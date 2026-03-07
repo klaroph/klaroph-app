@@ -46,6 +46,8 @@ export async function POST(request: Request) {
   // 1. Verify signature
   // -----------------------------------------------------------------------
   const sigHeader = request.headers.get('paymongo-signature') ?? ''
+  // Diagnostic (remove after debugging): raw body length + header prefix for Vercel logs
+  console.log('[Webhook] diagnostic rawBody.length=', rawBody.length, 'sigHeaderPrefix=', sigHeader.slice(0, 50))
   if (!sigHeader) {
     console.warn('[Webhook] Missing Paymongo-Signature header')
     return NextResponse.json(
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
   )
 
   if (!valid) {
-    console.warn('[Webhook] Invalid signature')
+    console.warn('[Webhook] Invalid signature — decision=401', 'timestamp=', timestamp, 'rawBody.length=', rawBody.length)
     return NextResponse.json(
       { error: 'Invalid signature' },
       { status: 401 }
