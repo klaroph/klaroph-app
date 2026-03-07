@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
+  console.log('[Webhook] secret fingerprint = len:' + webhookSecret.length + ' first:' + webhookSecret.slice(0, 4) + ' last:' + webhookSecret.slice(-4))
 
   let rawBody: string
   try {
