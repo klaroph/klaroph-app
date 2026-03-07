@@ -228,7 +228,8 @@ import { createHmac, timingSafeEqual } from 'crypto'
 /**
  * Verify PayMongo webhook signature.
  * Header format: t=<timestamp>,te=<test_sig>,li=<live_sig>
- * Signature = HMAC-SHA256(secret, `${timestamp}.${rawBody}`)
+ * PayMongo signs: HMAC-SHA256(webhook_secret, `${timestamp}.${rawBody}`), digest in hex.
+ * We must use .digest('hex') and compare against the te/li value (hex string from header).
  */
 export function verifyWebhookSignature(
   rawBody: string,
@@ -255,10 +256,12 @@ export function verifyWebhookSignature(
   }
 
   const payload = `${timestamp}.${rawBody}`
+  // Digest must be hex to match PayMongo header (te/li are hex). Do not use base64.
   const computed = createHmac('sha256', webhookSecret)
-    .update(payload)
+    .update(payload, 'utf8')
     .digest('hex')
 
+  // Compare: both expectedSig and computed are hex strings; decode to buffers for timingSafeEqual.
   const sigBuffer = Buffer.from(expectedSig, 'hex')
   const computedBuffer = Buffer.from(computed, 'hex')
 
