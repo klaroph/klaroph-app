@@ -246,8 +246,9 @@ export function verifyWebhookSignature(
     return { valid: false, timestamp: 0 }
   }
 
+  // PayMongo may send te= (test) and/or li= (live). Use the one present for current env.
   const isLive = process.env.NODE_ENV === 'production'
-  const expectedSig = isLive ? parts.li : parts.te
+  const expectedSig = (isLive ? parts.li ?? parts.te : parts.te ?? parts.li)
 
   if (!expectedSig) {
     return { valid: false, timestamp }
