@@ -90,32 +90,27 @@ export async function POST(request: Request) {
   const eventType = event.data.attributes.type
 
   // -----------------------------------------------------------------------
-  // 3. Idempotency: claim event by inserting first. Only one request can insert;
-  //    duplicate events (same event_id) get unique violation and are skipped.
+  // 3. Idempotency: skip if already successfully processed (row exists).
   // -----------------------------------------------------------------------
-  const { error: insertError } = await supabaseAdmin.from('payment_events').insert({
-    event_id: eventId,
-    event_type: eventType,
-    payload: event,
-  })
+  const { data: existing } = await supabaseAdmin
+    .from('payment_events')
+    .select('event_id')
+    .eq('event_id', eventId)
+    .maybeSingle()
 
-  if (insertError) {
-    if (insertError.code === '23505') {
-      // Unique violation: already processed
-      console.log('[Webhook] Idempotent skip event_id=', eventId, 'type=', eventType)
-      return NextResponse.json({ status: 'already_processed' })
-    }
-    console.error('[Webhook] payment_events insert failed:', insertError.code, insertError.message)
-    return NextResponse.json(
-      { error: 'Processing failed' },
-      { status: 500 }
-    )
+  if (existing) {
+    console.log('[Webhook] Idempotent skip event_id=', eventId, 'type=', eventType)
+    return NextResponse.json({ status: 'already_processed' })
   }
 
   console.log('[Webhook] Processing event_id=', eventId, 'type=', eventType)
+  // Temporary audit: confirm event type and payload shape
+  const attrs = event?.data?.attributes
+  console.log('[Webhook] event.data.attributes.type=', attrs?.type, 'data.type=', (attrs?.data as { type?: string })?.type)
 
   // -----------------------------------------------------------------------
-  // 4. Route to handler (runs only once per event_id)
+  // 4. Route to handler. Insert payment_events only after success so failed
+  //    events are not marked processed and PayMongo retries can run handler again.
   // -----------------------------------------------------------------------
   try {
     switch (eventType) {
@@ -156,6 +151,26 @@ export async function POST(request: Request) {
         console.log('[Webhook] Unhandled event type=', eventType, 'event_id=', eventId)
     }
 
+    // Mark event as processed only after successful handler completion.
+    const { error: insertError } = await supabaseAdmin.from('payment_events').insert({
+      event_id: eventId,
+      event_type: eventType,
+      payload: event,
+    })
+
+    if (insertError) {
+      if (insertError.code === '23505') {
+        // Race: another request processed and inserted first; we still succeeded.
+        console.log('[Webhook] payment_events insert race (already present) event_id=', eventId)
+      } else {
+        console.error('[Webhook] payment_events insert failed after handler success:', insertError.code, insertError.message)
+        return NextResponse.json(
+          { error: 'Processing failed' },
+          { status: 500 }
+        )
+      }
+    }
+
     return NextResponse.json({ status: 'ok' })
   } catch (err) {
     console.error('[Webhook] Handler error event_id=', eventId, 'type=', eventType, err)
@@ -177,6 +192,8 @@ async function handleCheckoutPaid(event: WebhookEvent) {
   let metadata = (attrs.metadata ?? {}) as Record<string, string>
   let userId = metadata.user_id
 
+  console.log('[Webhook] handleCheckoutPaid session_id=', checkoutSessionId, 'data.type=', (sessionData as { type?: string }).type, 'metadata_from_payload=', !!attrs.metadata, 'user_id_from_payload=', userId ?? '(none)')
+
   // Webhook payload does not include metadata; fetch session from PayMongo API
   if (!userId) {
     try {
@@ -184,6 +201,7 @@ async function handleCheckoutPaid(event: WebhookEvent) {
       const apiMetadata = (session.data.attributes.metadata ?? {}) as Record<string, string>
       userId = apiMetadata.user_id
       metadata = apiMetadata
+      console.log('[Webhook] After fetch session: user_id=', userId ?? '(none)', 'metadata_keys=', Object.keys(apiMetadata).join(','))
     } catch (err) {
       console.error('[Webhook] Failed to fetch checkout session:', err)
       throw err
@@ -192,10 +210,12 @@ async function handleCheckoutPaid(event: WebhookEvent) {
 
   if (!userId) {
     console.error('[Webhook] Checkout session metadata missing after fetch session_id=', checkoutSessionId)
-    return
+    console.log('[Webhook] Checkout session metadata missing after fetch — throwing error')
+    throw new Error('Checkout session metadata missing: user_id')
   }
 
   const planType = (metadata.plan_type === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual'
+  console.log('[Webhook] Subscription insert attempt user_id=', userId, 'plan_type=', planType)
 
   // Assign single premium plan (pro) only.
   const { data: premiumPlan } = await supabaseAdmin
@@ -237,11 +257,11 @@ async function handleCheckoutPaid(event: WebhookEvent) {
     )
 
   if (error) {
-    console.error('[Webhook] Subscription assignment failed user_id=', userId, 'session_id=', checkoutSessionId, 'error=', error.message)
+    console.error('[Webhook] Subscription assignment failed user_id=', userId, 'session_id=', checkoutSessionId, 'error=', error.message, 'code=', error.code)
     throw error
   }
 
-  console.log('[Webhook] Payment success: subscription assigned user_id=', userId, 'plan=pro plan_type=', planType, 'period_end=', periodEnd.toISOString())
+  console.log('[Webhook] Subscription insert/update result: success user_id=', userId, 'plan=pro plan_type=', planType, 'period_end=', periodEnd.toISOString())
 }
 
 async function handleSubscriptionActivated(event: WebhookEvent) {
