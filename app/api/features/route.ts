@@ -48,11 +48,13 @@ function freeFallback(): UserFeaturesWithSubscription {
       max_rows_per_tool: 300,
       export_enabled: false,
       advanced_analytics: false,
+      full_budgeting_entitled: false,
       can_create_goals: true,
     },
     'none',
     null,
-    'free'
+    'free',
+    null
   )
 }
 
