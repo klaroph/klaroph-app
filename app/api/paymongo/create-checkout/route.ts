@@ -22,6 +22,9 @@ export async function POST(request: Request) {
     }
 
     const sub = await resolveSubscriptionState(user.id)
+    // Local diagnostic: full guard inputs
+    console.log('[Checkout Guard] sub.state=', sub.state, '| sub.planId=', sub.planId, '| currentPeriodEnd=', sub.currentPeriodEnd?.toISOString() ?? null)
+    let planName: string | null = null
     // Block checkout only when: active + plan is Pro + period still valid. Free plan can upgrade.
     if (sub.state === 'ACTIVE' && sub.planId) {
       const { data: plan } = await supabaseAdmin
@@ -29,8 +32,10 @@ export async function POST(request: Request) {
         .select('name')
         .eq('id', sub.planId)
         .single()
-      const planName = (plan as { name?: string } | null)?.name ?? null
+      planName = (plan as { name?: string } | null)?.name ?? null
+      console.log('[Checkout Guard] planName (from plans)=', planName)
       if (planName === 'pro' && sub.currentPeriodEnd && sub.currentPeriodEnd > new Date()) {
+        console.log('[Checkout Guard] decision=block')
         return NextResponse.json(
           { error: 'User already has active subscription.' },
           { status: 400 }
@@ -60,16 +65,17 @@ export async function POST(request: Request) {
 
     const isAnnual = plan_type === 'annual'
     const amount = isAnnual ? ANNUAL_CENTAVOS : MONTHLY_CENTAVOS
-    const planNameLabel = isAnnual ? 'Clarity Premium — Annual (Save 20%)' : 'Clarity Premium — Monthly'
+    const planNameLabel = isAnnual ? 'Clarity Pro — Annual (Save 20%)' : 'Clarity Pro — Monthly'
     const description = isAnnual
-      ? 'KlaroPH Clarity Premium: 12 months, unlimited goals, insights, export, analytics.'
-      : 'KlaroPH Clarity Premium: 20 goals, simulator, scenarios, smart insights, export, analytics.'
+      ? 'KlaroPH Pro: 12 months, 20 goals, unlimited history, export, advance charts and analytics.'
+      : 'KlaroPH Pro: 20 goals, unlimited history, export, smart insights, export, advance charts and analytics.'
 
     const metadata: Record<string, string> = {
       user_id: String(user.id),
       plan: 'pro',
       plan_type,
     }
+    console.log('[Checkout Guard] decision=allow')
     console.log('[Checkout] Creating session user_id=', user.id, 'plan=pro plan_type=', plan_type)
 
     const session = await createCheckoutSession({
