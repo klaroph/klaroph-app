@@ -1,0 +1,119 @@
+import { NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
+
+const BUDGET_UPGRADE_MESSAGE =
+  'Monthly Budgeting is available for 30 days free. Upgrade to Pro for unlimited access.'
+
+function toFirstDayOfMonth(input?: string | number): string {
+  const d = new Date(input ?? Date.now())
+  d.setDate(1)
+  d.setHours(0, 0, 0, 0)
+  return d.toISOString().slice(0, 10)
+}
+
+export async function GET(request: Request) {
+  try {
+    const supabase = await createSupabaseServerClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const monthParam = searchParams.get('month')
+    const month = toFirstDayOfMonth(monthParam || undefined)
+
+    const { data, error } = await supabase
+      .from('budget_overrides')
+      .select('id, user_id, category, amount, month, created_at')
+      .eq('user_id', user.id)
+      .eq('month', month)
+      .order('category')
+
+    if (error) {
+      console.error('GET /api/budget-overrides error:', error.message)
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      )
+    }
+    return NextResponse.json(data ?? [])
+  } catch (e) {
+    console.error('GET /api/budget-overrides', e)
+    return NextResponse.json(
+      { error: 'Something went wrong.' },
+      { status: 500 }
+    )
+  }
+}
+
+type PostBody = { category?: string; amount?: number; month?: string }
+
+export async function POST(request: Request) {
+  try {
+    const supabase = await createSupabaseServerClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { budgetEditingAllowed } = await resolvePlanAndBudgetEntitlement(
+      user.id,
+      (user as { created_at?: string }).created_at
+    )
+    if (!budgetEditingAllowed) {
+      return NextResponse.json(
+        { error: BUDGET_UPGRADE_MESSAGE, locked: true, reason: 'budget' },
+        { status: 403 }
+      )
+    }
+
+    const body = (await request.json().catch(() => ({}))) as PostBody
+    const category =
+      typeof body?.category === 'string' ? body.category.trim() : ''
+    const amount =
+      typeof body?.amount === 'number' ? body.amount : Number(body?.amount)
+    const month = toFirstDayOfMonth(body?.month)
+
+    if (!category || Number.isNaN(amount) || amount < 0) {
+      return NextResponse.json(
+        { error: 'Invalid category or amount.' },
+        { status: 400 }
+      )
+    }
+
+    const { data, error } = await supabase
+      .from('budget_overrides')
+      .upsert(
+        {
+          user_id: user.id,
+          category,
+          amount,
+          month,
+        },
+        { onConflict: 'user_id,category,month', ignoreDuplicates: false }
+      )
+      .select('id, user_id, category, amount, month, created_at')
+      .single()
+
+    if (error) {
+      console.error('POST /api/budget-overrides error:', error.message)
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      )
+    }
+    return NextResponse.json(data)
+  } catch (e) {
+    console.error('POST /api/budget-overrides', e)
+    return NextResponse.json(
+      { error: 'Something went wrong.' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,0 +1,104 @@
+import { createServerClient } from '@supabase/ssr'
+import { serialize } from 'cookie'
+import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legalVersions'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
+
+// OAuth redirect base is ONLY from env. Never use request origin.
+// Supabase Dashboard → Authentication → URL Configuration:
+//   Site URL must equal NEXT_PUBLIC_APP_URL. Do NOT leave localhost as primary Site URL during ngrok testing.
+// If using ngrok: always access app via ngrok domain; never initiate login via localhost. OAuth will return to the domain defined by NEXT_PUBLIC_APP_URL.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL
+if (!APP_URL) {
+  throw new Error('NEXT_PUBLIC_APP_URL is required for OAuth redirect safety.')
+}
+
+export async function GET(request: Request) {
+  const requestUrl = new URL(request.url)
+  const code = requestUrl.searchParams.get('code')
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Callback hit on:', request.url)
+    console.log('Resolved redirect base:', process.env.NEXT_PUBLIC_APP_URL)
+  }
+
+  if (!code) {
+    return NextResponse.redirect(new URL('/login', APP_URL))
+  }
+
+  const cookieStore = await cookies()
+
+  const response = NextResponse.redirect(new URL('/dashboard', APP_URL))
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const opts = {
+              ...(options ?? {}),
+              path: '/',
+              httpOnly: false,
+              sameSite: 'lax' as const,
+              secure: process.env.NODE_ENV === 'production',
+            }
+            response.headers.append('set-cookie', serialize(name, value, opts))
+          })
+        },
+      },
+    }
+  )
+
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+  if (error) {
+    console.error('OAuth error:', error.message)
+    return NextResponse.redirect(new URL('/login', APP_URL))
+  }
+
+  if (data?.session?.user?.id) {
+    const userId = data.session.user.id
+    // Use admin client so we're not subject to RLS/session timing; profile may have just been created by trigger.
+    let profile: { terms_accepted_at: string | null; privacy_accepted_at: string | null; terms_version: string | null; privacy_version: string | null } | null = null
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { data: row } = await supabaseAdmin
+        .from('profiles')
+        .select('terms_accepted_at, privacy_accepted_at, terms_version, privacy_version')
+        .eq('id', userId)
+        .single()
+      if (row) {
+        profile = row
+        break
+      }
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 250))
+    }
+
+    const now = new Date().toISOString()
+    const update = {
+      terms_accepted_at: profile?.terms_accepted_at ?? now,
+      privacy_accepted_at: profile?.privacy_accepted_at ?? now,
+      terms_version: profile?.terms_version ?? TERMS_VERSION,
+      privacy_version: profile?.privacy_version ?? PRIVACY_VERSION,
+    }
+    const { error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update(update)
+      .eq('id', userId)
+
+    if (updateError && process.env.NODE_ENV === 'development') {
+      console.error('Callback consent update failed:', updateError.message)
+    }
+  }
+
+  if (process.env.NODE_ENV === 'development' && data?.session?.user?.id) {
+    console.log('Callback session.user.id:', data.session.user.id)
+  }
+
+  return response
+}

@@ -1,0 +1,153 @@
+---
+description: KlaroPH production rules — replacement-first engineering, layout/CSS/component discipline, dashboard and file hygiene
+alwaysApply: true
+---
+
+# KlaroPH Production Rules
+
+## Core Engineering Principle
+
+Always use **replacement-first engineering**.
+
+When introducing a new implementation:
+
+* remove obsolete code immediately
+* do not layer new logic on top of old logic
+* do not preserve dead wrappers, stale imports, or duplicate selectors
+
+---
+
+## Mandatory Rule for Every Change
+
+Before completing any edit, check what became obsolete because of the change.
+
+Always remove:
+
+* unused imports
+* dead JSX blocks
+* obsolete props
+* stale state
+* abandoned wrappers
+* duplicate CSS selectors
+* old helper functions no longer used
+
+---
+
+## Layout Discipline
+
+When changing UI:
+
+1. Inspect parent wrappers before patching child components
+
+2. Prefer root-cause fixes over padding hacks
+
+3. Avoid adding override layers if structure can solve it
+
+4. One layout owner only:
+
+   * parent OR card OR content
+   * never all three
+
+5. Remove replaced layout rules immediately
+
+Never leave:
+
+* old flex logic beside new grid logic
+* duplicate card height systems
+* conflicting min-height rules
+
+---
+
+## CSS Discipline
+
+Before adding CSS:
+
+1. Check if an older selector already owns that responsibility
+2. Replace instead of override whenever possible
+3. Avoid duplicate selector blocks
+4. Remove selector groups tied to removed components
+
+Never keep:
+
+* dead dashboard selectors
+* legacy responsive patches
+* grouped selectors for unrelated cards
+
+Every CSS change must leave the file cleaner.
+
+---
+
+## Component Discipline
+
+When editing components:
+
+1. Remove dead branches immediately
+2. Remove unused state immediately
+3. Remove stale useEffect logic immediately
+4. Remove old props if replaced
+
+Never leave:
+
+* parallel rendering paths
+* retired modals still imported
+* abandoned helper wrappers
+
+---
+
+## Dashboard Rules
+
+Dashboard is production-sensitive.
+
+When editing dashboard:
+
+* preserve visual rhythm
+* preserve spacing system
+* inspect wrapper ownership first
+* avoid local fixes that create future CSS fights
+
+Cards must be:
+
+* content-driven
+* structurally clean
+* independently understandable
+
+---
+
+## File Hygiene
+
+If a file becomes unused:
+
+* mark for deletion immediately
+* confirm reference trace
+* remove related selectors
+
+Never keep dead files after confirmed replacement.
+
+---
+
+## Before Completing Any Task
+
+Always report:
+
+A. What changed
+B. What obsolete code was removed
+C. What remains intentionally active
+
+---
+
+## Production Priority
+
+Stability is more important than cleverness.
+
+If two solutions work:
+choose the one with:
+
+* fewer layers
+* fewer overrides
+* fewer hidden dependencies
+
+---
+
+## KlaroPH Standard
+
+Every accepted change must leave the surrounding file cleaner than before.
