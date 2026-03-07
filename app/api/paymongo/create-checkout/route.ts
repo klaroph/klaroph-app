@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { createCheckoutSession, PayMongoError } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900 // ₱149
 const ANNUAL_DISCOUNT = 0.8 // 20% off
@@ -21,11 +22,20 @@ export async function POST(request: Request) {
     }
 
     const sub = await resolveSubscriptionState(user.id)
-    if (sub.state === 'ACTIVE') {
-      return NextResponse.json(
-        { error: 'User already has active subscription.' },
-        { status: 400 }
-      )
+    // Block checkout only when: active + plan is Pro + period still valid. Free plan can upgrade.
+    if (sub.state === 'ACTIVE' && sub.planId) {
+      const { data: plan } = await supabaseAdmin
+        .from('plans')
+        .select('name')
+        .eq('id', sub.planId)
+        .single()
+      const planName = (plan as { name?: string } | null)?.name ?? null
+      if (planName === 'pro' && sub.currentPeriodEnd && sub.currentPeriodEnd > new Date()) {
+        return NextResponse.json(
+          { error: 'User already has active subscription.' },
+          { status: 400 }
+        )
+      }
     }
 
     let plan_type: PlanTypeCheckout = 'monthly'
