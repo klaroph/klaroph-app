@@ -226,10 +226,11 @@ export async function cancelSubscription(
 import { createHmac, timingSafeEqual } from 'crypto'
 
 /**
- * Verify PayMongo webhook signature.
- * Header format: t=<timestamp>,te=<test_sig>,li=<live_sig>
- * PayMongo signs: HMAC-SHA256(webhook_secret, `${timestamp}.${rawBody}`), digest in hex.
- * We must use .digest('hex') and compare against the te/li value (hex string from header).
+ * Verify PayMongo webhook signature (official spec: Securing a Webhook).
+ * Header: three comma-separated parts — t (timestamp), te (test), li (live).
+ * Sample test mode: t=1496734173,te=1447a89e...,li=  (li is empty in test).
+ * Signature string: timestamp + "." + raw JSON body. HMAC-SHA256(secret, that string), hex digest.
+ * Use te for test mode events, li for live mode events. If li is empty, use te.
  */
 export function verifyWebhookSignature(
   rawBody: string,
@@ -247,11 +248,10 @@ export function verifyWebhookSignature(
     return { valid: false, timestamp: 0 }
   }
 
-  // PayMongo header: t=<timestamp>, te=<test_sig>, li=<live_sig>. In test mode use te only; in production use li if present else te.
-  const isProduction = process.env.NODE_ENV === 'production'
-  const expectedSig = isProduction ? (parts.li ?? parts.te) : parts.te
+  // Use li for live mode events, te for test mode. PayMongo sends li= (empty) in test mode, so prefer li only when non-empty.
+  const expectedSig = (parts.li && parts.li.trim()) ? parts.li : parts.te
 
-  if (!expectedSig) {
+  if (!expectedSig || !expectedSig.trim()) {
     return { valid: false, timestamp }
   }
 
