@@ -25,8 +25,8 @@ export function useDashboardActions() {
 }
 
 function UpgradeModalGate() {
-  const { isUpgradeModalOpen, closeUpgradeModal } = useUpgradeTrigger()
-  return <UpgradeModal isOpen={isUpgradeModalOpen} onClose={closeUpgradeModal} onUpgrade={() => {}} />
+  const { isUpgradeModalOpen, upgradeModalMessage, closeUpgradeModal } = useUpgradeTrigger()
+  return <UpgradeModal isOpen={isUpgradeModalOpen} onClose={closeUpgradeModal} message={upgradeModalMessage ?? undefined} onUpgrade={() => {}} />
 }
 
 export default function DashboardLayoutClient({ children }: { children: React.ReactNode }) {

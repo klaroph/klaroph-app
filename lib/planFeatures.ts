@@ -11,6 +11,7 @@ export const FREE_PLAN_FEATURES = [
   'Monthly Budgeting (first 30 days only)',
   '90-Day Analytics View',
   'Basic Charts',
+  '2 CSV Imports (lifetime)',
 ] as const
 
 /** Financial Clarity Tools — each on its own line (strong selling points) */
@@ -29,6 +30,7 @@ export const PRO_PLAN_FEATURES: ReadonlyArray<{ label: string; premium: boolean 
   { label: 'Monthly Budgeting', premium: true },
   { label: 'Unlimited History & Insights', premium: true },
   { label: 'Export CSV (Income and Expenses)', premium: true },
+  { label: 'Import your spreadsheet history instantly', premium: true },
   { label: 'Advanced Charts', premium: true },
 ]
 

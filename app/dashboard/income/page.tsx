@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { INCOME_SOURCES } from '../../../lib/incomeSources'
 import IncomeAllocationModal from '../../../components/dashboard/IncomeAllocationModal'
 import type { IncomeRecordForEdit } from '../../../components/dashboard/IncomeAllocationModal'
+import ImportCSVModal from '@/components/dashboard/ImportCSVModal'
 import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
 import {
   TREND_CHART_TYPES,
@@ -140,6 +141,7 @@ const CATEGORY_TYPE_LABELS: Record<ChartTypeCategory, string> = {
 export default function IncomePage() {
   const router = useRouter()
   const [modalOpen, setModalOpen] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<IncomeRecordForEdit | null>(null)
   const [records, setRecords] = useState<IncomeRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -350,11 +352,21 @@ export default function IncomePage() {
               <PremiumBadge size="sm" />
             </span>
           )}
+          <button type="button" className="btn-secondary header-add-btn-desktop-only" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
+            Import CSV
+          </button>
           <button className="btn-primary header-add-btn-desktop-only" onClick={() => { setEditingRecord(null); setModalOpen(true) }}>
             + Add Income
           </button>
         </div>
       </div>
+
+      <ImportCSVModal
+        mode="income"
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onSuccess={() => setRefreshTrigger((n) => n + 1)}
+      />
 
       <div className="income-expense-page">
       {/* Row 1: Summary Cards (3 columns) */}

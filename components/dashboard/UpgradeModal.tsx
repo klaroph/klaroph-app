@@ -15,6 +15,8 @@ type UpgradeModalProps = {
   isOpen: boolean
   onClose: () => void
   onUpgrade?: () => void
+  /** Optional context message (e.g. import quota exhausted). */
+  message?: string
 }
 
 /** Table rows: strongest Pro differentiators first, then shared, then tools. Same wording as landing. */
@@ -63,6 +65,16 @@ function UpgradeTableRows() {
         <td className="upgrade-modal-pro">✓</td>
       </tr>
       <tr className="upgrade-modal-row">
+        <td className="upgrade-modal-feature">
+          <span className="plan-feature-premium">
+            <PlanFeaturePremiumIcon />
+            Import your spreadsheet history instantly
+          </span>
+        </td>
+        <td className="upgrade-modal-free">2 free imports</td>
+        <td className="upgrade-modal-pro">Unlimited</td>
+      </tr>
+      <tr className="upgrade-modal-row">
         <td className="upgrade-modal-feature">20 Active Goals</td>
         <td className="upgrade-modal-free">2</td>
         <td className="upgrade-modal-pro">✓</td>
@@ -102,7 +114,7 @@ function UpgradeTableRows() {
   )
 }
 
-export default function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
+export default function UpgradeModal({ isOpen, onClose, message }: UpgradeModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [planType, setPlanType] = useState<'monthly' | 'annual'>('annual')
@@ -145,7 +157,7 @@ export default function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Upgrade to KlaroPH Pro" contentMaxWidth={520} closeOnOutsideClick={false}>
       <p style={{ margin: '0 0 20px', fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-        Free plan includes analytics for the last 90 days. Upgrade to unlock unlimited history and advanced insights.
+        {message || 'Free plan includes analytics for the last 90 days. Upgrade to unlock unlimited history and advanced insights.'}
       </p>
 
       <div className="upgrade-modal-table-wrap">

@@ -12,7 +12,8 @@ function toFeaturesResponse(
   subscriptionStatus: string,
   currentPeriodEnd: string | null,
   planLabel: string,
-  userCreatedAt: string | null | undefined
+  userCreatedAt: string | null | undefined,
+  importCount: number
 ): UserFeaturesWithSubscription {
   const d = new Date()
   d.setDate(d.getDate() - FREE_ANALYTICS_DAYS)
@@ -34,6 +35,8 @@ function toFeaturesResponse(
     currentPeriodEnd,
     plan: planLabel,
     analyticsCutoffDate,
+    import_used: importCount,
+    import_limit: plan.plan_name === 'pro' ? null : 2,
   }
 }
 
@@ -54,7 +57,8 @@ function freeFallback(): UserFeaturesWithSubscription {
     'none',
     null,
     'free',
-    null
+    null,
+    0
   )
 }
 
@@ -83,12 +87,17 @@ export async function GET() {
 
     const planLabel = plan.plan_name === 'pro' ? 'pro' : 'free'
     const userCreatedAt = (user as { created_at?: string }).created_at ?? null
+
+    const { data: profile } = await supabase.from('profiles').select('import_count').eq('id', user.id).maybeSingle()
+    const importCount = typeof (profile as { import_count?: number } | null)?.import_count === 'number' ? (profile as { import_count: number }).import_count : 0
+
     const features = toFeaturesResponse(
       plan,
       subscriptionStatus,
       currentPeriodEnd,
       planLabel,
-      userCreatedAt
+      userCreatedAt,
+      importCount
     )
     return NextResponse.json(features, {
       headers: {

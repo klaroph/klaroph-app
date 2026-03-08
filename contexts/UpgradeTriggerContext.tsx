@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useState } from 'react'
 
 type UpgradeTriggerContextValue = {
   isUpgradeModalOpen: boolean
-  openUpgradeModal: () => void
+  upgradeModalMessage: string | null
+  openUpgradeModal: (options?: { message?: string }) => void
   closeUpgradeModal: () => void
 }
 
@@ -12,11 +13,18 @@ const UpgradeTriggerContext = createContext<UpgradeTriggerContextValue | null>(n
 
 export function UpgradeTriggerProvider({ children }: { children: React.ReactNode }) {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
-  const openUpgradeModal = useCallback(() => setIsUpgradeModalOpen(true), [])
-  const closeUpgradeModal = useCallback(() => setIsUpgradeModalOpen(false), [])
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState<string | null>(null)
+  const openUpgradeModal = useCallback((options?: { message?: string }) => {
+    setUpgradeModalMessage(options?.message ?? null)
+    setIsUpgradeModalOpen(true)
+  }, [])
+  const closeUpgradeModal = useCallback(() => {
+    setIsUpgradeModalOpen(false)
+    setUpgradeModalMessage(null)
+  }, [])
   return (
     <UpgradeTriggerContext.Provider
-      value={{ isUpgradeModalOpen, openUpgradeModal, closeUpgradeModal }}
+      value={{ isUpgradeModalOpen, upgradeModalMessage, openUpgradeModal, closeUpgradeModal }}
     >
       {children}
     </UpgradeTriggerContext.Provider>

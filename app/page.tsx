@@ -50,7 +50,7 @@ const FEATURES = [
   },
   {
     title: 'Advanced Analytics & Export (Pro)',
-    desc: 'Unlimited history, CSV export, and advanced trends for serious trackers.',
+    desc: 'Unlimited history, CSV export, import your spreadsheet history instantly, and advanced trends for serious trackers.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25M12 20.25v-2.25m0-13.5v-2.25M21 16.5v-2.25M19.5 21l-2.25-2.25M4.5 3L2.25 4.5m15 0L19.5 3m-15 13.5L4.5 21m15-15l2.25-2.25M19.5 3v2.25" />

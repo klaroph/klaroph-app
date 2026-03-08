@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { EXPENSE_CATEGORIES } from '../../../lib/expenseCategories'
 import AddExpenseModal from '../../../components/dashboard/AddExpenseModal'
 import EditExpenseModal, { type ExpenseRecord } from '../../../components/dashboard/EditExpenseModal'
+import ImportCSVModal from '@/components/dashboard/ImportCSVModal'
 import BudgetOverview from '@/components/dashboard/BudgetOverview'
 import BudgetPlanner from '@/components/budget/BudgetPlanner'
 import MonthOverrideModal from '@/components/budget/MonthOverrideModal'
@@ -177,6 +178,7 @@ export default function ExpensesPage() {
   const [budgetRefreshKey, setBudgetRefreshKey] = useState(0)
   const [budgetPlannerOpen, setBudgetPlannerOpen] = useState(false)
   const [monthOverrideOpen, setMonthOverrideOpen] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
   const [overrideMonth, setOverrideMonth] = useState(() => {
     const d = new Date()
     d.setDate(1)
@@ -405,11 +407,21 @@ export default function ExpensesPage() {
               <PremiumBadge size="sm" />
             </span>
           )}
+          <button type="button" className="btn-secondary header-add-btn-desktop-only" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
+            Import CSV
+          </button>
           <button className="btn-primary header-add-btn-desktop-only" onClick={() => setModalOpen(true)}>
             + Add Expense
           </button>
         </div>
       </div>
+
+      <ImportCSVModal
+        mode="expense"
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onSuccess={() => { setRefreshTrigger((n) => n + 1); setBudgetRefreshKey((k) => k + 1); }}
+      />
 
       <div className="income-expense-page">
       {/* Monthly Budget Overview at top */}

@@ -23,4 +23,8 @@ export interface UserFeaturesWithSubscription extends UserFeatures {
   plan: string
   /** For free users: date string (YYYY-MM-DD) - analytics limited to on or after this date. Premium: null. */
   analyticsCutoffDate: string | null
+  /** Successful CSV imports used (free: 2 max; Pro: unlimited). */
+  import_used: number
+  /** Free = 2; Pro = null (unlimited). */
+  import_limit: number | null
 }
