@@ -285,7 +285,7 @@ export default function BudgetOverview({
           </button>
         )}
         {onSetBudget && !canEditBudget && openUpgrade && (
-          <button type="button" className="btn-secondary" onClick={openUpgrade} style={{ padding: '10px 20px', fontSize: 14 }}>
+          <button type="button" className="btn-secondary" onClick={() => openUpgrade()} style={{ padding: '10px 20px', fontSize: 14 }}>
             Upgrade to set budget
           </button>
         )}
@@ -352,7 +352,7 @@ export default function BudgetOverview({
             </button>
           )}
           {showBudgetEditorButtons && !canEditBudget && openUpgrade && (
-            <button type="button" className="btn-secondary" onClick={openUpgrade} style={{ padding: '8px 16px', fontSize: 13 }}>
+            <button type="button" className="btn-secondary" onClick={() => openUpgrade()} style={{ padding: '8px 16px', fontSize: 13 }}>
               Upgrade to edit budget
             </button>
           )}

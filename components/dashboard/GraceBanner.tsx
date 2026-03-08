@@ -94,7 +94,7 @@ export default function GraceBanner() {
         {openUpgrade && (
           <button
             type="button"
-            onClick={openUpgrade}
+            onClick={() => openUpgrade()}
             style={graceCtaStyle}
             className="grace-banner-cta"
           >
@@ -115,7 +115,7 @@ export default function GraceBanner() {
         {openUpgrade && (
           <button
             type="button"
-            onClick={openUpgrade}
+            onClick={() => openUpgrade()}
             style={expiredCtaStyle}
             className="grace-banner-cta"
           >

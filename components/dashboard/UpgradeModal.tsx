@@ -68,10 +68,10 @@ function UpgradeTableRows() {
         <td className="upgrade-modal-feature">
           <span className="plan-feature-premium">
             <PlanFeaturePremiumIcon />
-            Import your spreadsheet history instantly
+            Import CSV (Income and Expenses)
           </span>
         </td>
-        <td className="upgrade-modal-free">2 free imports</td>
+        <td className="upgrade-modal-free">Up to 2 imports only</td>
         <td className="upgrade-modal-pro">Unlimited</td>
       </tr>
       <tr className="upgrade-modal-row">
