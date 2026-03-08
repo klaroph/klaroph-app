@@ -45,7 +45,7 @@ export default function UpgradeCTA({ label = 'Upgrade to Pro', variant = 'defaul
       type="button"
       className={className}
       style={style}
-      onClick={openModal}
+      onClick={() => openModal()}
       onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
       onMouseUp={(e) => e.currentTarget.style.transform = ''}
       onMouseLeave={(e) => e.currentTarget.style.transform = ''}
