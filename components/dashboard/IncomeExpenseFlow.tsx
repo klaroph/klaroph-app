@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
 import LockIcon from '@/components/ui/LockIcon'
+import { toLocalDateString } from '@/lib/format'
 
 type FilterKey =
   | 'this_week'
@@ -21,16 +22,12 @@ type FilterKey =
 type IncomeRow = { total_amount: number; date: string; income_source: string | null }
 type ExpenseRow = { category: string; type: string; amount: number; date: string }
 
-function fmt(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
-
 /** Returns { start, end } for the month whose first day is monthFirst (YYYY-MM-01). */
 function getMonthRange(monthFirst: string): { start: string; end: string } {
   const [y, m] = monthFirst.split('-').map(Number)
   const start = new Date(y, (m ?? 1) - 1, 1)
   const end = new Date(y, m ?? 1, 0)
-  return { start: fmt(start), end: fmt(end) }
+  return { start: toLocalDateString(start), end: toLocalDateString(end) }
 }
 
 function getDateRange(
@@ -47,7 +44,7 @@ function getDateRange(
       const dayOfWeek = now.getDay()
       const start = new Date(now)
       start.setDate(now.getDate() - dayOfWeek)
-      return { start: fmt(start), end: fmt(now) }
+      return { start: toLocalDateString(start), end: toLocalDateString(now) }
     }
     case 'previous_week': {
       const dayOfWeek = now.getDay()
@@ -55,38 +52,38 @@ function getDateRange(
       end.setDate(now.getDate() - dayOfWeek - 1)
       const start = new Date(end)
       start.setDate(end.getDate() - 6)
-      return { start: fmt(start), end: fmt(end) }
+      return { start: toLocalDateString(start), end: toLocalDateString(end) }
     }
     case 'current_month': {
       const start = new Date(y, m, 1)
       const end = new Date(y, m + 1, 0)
-      return { start: fmt(start), end: fmt(end) }
+      return { start: toLocalDateString(start), end: toLocalDateString(end) }
     }
     case 'previous_month': {
       const start = new Date(y, m - 1, 1)
       const end = new Date(y, m, 0)
-      return { start: fmt(start), end: fmt(end) }
+      return { start: toLocalDateString(start), end: toLocalDateString(end) }
     }
     case 'this_quarter': {
       const qStart = Math.floor(m / 3) * 3
       const start = new Date(y, qStart, 1)
       const end = new Date(y, qStart + 3, 0)
-      return { start: fmt(start), end: fmt(end) }
+      return { start: toLocalDateString(start), end: toLocalDateString(end) }
     }
     case 'previous_quarter': {
       const qStart = Math.floor(m / 3) * 3 - 3
       const start = new Date(y, qStart, 1)
       const end = new Date(y, qStart + 3, 0)
-      return { start: fmt(start), end: fmt(end) }
+      return { start: toLocalDateString(start), end: toLocalDateString(end) }
     }
     case 'this_year':
       return { start: `${y}-01-01`, end: `${y}-12-31` }
     case 'previous_year':
       return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31` }
     case 'all_time':
-      return { start: '2000-01-01', end: fmt(now) }
+      return { start: '2000-01-01', end: toLocalDateString(now) }
     case 'custom':
-      return { start: customStart || `${y}-01-01`, end: customEnd || fmt(now) }
+      return { start: customStart || `${y}-01-01`, end: customEnd || toLocalDateString(now) }
   }
 }
 
@@ -155,16 +152,11 @@ function NetIcon() {
 
 function getCurrentMonthFirst(): string {
   const d = new Date()
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 10)
+  return toLocalDateString(new Date(d.getFullYear(), d.getMonth(), 1))
 }
 function getPreviousMonthFirst(): string {
   const d = new Date()
-  d.setMonth(d.getMonth() - 1)
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 10)
+  return toLocalDateString(new Date(d.getFullYear(), d.getMonth() - 1, 1))
 }
 
 export default function IncomeExpenseFlow({

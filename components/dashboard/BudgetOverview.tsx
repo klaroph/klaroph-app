@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { useSubscriptionOptional } from '@/contexts/SubscriptionContext'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
+import { toLocalDateString } from '@/lib/format'
 
 type EffectiveItem = { category: string; amount: number }
 
@@ -33,9 +34,7 @@ function formatPeso(n: number) {
 
 function getCurrentMonthFirst(): string {
   const d = new Date()
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 10)
+  return toLocalDateString(new Date(d.getFullYear(), d.getMonth(), 1))
 }
 
 function getCurrentMonthRange() {
@@ -43,8 +42,8 @@ function getCurrentMonthRange() {
   const start = new Date(now.getFullYear(), now.getMonth(), 1)
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
+    start: toLocalDateString(start),
+    end: toLocalDateString(end),
   }
 }
 
@@ -53,8 +52,8 @@ function getMonthRange(monthFirst: string): { start: string; end: string } {
   const start = new Date(y, (m ?? 1) - 1, 1)
   const end = new Date(y, (m ?? 1), 0)
   return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
+    start: toLocalDateString(start),
+    end: toLocalDateString(end),
   }
 }
 

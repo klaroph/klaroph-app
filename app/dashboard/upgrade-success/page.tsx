@@ -97,10 +97,10 @@ export default function UpgradeSuccessPage() {
             </svg>
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 8px' }}>
-            Welcome to Clarity Premium!
+            Welcome to KlaroPH Pro!
           </h1>
           <p style={{ fontSize: 15, color: 'var(--text-secondary)', margin: '0 0 24px', maxWidth: 400 }}>
-            You now have full access: 20 goals, month-over-month comparisons, forecasting, export, and analytics.
+            You now have full access: 20 goals, unlimited history, export, advance charts and analytics.
           </p>
           <button
             type="button"

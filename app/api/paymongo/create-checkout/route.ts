@@ -4,7 +4,7 @@ import { createCheckoutSession, PayMongoError } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900 // ₱149
+const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 500 // ₱5 default for live test; set env for production
 const ANNUAL_DISCOUNT = 0.8 // 20% off
 const ANNUAL_CENTAVOS = Math.round(12 * MONTHLY_CENTAVOS * ANNUAL_DISCOUNT)
 
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     const planNameLabel = isAnnual ? 'Clarity Pro — Annual (Save 20%)' : 'Clarity Pro — Monthly'
     const description = isAnnual
       ? 'KlaroPH Pro: 12 months, 20 goals, unlimited history, export, advance charts and analytics.'
-      : 'KlaroPH Pro: 20 goals, unlimited history, export, smart insights, export, advance charts and analytics.'
+      : 'KlaroPH Pro: 20 goals, unlimited history, export, advance charts and analytics.'
 
     const metadata: Record<string, string> = {
       user_id: String(user.id),

@@ -16,15 +16,14 @@ import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { PLAN_LIMITS } from '@/lib/planLimits'
+import { toLocalDateString } from '@/lib/format'
 import Link from 'next/link'
 import UpgradeCTA from '@/components/ui/UpgradeCTA'
 import { useDashboardActions } from './DashboardLayoutClient'
 
 function getCurrentMonthFirst(): string {
   const d = new Date()
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 10)
+  return toLocalDateString(new Date(d.getFullYear(), d.getMonth(), 1))
 }
 
 export default function DashboardPage() {
@@ -114,7 +113,7 @@ export default function DashboardPage() {
         <div className="dashboard-header-actions-desktop page-header-actions">
           <button
             type="button"
-            className="btn-primary"
+            className="btn-primary header-add-btn-desktop-only"
             onClick={openAddIncome}
             aria-label="Add income"
           >
@@ -122,7 +121,7 @@ export default function DashboardPage() {
           </button>
           <button
             type="button"
-            className="btn-primary"
+            className="btn-primary header-add-btn-desktop-only"
             onClick={openAddExpense}
             aria-label="Add expense"
           >

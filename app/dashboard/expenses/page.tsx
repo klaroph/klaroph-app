@@ -29,6 +29,7 @@ import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { useTriggerDateRangeBeyond90 } from '@/hooks/useSmartUpgradeTriggers'
 import { getAllTimeRangeAndGrouping, type AllTimeRangeResult } from '@/lib/allTimeRange'
 import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboardRefresh'
+import { toLocalDateString } from '@/lib/format'
 
 type ExpenseRow = {
   id: string
@@ -46,44 +47,43 @@ function getMonthRange(monthFirst: string): { start: string; end: string } {
   const [y, m] = monthFirst.split('-').map(Number)
   const start = new Date(y, (m ?? 1) - 1, 1)
   const end = new Date(y, (m ?? 1), 0)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  return { start: toLocalDateString(start), end: toLocalDateString(end) }
 }
 
 function getRange(period: FilterPeriod, customStart: string, customEnd: string) {
   const now = new Date()
   const y = now.getFullYear()
   const m = now.getMonth()
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
   const dayOfWeek = now.getDay()
   switch (period) {
     case 'this_week': {
       const start = new Date(now)
       start.setDate(now.getDate() - dayOfWeek)
-      return { start: fmt(start), end: fmt(now) }
+      return { start: toLocalDateString(start), end: toLocalDateString(now) }
     }
     case 'previous_week': {
       const end = new Date(now)
       end.setDate(now.getDate() - dayOfWeek - 1)
       const start = new Date(end)
       start.setDate(end.getDate() - 6)
-      return { start: fmt(start), end: fmt(end) }
+      return { start: toLocalDateString(start), end: toLocalDateString(end) }
     }
-    case 'month': return { start: fmt(new Date(y, m, 1)), end: fmt(new Date(y, m + 1, 0)) }
-    case 'previous_month': return { start: fmt(new Date(y, m - 1, 1)), end: fmt(new Date(y, m, 0)) }
+    case 'month': return { start: toLocalDateString(new Date(y, m, 1)), end: toLocalDateString(new Date(y, m + 1, 0)) }
+    case 'previous_month': return { start: toLocalDateString(new Date(y, m - 1, 1)), end: toLocalDateString(new Date(y, m, 0)) }
     case 'quarter': {
       const q = Math.floor(m / 3) * 3
-      return { start: fmt(new Date(y, q, 1)), end: fmt(new Date(y, q + 3, 0)) }
+      return { start: toLocalDateString(new Date(y, q, 1)), end: toLocalDateString(new Date(y, q + 3, 0)) }
     }
     case 'previous_quarter': {
       const q = Math.floor(m / 3) * 3 - 3
       const start = new Date(y, q, 1)
       const end = new Date(y, q + 3, 0)
-      return { start: fmt(start), end: fmt(end) }
+      return { start: toLocalDateString(start), end: toLocalDateString(end) }
     }
     case 'year': return { start: `${y}-01-01`, end: `${y}-12-31` }
     case 'previous_year': return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31` }
-    case 'all_time': return { start: fmt(now), end: fmt(now) }
-    case 'custom': return { start: customStart || `${y}-01-01`, end: customEnd || fmt(now) }
+    case 'all_time': return { start: toLocalDateString(now), end: toLocalDateString(now) }
+    case 'custom': return { start: customStart || `${y}-01-01`, end: customEnd || toLocalDateString(now) }
   }
 }
 

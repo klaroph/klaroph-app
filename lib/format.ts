@@ -3,6 +3,14 @@
  * Negative amounts use parentheses; tabular numbers for alignment.
  */
 
+/** Format a Date as YYYY-MM-DD in local time (avoids UTC shift from toISOString). Use for month boundaries and range start/end. */
+export function toLocalDateString(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 /** Format date as MM/DD/YYYY */
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date

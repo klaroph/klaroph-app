@@ -4554,12 +4554,7 @@ html { scroll-behavior: smooth; }
     align-items: center;
   }
 
-  /* Simplify: show only Total Saved + donut %; hide Total Target and Active Goals */
-  .goal-momentum-executive-stat:nth-child(2),
-  .goal-momentum-executive-stat:nth-child(3) {
-    display: none;
-  }
-
+  /* Total Saved, Total Target, Active Goals all visible on mobile */
   .goal-momentum-executive-donut-ring {
     width: 120px;
     height: 120px;
