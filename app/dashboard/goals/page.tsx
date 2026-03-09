@@ -11,6 +11,7 @@ import UpgradeCTA from '../../../components/ui/UpgradeCTA'
 import PremiumBadge from '../../../components/ui/PremiumBadge'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { PLAN_LIMITS } from '@/lib/planLimits'
+import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboardRefresh'
 
 const defaultSummary: GoalSummary = {
   totalSaved: 0,
@@ -30,6 +31,12 @@ export default function GoalsPage() {
 
   const maxGoals = features?.max_goals ?? PLAN_LIMITS.free.maxGoals
   const atLimit = !isPro && goalCount >= maxGoals
+
+  useEffect(() => {
+    const onRefresh = () => setRefreshTrigger((n) => n + 1)
+    window.addEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+    return () => window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+  }, [])
 
   useEffect(() => {
     let mounted = true

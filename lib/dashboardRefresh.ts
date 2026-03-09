@@ -1,6 +1,7 @@
 /**
- * Custom event name used when goal, income, or expense is added/updated from FAB or elsewhere.
- * Pages (dashboard, income, expenses) listen for this to refetch data immediately.
+ * Custom event used when goal, income, or expense is added/updated from FAB or elsewhere.
+ * Dashboard, income, expenses, and goals pages listen for this to refetch so the current
+ * page and dashboard stay in sync (important for mobile FAB flows).
  */
 export const DASHBOARD_REFRESH_EVENT = 'klaroph-dashboard-refresh'
 
