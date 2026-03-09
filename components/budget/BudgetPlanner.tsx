@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
+import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 
 type BudgetPlannerProps = {
   isOpen: boolean
@@ -80,8 +81,8 @@ export default function BudgetPlanner({
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         if (data?.locked && data?.reason === 'budget') {
-          openUpgrade?.()
-          setError((data?.error as string) || 'Budget editing is a Pro feature. Upgrade to continue.')
+          openUpgrade?.({ message: BUDGET_LOCK_UPGRADE_MESSAGE })
+          setError((data?.error as string) || BUDGET_LOCK_UPGRADE_MESSAGE)
         } else {
           setError((data?.error as string) || 'Failed to save plan.')
         }

@@ -11,6 +11,9 @@ import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900 // ₱149
+const ANNUAL_DISCOUNT = 0.8 // 20% off
+// Round to nearest peso (100 centavos) so scanned QR shows e.g. ₱1,430 not ₱1,430.40
+const ANNUAL_CENTAVOS = Math.round((12 * MONTHLY_CENTAVOS * ANNUAL_DISCOUNT) / 100) * 100
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
 
 export async function POST(request: Request) {
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}))
     const existingPaymentIntentId = typeof body?.payment_intent_id === 'string' ? body.payment_intent_id.trim() : null
+    const plan_type = body?.plan_type === 'annual' ? 'annual' : 'monthly'
 
     const billing = {
       name: user.user_metadata?.full_name ?? user.email ?? 'Customer',
@@ -81,15 +85,18 @@ export async function POST(request: Request) {
     }
 
     // New QRPH session: create intent + method + attach
+    const amountCentavos = plan_type === 'annual' ? ANNUAL_CENTAVOS : MONTHLY_CENTAVOS
     const intent = await createPaymentIntent({
-      amount: MONTHLY_CENTAVOS,
+      amount: amountCentavos,
       currency: 'PHP',
       paymentMethodAllowed: ['qrph'],
-      description: 'KlaroPH Pro: 20 goals, unlimited history, import/export, advance charts and analytics.',
+      description: plan_type === 'annual'
+        ? 'KlaroPH Pro Annual: 20 goals, unlimited history, import/export, advance charts and analytics.'
+        : 'KlaroPH Pro Monthly: 20 goals, unlimited history, import/export, advance charts and analytics.',
       metadata: {
         user_id: String(user.id),
         plan: 'pro',
-        plan_type: 'monthly',
+        plan_type,
       },
     })
 

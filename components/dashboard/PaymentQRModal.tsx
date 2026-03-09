@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Modal from '../ui/Modal'
 
 const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
+const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
 const POLL_INTERVAL_MS = 3500
 
 type PaymentQRModalProps = {
@@ -14,6 +15,8 @@ type PaymentQRModalProps = {
   refreshSubscription: () => Promise<void>
   /** When true (after webhook), show success state. */
   isPro: boolean
+  /** Plan type for payment intent (amount + metadata). Default monthly. */
+  planType?: 'monthly' | 'annual'
 }
 
 type ViewState = 'loading' | 'qr' | 'expired' | 'success' | 'error'
@@ -24,6 +27,7 @@ export default function PaymentQRModal({
   onSuccess,
   refreshSubscription,
   isPro,
+  planType = 'monthly',
 }: PaymentQRModalProps) {
   const [viewState, setViewState] = useState<ViewState>('loading')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -35,11 +39,14 @@ export default function PaymentQRModal({
 
   const fetchQr = useCallback(
     async (intentId?: string) => {
+      const body = intentId
+        ? { payment_intent_id: intentId }
+        : { plan_type: planType }
       const res = await fetch('/api/paymongo/create-qrph', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(intentId ? { payment_intent_id: intentId } : {}),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -54,7 +61,7 @@ export default function PaymentQRModal({
       setError(null)
       setViewState('qr')
     },
-    [],
+    [planType],
   )
 
   useEffect(() => {
@@ -158,7 +165,10 @@ export default function PaymentQRModal({
         {viewState === 'qr' && (
           <>
             <p style={{ margin: '0 0 20px', fontSize: 22, fontWeight: 700, color: 'var(--color-primary)' }}>
-              ₱{MONTHLY_PESOS} <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>/ month</span>
+              ₱{planType === 'annual' ? ANNUAL_PESOS : MONTHLY_PESOS}{' '}
+              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                / {planType === 'annual' ? 'year' : 'month'}
+              </span>
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               {imageUrl && (

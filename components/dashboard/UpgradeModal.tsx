@@ -17,8 +17,8 @@ type UpgradeModalProps = {
   onUpgrade?: () => void
   /** Optional context message (e.g. import quota exhausted). */
   message?: string
-  /** When provided and user selects monthly + Upgrade to Pro, open this instead of redirecting. */
-  onOpenPaymentModal?: () => void
+  /** When provided, both Monthly and Annual use QRPH modal; called with selected planType. */
+  onOpenPaymentModal?: (planType: 'monthly' | 'annual') => void
 }
 
 /** Table rows: strongest Pro differentiators first, then shared, then tools. Same wording as landing. */
@@ -122,8 +122,8 @@ export default function UpgradeModal({ isOpen, onClose, message, onOpenPaymentMo
   const [planType, setPlanType] = useState<'monthly' | 'annual'>('annual')
 
   const handleUpgrade = async () => {
-    if (planType === 'monthly' && onOpenPaymentModal) {
-      onOpenPaymentModal()
+    if (onOpenPaymentModal) {
+      onOpenPaymentModal(planType)
       onClose()
       return
     }

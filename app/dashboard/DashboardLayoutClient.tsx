@@ -30,6 +30,7 @@ function UpgradeModalGate() {
   const { isUpgradeModalOpen, upgradeModalMessage, closeUpgradeModal } = useUpgradeTrigger()
   const { refresh: refreshSubscription, isPro } = useSubscription()
   const [paymentQROpen, setPaymentQROpen] = useState(false)
+  const [paymentPlanType, setPaymentPlanType] = useState<'monthly' | 'annual'>('monthly')
   return (
     <>
       <UpgradeModal
@@ -37,13 +38,17 @@ function UpgradeModalGate() {
         onClose={closeUpgradeModal}
         message={upgradeModalMessage ?? undefined}
         onUpgrade={() => {}}
-        onOpenPaymentModal={() => setPaymentQROpen(true)}
+        onOpenPaymentModal={(planType) => {
+          setPaymentPlanType(planType ?? 'monthly')
+          setPaymentQROpen(true)
+        }}
       />
       <PaymentQRModal
         isOpen={paymentQROpen}
         onClose={() => setPaymentQROpen(false)}
         refreshSubscription={refreshSubscription}
         isPro={isPro}
+        planType={paymentPlanType}
       />
     </>
   )

@@ -88,15 +88,19 @@ export async function GET() {
     const planLabel = plan.plan_name === 'pro' ? 'pro' : 'free'
     const userCreatedAt = (user as { created_at?: string }).created_at ?? null
 
-    const { data: profile } = await supabase.from('profiles').select('import_count').eq('id', user.id).maybeSingle()
+    const { data: profile } = await supabase.from('profiles').select('import_count, simulate_budget_expired').eq('id', user.id).maybeSingle()
     const importCount = typeof (profile as { import_count?: number } | null)?.import_count === 'number' ? (profile as { import_count: number }).import_count : 0
+    const simulateBudgetExpired = (profile as { simulate_budget_expired?: boolean } | null)?.simulate_budget_expired === true
+    const effectiveCreatedAt = simulateBudgetExpired
+      ? new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString()
+      : userCreatedAt
 
     const features = toFeaturesResponse(
       plan,
       subscriptionStatus,
       currentPeriodEnd,
       planLabel,
-      userCreatedAt,
+      effectiveCreatedAt,
       importCount
     )
     return NextResponse.json(features, {

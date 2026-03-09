@@ -6,6 +6,8 @@ import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { useSubscriptionOptional } from '@/contexts/SubscriptionContext'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
 import { toLocalDateString } from '@/lib/format'
+import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
+import LockIcon from '@/components/ui/LockIcon'
 
 type EffectiveItem = { category: string; amount: number }
 
@@ -285,8 +287,14 @@ export default function BudgetOverview({
           </button>
         )}
         {onSetBudget && !canEditBudget && openUpgrade && (
-          <button type="button" className="btn-secondary" onClick={() => openUpgrade()} style={{ padding: '10px 20px', fontSize: 14 }}>
-            Upgrade to set budget
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
+            style={{ padding: '10px 20px', fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <LockIcon size={14} />
+            Set Budget
           </button>
         )}
       </div>
@@ -346,14 +354,31 @@ export default function BudgetOverview({
               {isCurrentMonth ? 'Edit This Month' : `Edit ${formatMonthLabel(selectedMonth)}`}
             </button>
           )}
+          {showBudgetEditorButtons && onEditThisMonth && !canEditBudget && openUpgrade && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
+              style={{ padding: '8px 14px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <LockIcon size={12} />
+              {isCurrentMonth ? 'Edit This Month' : `Edit ${formatMonthLabel(selectedMonth)}`}
+            </button>
+          )}
           {showBudgetEditorButtons && onSetBudget && canEditBudget && (
             <button type="button" className="btn-primary" onClick={onSetBudget} style={{ padding: '8px 16px', fontSize: 13 }}>
               Edit Spending Plan
             </button>
           )}
-          {showBudgetEditorButtons && !canEditBudget && openUpgrade && (
-            <button type="button" className="btn-secondary" onClick={() => openUpgrade()} style={{ padding: '8px 16px', fontSize: 13 }}>
-              Upgrade to edit budget
+          {showBudgetEditorButtons && onSetBudget && !canEditBudget && openUpgrade && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
+              style={{ padding: '8px 16px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <LockIcon size={12} />
+              Edit Spending Plan
             </button>
           )}
           {headerAction}

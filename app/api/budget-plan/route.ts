@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
-
-const BUDGET_UPGRADE_MESSAGE =
-  'Monthly Budgeting is available for 30 days free. Upgrade to Pro for unlimited access.'
+import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type PlanRow = {
   id: string
@@ -58,13 +57,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { data: profile } = await supabaseAdmin.from('profiles').select('simulate_budget_expired').eq('id', user.id).maybeSingle()
+    const simulateBudgetExpired = (profile as { simulate_budget_expired?: boolean } | null)?.simulate_budget_expired === true
+    const effectiveCreatedAt = simulateBudgetExpired
+      ? new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString()
+      : (user as { created_at?: string }).created_at
+
     const { budgetEditingAllowed } = await resolvePlanAndBudgetEntitlement(
       user.id,
-      (user as { created_at?: string }).created_at
+      effectiveCreatedAt
     )
     if (!budgetEditingAllowed) {
       return NextResponse.json(
-        { error: BUDGET_UPGRADE_MESSAGE, locked: true, reason: 'budget' },
+        { error: BUDGET_LOCK_UPGRADE_MESSAGE, locked: true, reason: 'budget' },
         { status: 403 }
       )
     }
