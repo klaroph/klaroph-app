@@ -1,3 +1,9 @@
+/**
+ * PayMongo webhook handler.
+ * Required event subscriptions in PayMongo Dashboard:
+ * - checkout_session.payment.paid (redirect checkout)
+ * - payment.paid (QRPH / payment intent flow) — see https://developers.paymongo.com/docs/qr-ph-api
+ */
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
@@ -266,7 +272,10 @@ async function handleCheckoutPaid(event: WebhookEvent) {
   console.log('[Webhook] Subscription insert/update result: success user_id=', userId, 'plan=pro plan_type=', planType, 'period_end=', periodEnd.toISOString())
 }
 
-/** payment.paid: QRPH (payment intent) flow — activate subscription from intent metadata. */
+/**
+ * payment.paid: QRPH (payment intent) flow — activate subscription from intent metadata.
+ * PayMongo docs: https://developers.paymongo.com/docs/qr-ph-api (webhook subscribed to payment.paid).
+ */
 async function handlePaymentPaid(event: WebhookEvent) {
   const paymentData = event.data.attributes.data
   if (paymentData.type !== 'payment') {
@@ -276,14 +285,16 @@ async function handlePaymentPaid(event: WebhookEvent) {
   const paymentAttrs = paymentData.attributes as Record<string, unknown>
   const paymentIntentId = paymentAttrs.payment_intent_id as string | undefined
   if (!paymentIntentId) {
-    console.warn('[Webhook] payment.paid missing payment_intent_id')
-    return
+    console.error('[Webhook] payment.paid missing payment_intent_id — payload may be unexpected; not marking processed so PayMongo can retry')
+    throw new Error('payment.paid missing payment_intent_id')
   }
 
+  console.log('[Webhook] payment.paid received payment_intent_id=', paymentIntentId)
   let metadata: Record<string, string> = {}
   try {
     const intent = await retrievePaymentIntent(paymentIntentId)
     metadata = (intent.data.attributes.metadata ?? {}) as Record<string, string>
+    console.log('[Webhook] payment.paid intent metadata keys=', Object.keys(metadata).join(','), 'user_id=', metadata.user_id ?? '(none)', 'plan=', metadata.plan ?? '(none)')
   } catch (err) {
     console.error('[Webhook] Failed to fetch payment intent for payment.paid:', err)
     throw err
@@ -291,7 +302,7 @@ async function handlePaymentPaid(event: WebhookEvent) {
 
   const userId = metadata.user_id
   if (!userId || metadata.plan !== 'pro') {
-    console.log('[Webhook] payment.paid skipped: no user_id or plan in intent metadata')
+    console.log('[Webhook] payment.paid skipped: no user_id or plan in intent metadata (not a KlaroPH Pro QR payment)')
     return
   }
 

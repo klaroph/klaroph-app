@@ -10,7 +10,7 @@ import {
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900
+const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 500
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
 
 export async function POST(request: Request) {
