@@ -38,24 +38,32 @@ const handBuffer = await sharp(srcPath)
   .png()
   .toBuffer();
 
+// Scale hand to fill more of the square: render at 1.35x then center-crop to icon size.
+const HAND_FILL_SCALE = 1.35;
+
 async function writeIcon(size) {
+  const target = Math.round(size * HAND_FILL_SCALE);
   const resized = await sharp(handBuffer)
-    .resize(size, size, { fit: 'contain' })
+    .resize(target, target, { fit: 'contain' })
     .png()
     .toBuffer();
 
-  const outPath = path.join(publicDir, `icon-${size}.png`);
-  await sharp({
+  const canvas = sharp({
     create: {
-      width: size,
-      height: size,
+      width: target,
+      height: target,
       channels: 3,
       background: KLAROPH_BLUE,
     },
   })
     .png()
-    .composite([{ input: resized, gravity: 'center' }])
-    .toFile(outPath);
+    .composite([{ input: resized, gravity: 'center' }]);
+
+  const cropLeft = Math.floor((target - size) / 2);
+  const cropTop = Math.floor((target - size) / 2);
+  await sharp(await canvas.toBuffer())
+    .extract({ left: cropLeft, top: cropTop, width: size, height: size })
+    .toFile(path.join(publicDir, `icon-${size}.png`));
   console.log(`Written: public/icon-${size}.png`);
 }
 
