@@ -17,6 +17,8 @@ type UpgradeModalProps = {
   onUpgrade?: () => void
   /** Optional context message (e.g. import quota exhausted). */
   message?: string
+  /** When provided and user selects monthly + Upgrade to Pro, open this instead of redirecting. */
+  onOpenPaymentModal?: () => void
 }
 
 /** Table rows: strongest Pro differentiators first, then shared, then tools. Same wording as landing. */
@@ -114,12 +116,17 @@ function UpgradeTableRows() {
   )
 }
 
-export default function UpgradeModal({ isOpen, onClose, message }: UpgradeModalProps) {
+export default function UpgradeModal({ isOpen, onClose, message, onOpenPaymentModal }: UpgradeModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [planType, setPlanType] = useState<'monthly' | 'annual'>('annual')
 
   const handleUpgrade = async () => {
+    if (planType === 'monthly' && onOpenPaymentModal) {
+      onOpenPaymentModal()
+      onClose()
+      return
+    }
     setLoading(true)
     setError(null)
     try {

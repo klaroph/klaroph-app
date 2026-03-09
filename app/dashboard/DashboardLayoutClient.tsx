@@ -6,12 +6,14 @@ import Sidebar from '../../components/layout/Sidebar'
 import MobileQuickActions from '../../components/layout/MobileQuickActions'
 import HowKlaroPHWorksModal, { hasSeenOnboarding } from '../../components/onboarding/HowKlaroPHWorksModal'
 import UpgradeModal from '../../components/dashboard/UpgradeModal'
+import PaymentQRModal from '../../components/dashboard/PaymentQRModal'
 import GraceBanner from '../../components/dashboard/GraceBanner'
 import NewGoalModal from '../../components/dashboard/NewGoalModal'
 import IncomeAllocationModal from '../../components/dashboard/IncomeAllocationModal'
 import AddExpenseModal from '../../components/dashboard/AddExpenseModal'
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext'
 import { UpgradeTriggerProvider, useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
+import { useSubscription } from '@/contexts/SubscriptionContext'
 import { dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
 
 const DashboardActionsContext = createContext<{
@@ -26,7 +28,25 @@ export function useDashboardActions() {
 
 function UpgradeModalGate() {
   const { isUpgradeModalOpen, upgradeModalMessage, closeUpgradeModal } = useUpgradeTrigger()
-  return <UpgradeModal isOpen={isUpgradeModalOpen} onClose={closeUpgradeModal} message={upgradeModalMessage ?? undefined} onUpgrade={() => {}} />
+  const { refresh: refreshSubscription, isPro } = useSubscription()
+  const [paymentQROpen, setPaymentQROpen] = useState(false)
+  return (
+    <>
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={closeUpgradeModal}
+        message={upgradeModalMessage ?? undefined}
+        onUpgrade={() => {}}
+        onOpenPaymentModal={() => setPaymentQROpen(true)}
+      />
+      <PaymentQRModal
+        isOpen={paymentQROpen}
+        onClose={() => setPaymentQROpen(false)}
+        refreshSubscription={refreshSubscription}
+        isPro={isPro}
+      />
+    </>
+  )
 }
 
 export default function DashboardLayoutClient({ children }: { children: React.ReactNode }) {

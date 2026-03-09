@@ -148,6 +148,144 @@ export async function retrieveCheckoutSession(
 }
 
 // ---------------------------------------------------------------------------
+// Payment Intents + QRPH (in-app QR payment)
+// ---------------------------------------------------------------------------
+
+export type CreatePaymentIntentParams = {
+  amount: number // centavos
+  currency?: 'PHP'
+  paymentMethodAllowed?: string[]
+  description?: string
+  metadata?: Record<string, string>
+}
+
+export type PaymentIntentResponse = {
+  data: {
+    id: string
+    type: 'payment_intent'
+    attributes: {
+      amount: number
+      currency: string
+      status: string
+      payment_method_allowed: string[]
+      next_action?: {
+        type: string
+        code?: {
+          id: string
+          amount: number
+          image_url: string
+          label?: string
+        }
+      }
+      metadata: Record<string, string> | null
+      [key: string]: unknown
+    }
+  }
+}
+
+export async function createPaymentIntent(
+  params: CreatePaymentIntentParams
+): Promise<PaymentIntentResponse> {
+  return paymongoRequest<PaymentIntentResponse>('/payment_intents', {
+    method: 'POST',
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          amount: params.amount,
+          currency: params.currency ?? 'PHP',
+          payment_method_allowed: params.paymentMethodAllowed ?? ['qrph'],
+          description: params.description ?? undefined,
+          metadata: params.metadata ?? {},
+        },
+      },
+    }),
+  })
+}
+
+export type CreatePaymentMethodQrphParams = {
+  billing: {
+    name: string
+    email: string
+    phone?: string
+    address?: {
+      line1?: string
+      line2?: string
+      city?: string
+      state?: string
+      postal_code?: string
+      country?: string
+    }
+  }
+  expiry_seconds?: number // 60–9000; default 30 min
+}
+
+export type PaymentMethodResponse = {
+  data: {
+    id: string
+    type: string
+    attributes: Record<string, unknown>
+  }
+}
+
+export async function createPaymentMethodQrph(
+  params: CreatePaymentMethodQrphParams
+): Promise<PaymentMethodResponse> {
+  const billing = params.billing
+  const address = billing.address ?? {}
+  return paymongoRequest<PaymentMethodResponse>('/payment_methods', {
+    method: 'POST',
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          type: 'qrph',
+          expiry_seconds: params.expiry_seconds ?? 600,
+          billing: {
+            name: billing.name,
+            email: billing.email,
+            phone: billing.phone ?? '',
+            address: {
+              line1: address.line1 ?? 'N/A',
+              line2: address.line2 ?? '',
+              city: address.city ?? 'Manila',
+              state: address.state ?? 'NCR',
+              postal_code: address.postal_code ?? '1000',
+              country: address.country ?? 'PH',
+            },
+          },
+        },
+      },
+    }),
+  })
+}
+
+export async function attachPaymentMethodToIntent(
+  paymentIntentId: string,
+  paymentMethodId: string
+): Promise<PaymentIntentResponse> {
+  return paymongoRequest<PaymentIntentResponse>(
+    `/payment_intents/${paymentIntentId}/attach`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            payment_method: paymentMethodId,
+          },
+        },
+      })
+    }
+  )
+}
+
+export async function retrievePaymentIntent(
+  paymentIntentId: string
+): Promise<PaymentIntentResponse> {
+  return paymongoRequest<PaymentIntentResponse>(
+    `/payment_intents/${paymentIntentId}`
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Subscriptions (Card + Maya auto-recurring — future use)
 // ---------------------------------------------------------------------------
 

@@ -4,6 +4,7 @@ import {
   verifyWebhookSignature,
   isTimestampFresh,
   retrieveCheckoutSession,
+  retrievePaymentIntent,
 } from '@/lib/paymongo'
 
 type WebhookEvent = {
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
         break
 
       case 'payment.paid':
-        console.log('[Webhook] payment.paid (no-op for checkout flow) event_id=', eventId)
+        await handlePaymentPaid(event)
         break
 
       case 'payment.failed':
@@ -263,6 +264,84 @@ async function handleCheckoutPaid(event: WebhookEvent) {
   }
 
   console.log('[Webhook] Subscription insert/update result: success user_id=', userId, 'plan=pro plan_type=', planType, 'period_end=', periodEnd.toISOString())
+}
+
+/** payment.paid: QRPH (payment intent) flow — activate subscription from intent metadata. */
+async function handlePaymentPaid(event: WebhookEvent) {
+  const paymentData = event.data.attributes.data
+  if (paymentData.type !== 'payment') {
+    console.log('[Webhook] payment.paid ignored: data.type=', (paymentData as { type?: string }).type)
+    return
+  }
+  const paymentAttrs = paymentData.attributes as Record<string, unknown>
+  const paymentIntentId = paymentAttrs.payment_intent_id as string | undefined
+  if (!paymentIntentId) {
+    console.warn('[Webhook] payment.paid missing payment_intent_id')
+    return
+  }
+
+  let metadata: Record<string, string> = {}
+  try {
+    const intent = await retrievePaymentIntent(paymentIntentId)
+    metadata = (intent.data.attributes.metadata ?? {}) as Record<string, string>
+  } catch (err) {
+    console.error('[Webhook] Failed to fetch payment intent for payment.paid:', err)
+    throw err
+  }
+
+  const userId = metadata.user_id
+  if (!userId || metadata.plan !== 'pro') {
+    console.log('[Webhook] payment.paid skipped: no user_id or plan in intent metadata')
+    return
+  }
+
+  const planType = (metadata.plan_type === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual'
+  console.log('[Webhook] payment.paid (QRPH) subscription insert user_id=', userId, 'plan_type=', planType)
+
+  const { data: premiumPlan } = await supabaseAdmin
+    .from('plans')
+    .select('id')
+    .eq('name', 'pro')
+    .single()
+
+  if (!premiumPlan) {
+    console.error('[Webhook] payment.paid: plan (pro) not found')
+    throw new Error('Premium plan not found')
+  }
+
+  const now = new Date()
+  const periodEnd = new Date(now)
+  if (planType === 'annual') {
+    periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+  } else {
+    periodEnd.setMonth(periodEnd.getMonth() + 1)
+  }
+
+  const { error } = await supabaseAdmin
+    .from('subscriptions')
+    .upsert(
+      {
+        user_id: userId,
+        plan_id: premiumPlan.id,
+        status: 'active',
+        plan_type: planType,
+        payment_provider: 'paymongo',
+        paymongo_checkout_session_id: null,
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd.toISOString(),
+        grace_period_until: null,
+        grace_period_used: false,
+        auto_renew: true,
+      },
+      { onConflict: 'user_id' }
+    )
+
+  if (error) {
+    console.error('[Webhook] payment.paid subscription upsert failed user_id=', userId, 'error=', error.message)
+    throw error
+  }
+
+  console.log('[Webhook] payment.paid subscription success user_id=', userId, 'plan=pro plan_type=', planType)
 }
 
 async function handleSubscriptionActivated(event: WebhookEvent) {
