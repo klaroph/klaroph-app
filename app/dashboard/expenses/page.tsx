@@ -29,7 +29,7 @@ import { usePremiumGate } from '@/hooks/usePremiumGate'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { useTriggerDateRangeBeyond90 } from '@/hooks/useSmartUpgradeTriggers'
 import { getAllTimeRangeAndGrouping, type AllTimeRangeResult } from '@/lib/allTimeRange'
-import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboardRefresh'
+import { DASHBOARD_REFRESH_EVENT, dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
 import { toLocalDateString } from '@/lib/format'
 
 type ExpenseRow = {
@@ -816,6 +816,7 @@ export default function ExpensesPage() {
                                   return
                                 }
                                 setRefreshTrigger((n) => n + 1)
+                                dispatchDashboardRefresh()
                               }}
                               title="Delete"
                               aria-label="Delete"
@@ -846,6 +847,7 @@ export default function ExpensesPage() {
         onSaved={() => {
           setRefreshTrigger((n) => n + 1)
           router.refresh()
+          dispatchDashboardRefresh()
         }}
       />
       <EditExpenseModal
@@ -855,18 +857,25 @@ export default function ExpensesPage() {
           setRefreshTrigger((n) => n + 1)
           setEditingExpense(null)
           router.refresh()
+          dispatchDashboardRefresh()
         }}
         expense={editingExpense}
       />
       <BudgetPlanner
         isOpen={budgetPlannerOpen}
         onClose={() => setBudgetPlannerOpen(false)}
-        onSaved={() => setBudgetRefreshKey(Date.now())}
+        onSaved={() => {
+          setBudgetRefreshKey(Date.now())
+          dispatchDashboardRefresh()
+        }}
       />
       <MonthOverrideModal
         isOpen={monthOverrideOpen}
         onClose={() => setMonthOverrideOpen(false)}
-        onSaved={() => setBudgetRefreshKey(Date.now())}
+        onSaved={() => {
+          setBudgetRefreshKey(Date.now())
+          dispatchDashboardRefresh()
+        }}
         month={overrideMonth}
       />
     </div>

@@ -87,6 +87,31 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
     return () => { cancelled = true }
   }, [router])
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    let lastDispatch = 0
+    const MIN_INTERVAL_MS = 3000
+    const maybeDispatch = () => {
+      const now = Date.now()
+      if (now - lastDispatch < MIN_INTERVAL_MS) return
+      lastDispatch = now
+      dispatchDashboardRefresh()
+    }
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      maybeDispatch()
+    }
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) maybeDispatch()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onPageShow)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onPageShow)
+    }
+  }, [])
+
   const handleOnboardingClose = () => {
     setShowOnboarding(false)
   }

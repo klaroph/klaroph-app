@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboardRefresh'
+import { DASHBOARD_REFRESH_EVENT, dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
 import type { GoalRow, GoalWithSaved } from '@/types/database'
 import GoalMomentumSection from '@/components/dashboard/GoalMomentumSection'
 import ExpensesTrendChartCard from '@/components/dashboard/ExpensesTrendChartCard'
@@ -154,6 +154,7 @@ export default function DashboardPage() {
             <BudgetOverview
               selectedMonth={budgetMonth}
               onMonthChange={setBudgetMonth}
+              budgetRefreshKey={refreshTrigger}
               maxCategories={8}
               breakdownTitle="Top 8 Spending to Watch"
               showBudgetEditorButtons={false}
@@ -193,7 +194,10 @@ export default function DashboardPage() {
       <ManageGoalsModal
         isOpen={manageGoalsOpen}
         onClose={() => setManageGoalsOpen(false)}
-        onGoalsChange={() => setRefreshTrigger((n) => n + 1)}
+        onGoalsChange={() => {
+          setRefreshTrigger((n) => n + 1)
+          dispatchDashboardRefresh()
+        }}
         maxGoals={maxGoals}
         isPro={isPro}
         onUpgradeClick={isPro ? undefined : () => { setManageGoalsOpen(false); openUpgradeModal() }}
@@ -206,6 +210,7 @@ export default function DashboardPage() {
           setAddGoalOpen(false)
           setRefreshTrigger((n) => n + 1)
           router.refresh()
+          dispatchDashboardRefresh()
         }}
       />
 

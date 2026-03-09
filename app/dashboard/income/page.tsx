@@ -26,7 +26,7 @@ import { usePremiumGate } from '@/hooks/usePremiumGate'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { useTriggerDateRangeBeyond90 } from '@/hooks/useSmartUpgradeTriggers'
 import { getAllTimeRangeAndGrouping, type AllTimeRangeResult } from '@/lib/allTimeRange'
-import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboardRefresh'
+import { DASHBOARD_REFRESH_EVENT, dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
 import { toLocalDateString } from '@/lib/format'
 
 type IncomeRecord = {
@@ -727,6 +727,7 @@ export default function IncomePage() {
                                   return
                                 }
                                 setRefreshTrigger((n) => n + 1)
+                                dispatchDashboardRefresh()
                               }}
                               title="Delete"
                               aria-label="Delete"
@@ -758,6 +759,7 @@ export default function IncomePage() {
           setRefreshTrigger((n) => n + 1)
           setEditingRecord(null)
           router.refresh()
+          dispatchDashboardRefresh()
         }}
         initialRecord={editingRecord}
       />

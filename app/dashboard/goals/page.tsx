@@ -11,7 +11,7 @@ import UpgradeCTA from '../../../components/ui/UpgradeCTA'
 import PremiumBadge from '../../../components/ui/PremiumBadge'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { PLAN_LIMITS } from '@/lib/planLimits'
-import { DASHBOARD_REFRESH_EVENT } from '@/lib/dashboardRefresh'
+import { DASHBOARD_REFRESH_EVENT, dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
 
 const defaultSummary: GoalSummary = {
   totalSaved: 0,
@@ -76,6 +76,7 @@ export default function GoalsPage() {
       return
     }
     setRefreshTrigger((n) => n + 1)
+    dispatchDashboardRefresh()
   }
 
   return (
