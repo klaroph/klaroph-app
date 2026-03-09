@@ -238,8 +238,9 @@ export default function IncomePage() {
   }, [period, allTimeRange, refreshTrigger, range.start, range.end, sourceFilter])
 
   const totalIncome = useMemo(() => records.reduce((s, r) => s + Number(r.total_amount), 0), [records])
-  const avgPerEntry = records.length > 0 ? totalIncome / records.length : 0
   const bySource = useMemo(() => aggregateBySource(records), [records])
+  const topSource = bySource[0]
+  const topSourcePct = totalIncome > 0 && topSource ? Math.round((topSource.total / totalIncome) * 100) : 0
   const maxSourceVal = Math.max(1, ...bySource.map((s) => s.total))
 
   const trendData = useMemo(() => {
@@ -352,7 +353,7 @@ export default function IncomePage() {
               <PremiumBadge size="sm" />
             </span>
           )}
-          <button type="button" className="btn-secondary header-add-btn-desktop-only" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
+          <button type="button" className="btn-secondary" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
             Import CSV
           </button>
           <button className="btn-primary header-add-btn-desktop-only" onClick={() => { setEditingRecord(null); setModalOpen(true) }}>
@@ -380,10 +381,15 @@ export default function IncomePage() {
         </div>
 
         <div className="income-expense-summary-card premium-summary-card premium-summary-card-accent-yellow">
-          <div style={labelStyle}>Transactions</div>
-          <div style={valueStyle}>{loading ? '...' : records.length}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-            Avg ₱{loading ? '...' : Math.round(avgPerEntry).toLocaleString()} / entry
+          <div style={labelStyle}>Top Category</div>
+          <div style={valueStyle}>
+            {loading ? '...' : (topSource?.source ?? '—')}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontWeight: 600 }}>
+            {loading ? '...' : (topSource ? `₱${topSource.total.toLocaleString()}` : '—')}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            {loading ? '...' : (topSource ? `${topSourcePct}% of income` : '—')}
           </div>
         </div>
 

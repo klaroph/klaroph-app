@@ -67,8 +67,8 @@ export async function POST(request: Request) {
     const amount = isAnnual ? ANNUAL_CENTAVOS : MONTHLY_CENTAVOS
     const planNameLabel = isAnnual ? 'Clarity Pro — Annual (Save 20%)' : 'Clarity Pro — Monthly'
     const description = isAnnual
-      ? 'KlaroPH Pro: 12 months, 20 goals, unlimited history, export, advance charts and analytics.'
-      : 'KlaroPH Pro: 20 goals, unlimited history, export, advance charts and analytics.'
+      ? 'KlaroPH Pro: 12 months, 20 goals, unlimited history, import/export, advance charts and analytics.'
+      : 'KlaroPH Pro: 20 goals, unlimited history, import/export, advance charts and analytics.'
 
     const metadata: Record<string, string> = {
       user_id: String(user.id),

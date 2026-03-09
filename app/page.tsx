@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
 import HowKlaroPHWorksModal from '../components/onboarding/HowKlaroPHWorksModal'
 import KlaroPHHandLogo from '../components/ui/KlaroPHHandLogo'
 import SignUpModal from '../components/auth/SignUpModal'
+import AddToHomeScreenModal from '../components/landing/AddToHomeScreenModal'
 import PlanFeaturePremiumIcon from '../components/ui/PlanFeaturePremiumIcon'
 import {
   FREE_PLAN_FEATURES,
@@ -77,6 +78,33 @@ export default function LandingPage() {
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false)
   const [showGoogleConsentModal, setShowGoogleConsentModal] = useState(false)
   const [googleConsentChecked, setGoogleConsentChecked] = useState(false)
+  const [showAddToHomeModal, setShowAddToHomeModal] = useState(false)
+  const [hasInstallPrompt, setHasInstallPrompt] = useState(false)
+  const [showPwaInNav, setShowPwaInNav] = useState(false)
+  const deferredPromptRef = useRef<(Event & { prompt: () => Promise<{ outcome: string }> }) | null>(null)
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault()
+      deferredPromptRef.current = e as Event & { prompt: () => Promise<{ outcome: string }> }
+      setHasInstallPrompt(true)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const update = () => {
+      const mobile = window.innerWidth <= 900
+      const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      const android = /Android/i.test(navigator.userAgent)
+      setShowPwaInNav(hasInstallPrompt || mobile || ios || android)
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [hasInstallPrompt])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -157,7 +185,24 @@ export default function LandingPage() {
               Purpose
             </button>
           </div>
-          <a href="#login" className="landing-nav-link">Sign In</a>
+          {showPwaInNav && (
+            <button
+              type="button"
+              className="landing-nav-add-home"
+              onClick={() => setShowAddToHomeModal(true)}
+              aria-label="Add KlaroPH to your home screen"
+            >
+              <span className="landing-nav-add-home-icon" aria-hidden>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" />
+                </svg>
+              </span>
+              <span className="landing-nav-add-home-label landing-nav-add-home-label-desktop">Add to Home Screen</span>
+              <span className="landing-nav-add-home-label landing-nav-add-home-label-mobile">Add App</span>
+            </button>
+          )}
+          <a href="#login" className="landing-nav-link landing-nav-signin">Sign In</a>
         </div>
       </nav>
 
@@ -168,11 +213,14 @@ export default function LandingPage() {
             <h1 className="landing-hero-headline">{HERO_HEADLINE}</h1>
             <p className="landing-hero-subheadline">{HERO_SUBHEADLINE}</p>
             <div className="landing-hero-ctas">
-              <button type="button" className="landing-cta-btn landing-cta-primary" onClick={scrollToGetStarted}>Get Started</button>
-              <button type="button" className="landing-cta-btn landing-cta-secondary" onClick={() => setShowHowItWorks(true)}>
-                See How It Works
+              <button type="button" className="landing-cta-btn landing-cta-primary" onClick={scrollToGetStarted}>
+                Create Free Account
+              </button>
+              <button type="button" className="landing-cta-btn landing-cta-secondary" onClick={() => setShowAddToHomeModal(true)}>
+                Add to Home Screen
               </button>
             </div>
+            <p className="landing-hero-pwa-helper">Fast mobile access. No download required.</p>
           </div>
           <div className="landing-hero-right">
             <div className="landing-dashboard-mock" role="img" aria-label="Dashboard preview: monthly overview with income, expenses, and goal progress">
@@ -226,6 +274,31 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Free Financial Tools — SEO entry points, no signup */}
+      <section id="tools" className="landing-tools">
+        <h2 className="landing-tools-title">Free Financial Tools for Everyday Decisions</h2>
+        <p className="landing-tools-subtitle">Try KlaroPH calculators before creating your account.</p>
+        <div className="landing-tools-grid">
+          <a href="/tools/salary-calculator" className="landing-tool-card">
+            <h3>Salary Calculator</h3>
+            <p>Estimate net pay after SSS, PhilHealth, Pag-IBIG, and tax. For employees and freelancers.</p>
+          </a>
+          <a href="/tools/loan-calculator" className="landing-tool-card">
+            <h3>Loan Calculator</h3>
+            <p>Monthly amortization, total interest, and payoff. Personal, housing, and car loans.</p>
+          </a>
+          <a href="/tools/13th-month-calculator" className="landing-tool-card">
+            <h3>13th Month Calculator</h3>
+            <p>Compute 13th month pay from basic salary and months worked. Tax threshold included.</p>
+          </a>
+          <a href="/tools/financial-health-check" className="landing-tool-card">
+            <h3>Financial Health Check</h3>
+            <p>Quick read on your financial position from assets and liabilities. No account needed.</p>
+          </a>
+        </div>
+        <p className="landing-tools-cta">No signup required</p>
+      </section>
+
       {/* How it works: 3 steps */}
       <section id="how" className="landing-how">
         <h2 className="landing-how-title">How it works</h2>
@@ -241,7 +314,7 @@ export default function LandingPage() {
       </section>
 
       {/* Free vs Pro — consistent with Upgrade modal */}
-      <section className="landing-compare">
+      <section id="pricing" className="landing-compare">
         <h2 className="landing-compare-title">Free vs Pro</h2>
         <div className="landing-compare-grid">
           <div className="landing-plan-card">
@@ -389,6 +462,11 @@ export default function LandingPage() {
 
       <HowKlaroPHWorksModal isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} markSeenOnAccept={false} />
       <SignUpModal isOpen={showSignUpModal} onClose={() => setShowSignUpModal(false)} />
+      <AddToHomeScreenModal
+        isOpen={showAddToHomeModal}
+        onClose={() => setShowAddToHomeModal(false)}
+        deferredPromptRef={deferredPromptRef}
+      />
 
       {showGoogleConsentModal &&
         typeof document !== 'undefined' &&

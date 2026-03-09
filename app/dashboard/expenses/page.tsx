@@ -283,8 +283,9 @@ export default function ExpensesPage() {
   }, [period, allTimeRange, refreshTrigger, range.start, range.end, typeFilter, categoryFilter])
 
   const totalExpenses = useMemo(() => rows.reduce((s, r) => s + Number(r.amount), 0), [rows])
-  const avgPerEntry = rows.length > 0 ? totalExpenses / rows.length : 0
   const byCategory = useMemo(() => aggregateByCategory(rows), [rows])
+  const topCategory = byCategory[0]
+  const topCategoryPct = totalExpenses > 0 && topCategory ? Math.round((topCategory.total / totalExpenses) * 100) : 0
   const maxCatVal = Math.max(1, ...byCategory.map((c) => c.total))
 
   const spendingByCategoryForBudget = useMemo(() => {
@@ -407,7 +408,7 @@ export default function ExpensesPage() {
               <PremiumBadge size="sm" />
             </span>
           )}
-          <button type="button" className="btn-secondary header-add-btn-desktop-only" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
+          <button type="button" className="btn-secondary" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
             Import CSV
           </button>
           <button className="btn-primary header-add-btn-desktop-only" onClick={() => setModalOpen(true)}>
@@ -453,10 +454,15 @@ export default function ExpensesPage() {
         </div>
 
         <div className="income-expense-summary-card premium-summary-card premium-summary-card-accent-yellow">
-          <div style={labelStyle}>Transactions</div>
-          <div style={valueStyle}>{loading ? '...' : rows.length}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-            Avg ₱{loading ? '...' : Math.round(avgPerEntry).toLocaleString()} / entry
+          <div style={labelStyle}>Top Category</div>
+          <div style={valueStyle}>
+            {loading ? '...' : (topCategory?.category ?? '—')}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontWeight: 600 }}>
+            {loading ? '...' : (topCategory ? `₱${topCategory.total.toLocaleString()}` : '—')}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            {loading ? '...' : (topCategory ? `${topCategoryPct}% of expenses` : '—')}
           </div>
         </div>
 
