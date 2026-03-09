@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "export:oauth-logo": "node scripts/export-oauth-logo.mjs",
+    "export:hand-icon": "node scripts/export-hand-icon.mjs",
+    "export:pwa-icons": "node scripts/export-pwa-icons.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -34,6 +37,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "pg": "^8.19.0",
+    "sharp": "^0.33.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"

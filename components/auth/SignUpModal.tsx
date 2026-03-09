@@ -71,7 +71,7 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
   }, [password, confirmPassword])
 
   const validateTerms = useCallback(() => {
-    if (!termsChecked) setTermsError('You must agree to the Terms and Privacy Policy.')
+    if (!termsChecked) setTermsError('You must agree to the Privacy Policy and Terms & Conditions.')
     else setTermsError(null)
   }, [termsChecked])
 
@@ -93,7 +93,7 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
     validateTerms()
 
     if (!emailValid || !passwordValid || !passwordsMatch || !termsChecked) {
-      if (!termsChecked) setTermsError('You must agree to the Terms and Privacy Policy.')
+      if (!termsChecked) setTermsError('You must agree to the Privacy Policy and Terms & Conditions.')
       return
     }
 
@@ -222,9 +222,9 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
           />
           <span id="signup-terms-desc">
             I agree to the{' '}
-            <a href="/terms" target="_blank" rel="noopener noreferrer" className="login-terms-link">Terms &amp; Conditions</a>
-            {' '}and{' '}
             <a href="/privacy" target="_blank" rel="noopener noreferrer" className="login-terms-link">Privacy Policy</a>
+            {' '}and{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="login-terms-link">Terms &amp; Conditions</a>
           </span>
         </label>
         {termsError && (

@@ -2375,7 +2375,7 @@ html { scroll-behavior: smooth; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 48px;
+  padding: 20px 56px;
   background: rgba(0, 56, 168, 0.97);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -2395,13 +2395,13 @@ html { scroll-behavior: smooth; }
 .landing-nav-links {
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 40px;
 }
 
 .landing-nav-links-primary {
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 40px;
 }
 
 .landing-nav-link {
@@ -2427,7 +2427,8 @@ html { scroll-behavior: smooth; }
   padding: 120px 48px 80px;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #0038A8 0%, #002d8a 40%, #001d5c 100%);
+  background: linear-gradient(160deg, #0038A8 0%, #002d8a 35%, #001d5c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 /* SaaS two-column hero */
@@ -2449,44 +2450,54 @@ html { scroll-behavior: smooth; }
   z-index: 1;
 }
 .landing-hero-left {
-  max-width: 520px;
+  max-width: 460px;
 }
 .landing-hero-headline {
-  margin: 0 0 20px;
+  margin: 0 0 28px;
   font-size: clamp(32px, 4vw, 44px);
   font-weight: 700;
   color: var(--text-inverse);
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: 1.18;
 }
 .landing-hero-subheadline {
-  margin: 0 0 32px;
+  margin: 0 0 36px;
   font-size: 18px;
-  color: rgba(255, 255, 255, 0.85);
-  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.55;
+  max-width: 420px;
 }
 .landing-hero-ctas {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 14px;
+}
+.landing-hero-ctas .landing-cta-btn {
+  min-height: 52px;
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
 .landing-cta-primary {
   background: var(--color-yellow);
   color: #0f172a;
-  box-shadow: 0 4px 20px rgba(252, 209, 22, 0.3);
+  box-shadow: 0 4px 20px rgba(252, 209, 22, 0.35);
+  border: 2px solid transparent;
 }
 .landing-cta-primary:hover {
-  box-shadow: 0 8px 30px rgba(252, 209, 22, 0.4);
+  box-shadow: 0 8px 28px rgba(252, 209, 22, 0.45);
 }
 .landing-cta-secondary {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-inverse);
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.5);
 }
 .landing-cta-secondary:hover {
-  border-color: var(--text-inverse);
-  background: rgba(255, 255, 255, 0.08);
-  transform: none;
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-inverse);
   box-shadow: none;
 }
 .landing-hero-right {
@@ -2500,12 +2511,12 @@ html { scroll-behavior: smooth; }
 .landing-dashboard-mock {
   width: 100%;
   min-width: 280px;
-  max-width: 420px;
+  max-width: 400px;
   background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px -16px rgba(0, 0, 0, 0.18), 0 8px 24px -8px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   position: relative;
   z-index: 2;
   flex-shrink: 0;
@@ -2514,89 +2525,92 @@ html { scroll-behavior: smooth; }
   flex-direction: column;
 }
 .landing-mock-header {
-  padding: var(--space-3) var(--space-4);
-  background: #f1f5f9;
-  font-size: 13px;
+  padding: 18px 20px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
+  border-bottom: 1px solid var(--border-muted);
 }
 .landing-mock-summary-cards {
   display: flex;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  gap: 12px;
+  padding: 20px 20px 16px;
 }
 .landing-mock-summary-card {
   flex: 1;
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  padding: 14px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
   background: var(--surface);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 .landing-mock-card-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 .landing-mock-card-value {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.02em;
 }
 .landing-mock-value-income { color: var(--color-success); }
 .landing-mock-value-expense { color: var(--color-error); }
 .landing-mock-value-savings { color: var(--color-primary); }
 .landing-mock-chart {
   height: 100px;
-  margin: 0 var(--space-4) var(--space-3);
-  padding: var(--space-3) var(--space-2) 0;
-  border-radius: var(--radius-sm);
+  margin: 0 20px 20px;
+  padding: 16px 12px 0;
+  border-radius: 10px;
   background: #f8fafc;
   border: 1px solid var(--border-muted);
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
 }
 .landing-mock-chart-bar {
   flex: 1;
   min-width: 0;
   max-width: 36px;
   margin: 0 auto;
-  border-radius: 4px 4px 0 0;
+  border-radius: 6px 6px 0 0;
   background: var(--color-primary);
-  opacity: 0.9;
+  opacity: 0.88;
   transition: height 0.2s ease;
 }
 .landing-mock-chart-bar-tall { opacity: 1; }
 .landing-mock-goal {
-  padding: 0 var(--space-4) var(--space-4);
+  padding: 0 20px 20px;
 }
 .landing-mock-goal-label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: var(--space-2);
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
 }
 .landing-mock-progress-track {
   height: 8px;
   background: var(--border-muted);
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
-  margin-bottom: var(--space-2);
+  margin-bottom: 8px;
 }
 .landing-mock-progress-fill {
   height: 100%;
   background: var(--color-primary);
-  border-radius: 4px;
+  border-radius: 6px;
   transition: width 0.2s ease;
 }
 .landing-mock-goal-text {
@@ -2971,6 +2985,24 @@ html { scroll-behavior: smooth; }
   line-height: 1.5;
 }
 
+.consent-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  cursor: pointer;
+}
+.consent-checkbox {
+  margin-top: 3px;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary);
+}
+
 .consent-actions {
   display: flex;
   justify-content: flex-end;
@@ -3001,6 +3033,11 @@ html { scroll-behavior: smooth; }
 }
 .consent-btn-primary:hover {
   background: var(--color-primary-hover);
+}
+.consent-btn-primary:disabled {
+  background: var(--border-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
 /* SignUp modal */
@@ -3211,24 +3248,24 @@ html { scroll-behavior: smooth; }
 .landing-hero::before {
   content: "";
   position: absolute;
-  width: 600px;
-  height: 600px;
+  width: 640px;
+  height: 640px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(252, 209, 22, 0.12) 0%, transparent 70%);
-  top: -200px;
-  right: -200px;
+  background: radial-gradient(circle, rgba(252, 209, 22, 0.08) 0%, transparent 65%);
+  top: -220px;
+  right: -180px;
   pointer-events: none;
 }
 
 .landing-hero::after {
   content: "";
   position: absolute;
-  width: 400px;
-  height: 400px;
+  width: 420px;
+  height: 420px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(206, 17, 38, 0.08) 0%, transparent 70%);
-  bottom: -100px;
-  left: -100px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 0%, transparent 65%);
+  bottom: -80px;
+  left: -80px;
   pointer-events: none;
 }
 
@@ -3317,8 +3354,11 @@ html { scroll-behavior: smooth; }
 }
 
 .landing-features {
-  padding: 80px 48px;
+  padding: 88px 48px 80px;
   background: var(--background);
+  border-top: 1px solid transparent;
+  position: relative;
+  margin-top: -1px;
 }
 
 .landing-features-title {
@@ -3454,10 +3494,11 @@ html { scroll-behavior: smooth; }
     grid-template-columns: 1fr;
     text-align: center;
   }
-  .landing-hero-left { max-width: none; }
+  .landing-hero-left { max-width: none; margin: 0 auto; }
+  .landing-hero-subheadline { margin-left: auto; margin-right: auto; }
   .landing-hero-ctas { justify-content: center; }
   .landing-hero-right { order: -1; }
-  .landing-dashboard-mock { max-width: 320px; margin: 0 auto; }
+  .landing-dashboard-mock { max-width: 340px; margin: 0 auto; }
   .landing-mock-summary-cards { flex-wrap: wrap; }
   .landing-mock-summary-card { min-width: calc(33.33% - 6px); }
   .landing-mock-header,
@@ -3532,16 +3573,16 @@ html { scroll-behavior: smooth; }
 
 /* Landing: mobile */
 @media (max-width: 600px) {
-  .landing-hero-headline { font-size: 28px; }
-  .landing-hero-subheadline { font-size: 16px; }
-  .landing-hero-ctas { flex-direction: column; }
-  .landing-cta-btn { width: 100%; text-align: center; }
+  .landing-hero-headline { font-size: 28px; line-height: 1.2; }
+  .landing-hero-subheadline { font-size: 16px; max-width: 100%; }
+  .landing-hero-ctas { flex-direction: column; gap: 12px; }
+  .landing-hero-ctas .landing-cta-btn { width: 100%; text-align: center; min-height: 48px; padding: 14px 20px; }
   .landing-features-responsive { grid-template-columns: 1fr; }
   .landing-final-checks { flex-direction: column; align-items: center; gap: var(--space-2); }
-  .landing-dashboard-mock { max-width: 100%; min-width: 260px; }
+  .landing-dashboard-mock { max-width: 100%; min-width: 260px; border-radius: 14px; }
   .landing-mock-summary-cards { flex-direction: column; }
   .landing-mock-summary-card { min-width: 0; }
-  .landing-mock-card-value { font-size: 12px; }
+  .landing-mock-card-value { font-size: 13px; }
   .landing-mock-chart { height: 80px; margin-left: var(--space-3); margin-right: var(--space-3); }
   .landing-mock-goal,
   .landing-mock-header { padding-left: var(--space-3); padding-right: var(--space-3); }

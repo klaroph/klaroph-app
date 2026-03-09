@@ -17,7 +17,7 @@ import {
 } from '../lib/planFeatures'
 
 const HERO_HEADLINE = 'Take Control of Your Money with Financial Clarity.'
-const HERO_SUBHEADLINE = 'Track income, expenses, and goals in one simple dashboard.'
+const HERO_SUBHEADLINE = 'Track expenses, manage budgets, and reach financial goals in one simple dashboard.'
 const EMOTIONAL_TAGLINE = 'Finally understand where your money goes.'
 
 const FEATURES = [
@@ -76,6 +76,17 @@ export default function LandingPage() {
   const [showSignUpModal, setShowSignUpModal] = useState(false)
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false)
   const [showGoogleConsentModal, setShowGoogleConsentModal] = useState(false)
+  const [googleConsentChecked, setGoogleConsentChecked] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = window.localStorage.getItem('klaroph_legal_consent_given')
+    if (stored === 'true') setHasAcceptedTerms(true)
+  }, [])
+
+  useEffect(() => {
+    if (showGoogleConsentModal) setGoogleConsentChecked(false)
+  }, [showGoogleConsentModal])
 
   useEffect(() => {
     const checkSession = async () => {
@@ -387,16 +398,26 @@ export default function LandingPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="consent-modal-title"
-            onClick={() => setShowGoogleConsentModal(false)}
+            onClick={() => { setShowGoogleConsentModal(false); setGoogleConsentChecked(false); }}
           >
             <div className="consent-modal" onClick={(e) => e.stopPropagation()}>
               <h3 id="consent-modal-title">Terms &amp; Privacy</h3>
-              <p>By continuing, you agree to our Terms &amp; Conditions and Privacy Policy.</p>
+              <p>Before continuing, please confirm that you agree to our <a href="/privacy" target="_blank" rel="noopener noreferrer" className="login-terms-link">Privacy Policy</a> and <a href="/terms" target="_blank" rel="noopener noreferrer" className="login-terms-link">Terms &amp; Conditions</a>.</p>
+              <label className="consent-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={googleConsentChecked}
+                  onChange={(e) => setGoogleConsentChecked(e.target.checked)}
+                  className="consent-checkbox"
+                  aria-describedby="consent-checkbox-desc"
+                />
+                <span id="consent-checkbox-desc">I agree</span>
+              </label>
               <div className="consent-actions">
-                <button type="button" className="consent-btn consent-btn-secondary" onClick={() => setShowGoogleConsentModal(false)}>
+                <button type="button" className="consent-btn consent-btn-secondary" onClick={() => { setShowGoogleConsentModal(false); setGoogleConsentChecked(false); }}>
                   Cancel
                 </button>
-                <button type="button" className="consent-btn consent-btn-primary" onClick={() => { setShowGoogleConsentModal(false); triggerGoogleOAuth(); }}>
+                <button type="button" className="consent-btn consent-btn-primary" disabled={!googleConsentChecked} onClick={() => { setShowGoogleConsentModal(false); if (typeof window !== 'undefined') window.localStorage.setItem('klaroph_legal_consent_given', 'true'); setHasAcceptedTerms(true); triggerGoogleOAuth(); }}>
                   Continue
                 </button>
               </div>
