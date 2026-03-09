@@ -8,8 +8,8 @@ import {
   PRO_PLAN_TOOLS,
 } from '@/lib/planFeatures'
 
-const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 5 // TEMPORARY: testing; restore 149 for production
-const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 48 // TEMPORARY: 12×₱5×0.8 for testing; restore 1430 for production
+const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
+const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
 
 type UpgradeModalProps = {
   isOpen: boolean

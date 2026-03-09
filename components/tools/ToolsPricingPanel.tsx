@@ -36,7 +36,7 @@ export function ToolsPricingPro() {
       <div className="landing-plan-card landing-plan-pro">
         <span className="landing-plan-badge">Most Popular</span>
         <h3>PRO PLAN</h3>
-        <p className="landing-plan-price">₱5<span>/month</span></p>
+        <p className="landing-plan-price">₱149<span>/month</span></p>
         <p className="landing-plan-value">Less than ₱5 per day.</p>
         <p className="plan-section-title">Core</p>
         <ul>

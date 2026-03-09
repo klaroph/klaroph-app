@@ -4,7 +4,7 @@ import { createCheckoutSession, PayMongoError } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 500 // TEMPORARY: ₱5 for testing; restore 14900 (₱149) for production
+const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900 // ₱149
 const ANNUAL_DISCOUNT = 0.8 // 20% off
 const ANNUAL_CENTAVOS = Math.round(12 * MONTHLY_CENTAVOS * ANNUAL_DISCOUNT)
 

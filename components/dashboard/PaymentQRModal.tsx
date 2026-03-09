@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Modal from '../ui/Modal'
 
-const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 5 // TEMPORARY: testing; restore 149 for production
+const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
 const POLL_INTERVAL_MS = 3500
 
 type PaymentQRModalProps = {
