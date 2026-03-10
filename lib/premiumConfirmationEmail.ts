@@ -19,15 +19,27 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
+/** Format subscription end as "Month Day, Year" e.g. March 9, 2027. Returns null if invalid. */
+function formatValidUntil(periodEnd: string | null | undefined): string | null {
+  if (!periodEnd) return null
+  const d = new Date(periodEnd)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 function buildPremiumConfirmationHtml(
   firstName: string | null,
   planName: string,
-  logoUrl: string
+  logoUrl: string,
+  validUntilFormatted: string | null
 ): string {
   const tokens = firstName?.trim()?.split(/\s+/).filter(Boolean)
   const first = tokens?.[0] ?? null
   const greeting = first ? `Hi ${escapeHtml(first)},` : 'Hi there,'
   const planEscaped = escapeHtml(planName)
+  const validityLine = validUntilFormatted
+    ? `<p style="margin:0 0 12px;">Valid until: ${escapeHtml(validUntilFormatted)}</p>`
+    : ''
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -52,6 +64,7 @@ function buildPremiumConfirmationHtml(
               <p style="margin:0 0 12px;">Your payment has been successfully received, and your KlaroPH Pro access is now active.</p>
               <p style="margin:0 0 12px;">You can now continue using Pro features across budgeting, reports, and goals.</p>
               <p style="margin:0 0 12px;">Plan: ${planEscaped}</p>
+              ${validityLine}
               <p style="margin:0 0 20px;">Thank you for supporting KlaroPH.</p>
               <p style="margin:0; font-size: 14px; color: #6b7280; line-height: 1.5;">— KlaroPH<br />Clearer money habits start here.<br />klaroph.com</p>
             </td>
@@ -71,14 +84,15 @@ function buildPremiumConfirmationHtml(
 async function sendPremiumConfirmationEmail(
   to: string,
   firstName: string | null,
-  planName: string
+  planName: string,
+  validUntilFormatted: string | null
 ): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey?.trim()) return false
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://klaroph.com'
   const logoUrl = `${baseUrl.replace(/\/$/, '')}/logo-klaroph-blue.png`
-  const html = buildPremiumConfirmationHtml(firstName, planName, logoUrl)
+  const html = buildPremiumConfirmationHtml(firstName, planName, logoUrl, validUntilFormatted)
 
   try {
     const resend = new Resend(apiKey)
@@ -115,9 +129,16 @@ export async function sendPremiumConfirmationIfNew(
       return
     }
 
-    const [{ data: authUser }, { data: profile }] = await Promise.all([
+    const [{ data: authUser }, { data: profile }, { data: subscription }] = await Promise.all([
       supabaseAdmin.auth.admin.getUserById(userId),
       supabaseAdmin.from('profiles').select('full_name').eq('id', userId).maybeSingle(),
+      supabaseAdmin
+        .from('subscriptions')
+        .select('current_period_end')
+        .eq('user_id', userId)
+        .order('current_period_end', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ])
 
     const email = authUser?.user?.email
@@ -125,7 +146,9 @@ export async function sendPremiumConfirmationIfNew(
 
     const fullName = (profile as { full_name?: string } | null)?.full_name ?? null
     const planName = planType === 'annual' ? 'Annual Pro' : 'Monthly Pro'
-    await sendPremiumConfirmationEmail(email, fullName, planName)
+    const periodEnd = (subscription as { current_period_end?: string } | null)?.current_period_end
+    const validUntilFormatted = formatValidUntil(periodEnd ?? null)
+    await sendPremiumConfirmationEmail(email, fullName, planName, validUntilFormatted)
   } catch {
     // Silent; payment fulfillment already completed
   }
