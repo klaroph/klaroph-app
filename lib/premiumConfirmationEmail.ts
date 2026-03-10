@@ -62,7 +62,14 @@ function buildPremiumConfirmationHtml(
             <td style="padding: 0 32px 32px 32px;">
               <p style="margin:0 0 12px;">${greeting}</p>
               <p style="margin:0 0 12px;">Your payment has been successfully received, and your KlaroPH Pro access is now active.</p>
-              <p style="margin:0 0 12px;">You can now continue using Pro features across budgeting, reports, and goals.</p>
+              <p style="margin:0 0 8px;">You now have access to Pro features including:</p>
+              <ul style="margin:0 0 12px; padding-left: 20px;">
+                <li style="margin-bottom: 4px;">Monthly Budgeting</li>
+                <li style="margin-bottom: 4px;">Unlimited History &amp; Insights</li>
+                <li style="margin-bottom: 4px;">Advanced Charts</li>
+                <li style="margin-bottom: 4px;">Export / Import CSV</li>
+                <li style="margin-bottom: 4px;">Financial Clarity Tools</li>
+              </ul>
               <p style="margin:0 0 12px;">Plan: ${planEscaped}</p>
               ${validityLine}
               <p style="margin:0 0 20px;">Thank you for supporting KlaroPH.</p>
