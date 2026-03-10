@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legalVersions'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { sendWelcomeEmail } from '@/lib/welcomeEmail'
 
 // OAuth redirect base is ONLY from env. Never use request origin.
 // Supabase Dashboard → Authentication → URL Configuration:
@@ -12,6 +13,15 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL
 if (!APP_URL) {
   throw new Error('NEXT_PUBLIC_APP_URL is required for OAuth redirect safety.')
+}
+
+type ProfileRow = {
+  terms_accepted_at: string | null
+  privacy_accepted_at: string | null
+  terms_version: string | null
+  privacy_version: string | null
+  full_name: string | null
+  welcome_email_sent_at: string | null
 }
 
 export async function GET(request: Request) {
@@ -65,15 +75,15 @@ export async function GET(request: Request) {
   if (data?.session?.user?.id) {
     const userId = data.session.user.id
     // Use admin client so we're not subject to RLS/session timing; profile may have just been created by trigger.
-    let profile: { terms_accepted_at: string | null; privacy_accepted_at: string | null; terms_version: string | null; privacy_version: string | null } | null = null
+    let profile: ProfileRow | null = null
     for (let attempt = 0; attempt < 2; attempt++) {
       const { data: row } = await supabaseAdmin
         .from('profiles')
-        .select('terms_accepted_at, privacy_accepted_at, terms_version, privacy_version')
+        .select('terms_accepted_at, privacy_accepted_at, terms_version, privacy_version, full_name, welcome_email_sent_at')
         .eq('id', userId)
         .single()
       if (row) {
-        profile = row
+        profile = row as ProfileRow
         break
       }
       if (attempt === 0) await new Promise((r) => setTimeout(r, 250))
@@ -93,6 +103,26 @@ export async function GET(request: Request) {
 
     if (updateError && process.env.NODE_ENV === 'development') {
       console.error('Callback consent update failed:', updateError.message)
+    }
+
+    // Welcome email: send at most once per user. Failure must never block redirect.
+    if (profile && profile.welcome_email_sent_at == null && data.session.user.email) {
+      try {
+        const fullName = (profile?.full_name ?? data.session.user.user_metadata?.full_name ?? null) as string | null
+        const sent = await sendWelcomeEmail(
+          data.session.user.email,
+          fullName,
+          APP_URL ?? 'https://klaroph.com'
+        )
+        if (sent) {
+          await supabaseAdmin
+            .from('profiles')
+            .update({ welcome_email_sent_at: now })
+            .eq('id', userId)
+        }
+      } catch {
+        // Silent; redirect proceeds
+      }
     }
   }
 
