@@ -9,11 +9,8 @@ import {
 } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
 
-const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900 // ₱149
-const ANNUAL_DISCOUNT = 0.8 // 20% off
-// Round to nearest peso (100 centavos) so scanned QR shows e.g. ₱1,430 not ₱1,430.40
-const ANNUAL_CENTAVOS = Math.round((12 * MONTHLY_CENTAVOS * ANNUAL_DISCOUNT) / 100) * 100
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
 
 export async function POST(request: Request) {
@@ -84,8 +81,9 @@ export async function POST(request: Request) {
       })
     }
 
-    // New QRPH session: create intent + method + attach
-    const amountCentavos = plan_type === 'annual' ? ANNUAL_CENTAVOS : MONTHLY_CENTAVOS
+    // New QRPH session: create intent + method + attach (pricing from DB profile.user_type only)
+    const pricing = await getSubscriptionPricing(user.id)
+    const amountCentavos = plan_type === 'annual' ? pricing.annualCentavos : pricing.monthlyCentavos
     const intent = await createPaymentIntent({
       amount: amountCentavos,
       currency: 'PHP',

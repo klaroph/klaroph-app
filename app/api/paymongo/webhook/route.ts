@@ -12,6 +12,7 @@ import {
   retrieveCheckoutSession,
   retrievePaymentIntent,
 } from '@/lib/paymongo'
+import { sendPremiumConfirmationIfNew } from '@/lib/premiumConfirmationEmail'
 
 type WebhookEvent = {
   data: {
@@ -270,6 +271,12 @@ async function handleCheckoutPaid(event: WebhookEvent) {
   }
 
   console.log('[Webhook] Subscription insert/update result: success user_id=', userId, 'plan=pro plan_type=', planType, 'period_end=', periodEnd.toISOString())
+
+  try {
+    await sendPremiumConfirmationIfNew(event.data.id, userId, planType)
+  } catch {
+    // Email failure must never block payment fulfillment
+  }
 }
 
 /**
@@ -353,6 +360,12 @@ async function handlePaymentPaid(event: WebhookEvent) {
   }
 
   console.log('[Webhook] payment.paid subscription success user_id=', userId, 'plan=pro plan_type=', planType)
+
+  try {
+    await sendPremiumConfirmationIfNew(event.data.id, userId, planType)
+  } catch {
+    // Email failure must never block payment fulfillment
+  }
 }
 
 async function handleSubscriptionActivated(event: WebhookEvent) {

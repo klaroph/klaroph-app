@@ -25,24 +25,29 @@ function buildWelcomeHtml(firstName: string | null, logoUrl: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0; padding:0; background-color:#ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #1a1a1a;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
+<body style="margin:0; padding:0; background-color:#f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #1a1a1a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5; padding: 24px 16px;">
     <tr>
-      <td align="center" style="padding: 32px 24px 24px;">
-        <img src="${logoUrl}" alt="KlaroPH" width="120" height="auto" style="display:block; max-width:120px; height:auto;" />
-      </td>
-    </tr>
-    <tr>
-      <td align="center" style="padding: 0 24px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 560px; margin: 0 auto;">
+      <td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 520px; width: 100%; background-color: #ffffff; border: 1px solid #eeeeee; border-radius: 12px;">
           <tr>
-            <td style="padding: 0 0 16px;">
-              <p style="margin:0 0 16px;">${greeting}</p>
-              <p style="margin:0 0 16px;">Welcome to KlaroPH.</p>
-              <p style="margin:0 0 16px;">We built KlaroPH to help you track expenses, manage budgets, and stay focused on your financial goals with clarity.</p>
-              <p style="margin:0 0 16px;">Your account is now ready, and you can begin adding expenses, setting budgets, and exploring your dashboard anytime.</p>
-              <p style="margin:0 0 24px;">Thank you for joining KlaroPH.</p>
-              <p style="margin:0; font-size: 14px; color: #4b5563;">- KlaroPH<br />klaroph.com</p>
+            <td align="center" style="padding: 32px 32px 20px 32px;">
+              <img src="${logoUrl}" alt="KlaroPH" width="120" height="auto" style="display:block; max-width:120px; height:auto;" />
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding: 0 32px 24px 32px;">
+              <h1 style="margin:0; font-size: 22px; font-weight: 600; color: #1a1a1a;">Welcome to KlaroPH</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 32px 32px 32px;">
+              <p style="margin:0 0 12px;">${greeting}</p>
+              <p style="margin:0 0 12px;">Welcome to KlaroPH.</p>
+              <p style="margin:0 0 12px;">We built KlaroPH to help you track expenses, manage budgets, and stay focused on your financial goals with clarity.</p>
+              <p style="margin:0 0 12px;">Your account is now ready, and you can begin adding expenses, setting budgets, and exploring your dashboard anytime.</p>
+              <p style="margin:0 0 20px;">Thank you for joining KlaroPH.</p>
+              <p style="margin:0; font-size: 14px; color: #6b7280; line-height: 1.5;">— KlaroPH<br />Clearer money habits start here.<br />klaroph.com</p>
             </td>
           </tr>
         </table>

@@ -3,10 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { createCheckoutSession, PayMongoError } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-const MONTHLY_CENTAVOS = Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900 // ₱149
-const ANNUAL_DISCOUNT = 0.8 // 20% off
-const ANNUAL_CENTAVOS = Math.round(12 * MONTHLY_CENTAVOS * ANNUAL_DISCOUNT)
+import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
 
 export type PlanTypeCheckout = 'monthly' | 'annual'
 
@@ -63,8 +60,9 @@ export async function POST(request: Request) {
     const cancel_url = `${baseUrl.trim().replace(/\/$/, '')}/dashboard`
     console.log('PayMongo success_url:', success_url)
 
+    const pricing = await getSubscriptionPricing(user.id)
     const isAnnual = plan_type === 'annual'
-    const amount = isAnnual ? ANNUAL_CENTAVOS : MONTHLY_CENTAVOS
+    const amount = isAnnual ? pricing.annualCentavos : pricing.monthlyCentavos
     const planNameLabel = isAnnual ? 'Clarity Pro — Annual (Save 20%)' : 'Clarity Pro — Monthly'
     const description = isAnnual
       ? 'KlaroPH Pro: 12 months, 20 goals, unlimited history, import/export, advance charts and analytics.'
