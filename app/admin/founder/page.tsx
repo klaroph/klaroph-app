@@ -62,6 +62,11 @@ export default async function FounderDashboardPage() {
     redirect('/')
   }
 
+  const founderEmail = process.env.FOUNDER_EMAIL
+  if (founderEmail && session.user.email !== founderEmail) {
+    redirect('/dashboard')
+  }
+
   let baseUrl = process.env.NEXT_PUBLIC_APP_URL
   if (!baseUrl) {
     const h = await headers()
