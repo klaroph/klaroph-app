@@ -98,25 +98,29 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
     }
 
     setLoading(true)
-    const redirectUrl =
+    // Redirect URL for the confirmation link in the email. Supabase sends the email server-side.
+    const base =
       typeof process !== 'undefined' && process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
-        : undefined
-
-    console.log('RAW EMAIL VALUE:', email)
-    console.log('CHAR CODES:', email.split('').map(c => c.charCodeAt(0)))
+        ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
+        : typeof window !== 'undefined'
+          ? window.location.origin
+          : ''
+    const emailRedirectTo = base ? `${base}/auth/callback` : undefined
 
     const { data, error } = await supabasePublic.auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: redirectUrl },
+      options: { emailRedirectTo },
     })
-
-    console.log('SIGNUP RESPONSE:', data, error)
 
     setLoading(false)
     if (error) {
-      setSubmitError(error.message)
+      const isConfirmationEmailError =
+        /confirmation email|sending.*email|email.*send/i.test(error.message)
+      const message = isConfirmationEmailError
+        ? 'We couldn’t send the confirmation email right now. Please try again in a few minutes, or check your spam folder. If it keeps happening, contact support.'
+        : error.message
+      setSubmitError(message)
       return
     }
     if (data?.user) {
