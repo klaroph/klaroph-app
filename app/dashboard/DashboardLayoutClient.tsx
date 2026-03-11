@@ -13,8 +13,10 @@ import IncomeAllocationModal from '../../components/dashboard/IncomeAllocationMo
 import AddExpenseModal from '../../components/dashboard/AddExpenseModal'
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext'
 import { UpgradeTriggerProvider, useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
+import { DashboardProfileProvider } from '@/contexts/DashboardProfileContext'
 import { useSubscription } from '@/contexts/SubscriptionContext'
-import { dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
+import { dispatchDashboardRefresh, dispatchDashboardTransactionsRefresh, dispatchDashboardGoalsRefresh } from '@/lib/dashboardRefresh'
+import type { ProfileWithComputed } from '@/types/profile'
 
 const DashboardActionsContext = createContext<{
   openAddIncome: () => void
@@ -59,6 +61,7 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
+  const [profile, setProfile] = useState<ProfileWithComputed | null>(null)
   const [fabGoalOpen, setFabGoalOpen] = useState(false)
   const [fabIncomeOpen, setFabIncomeOpen] = useState(false)
   const [fabExpenseOpen, setFabExpenseOpen] = useState(false)
@@ -71,7 +74,8 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
         const res = await fetch('/api/profile', { credentials: 'include' })
         if (cancelled) return
         if (res.ok) {
-          const data = await res.json()
+          const data = await res.json() as ProfileWithComputed
+          setProfile(data)
           const completed = data?.profile?.onboarding_completed === true
           if (!completed) {
             setOnboardingChecked(true)
@@ -140,6 +144,7 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
     <div className="dashboard-layout" style={{ display: 'flex', minHeight: '100%' }}>
       <SubscriptionProvider>
           <UpgradeTriggerProvider>
+            <DashboardProfileProvider profile={profile}>
             <DashboardActionsContext.Provider value={dashboardActions}>
             <Sidebar
               drawerOpen={drawerOpen}
@@ -199,10 +204,10 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
             <IncomeAllocationModal
               isOpen={fabIncomeOpen}
               onClose={() => setFabIncomeOpen(false)}
-              onSaved={() => {
+              onSaved={(opts) => {
                 setFabIncomeOpen(false)
-                router.refresh()
-                dispatchDashboardRefresh()
+                dispatchDashboardTransactionsRefresh()
+                if (opts?.allocationsChanged) dispatchDashboardGoalsRefresh()
               }}
               initialRecord={null}
             />
@@ -211,11 +216,11 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
               onClose={() => setFabExpenseOpen(false)}
               onSaved={() => {
                 setFabExpenseOpen(false)
-                router.refresh()
-                dispatchDashboardRefresh()
+                dispatchDashboardTransactionsRefresh()
               }}
             />
             </DashboardActionsContext.Provider>
+            </DashboardProfileProvider>
           </UpgradeTriggerProvider>
         </SubscriptionProvider>
     </div>

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useSubscription } from '@/contexts/SubscriptionContext'
-import type { ProfileWithComputed } from '@/types/profile'
+import { useDashboardProfile } from '@/contexts/DashboardProfileContext'
 import KlaroPHHandLogo from '../ui/KlaroPHHandLogo'
 import UpgradeCTA from '../ui/UpgradeCTA'
 import SupportModal from '../support/SupportModal'
@@ -125,7 +125,7 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose }: SidebarPr
   const pathname = usePathname()
   const [email, setEmail] = useState<string | null>(null)
   const [supportOpen, setSupportOpen] = useState(false)
-  const [profile, setProfile] = useState<ProfileWithComputed | null>(null)
+  const profile = useDashboardProfile()
   const { isPro, currentPeriodEnd } = useSubscription()
 
   useEffect(() => {
@@ -136,17 +136,6 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose }: SidebarPr
       setEmail(session?.user?.email ?? null)
     })
     return () => { listener.subscription.unsubscribe() }
-  }, [])
-
-  useEffect(() => {
-    let mounted = true
-    fetch('/api/profile', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (mounted) setProfile(data ?? null)
-      })
-      .catch(() => {})
-    return () => { mounted = false }
   }, [])
 
   const isActive = (href: string) => {

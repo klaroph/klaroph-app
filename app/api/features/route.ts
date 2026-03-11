@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
-import { resolveUserPlan } from '@/lib/resolveUserPlan'
+import { resolveUserPlanFromSubscription } from '@/lib/resolveUserPlan'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { getBudgetEditingAllowed } from '@/lib/entitlements'
 import type { UserFeaturesWithSubscription } from '@/types/features'
@@ -8,7 +8,7 @@ import type { UserFeaturesWithSubscription } from '@/types/features'
 const FREE_ANALYTICS_DAYS = 90
 
 function toFeaturesResponse(
-  plan: Awaited<ReturnType<typeof resolveUserPlan>>,
+  plan: Awaited<ReturnType<typeof resolveUserPlanFromSubscription>>,
   subscriptionStatus: string,
   currentPeriodEnd: string | null,
   planLabel: string,
@@ -72,9 +72,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const plan = await resolveUserPlan(user.id)
-
     const sub = await resolveSubscriptionState(user.id)
+    const plan = await resolveUserPlanFromSubscription(sub)
     const subscriptionStatus =
       sub.state === 'ACTIVE'
         ? 'active'

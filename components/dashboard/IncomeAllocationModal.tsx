@@ -14,10 +14,13 @@ export type IncomeRecordForEdit = {
   income_source: string | null
 }
 
+export type IncomeSavedOptions = { allocationsChanged?: boolean }
+
 type IncomeAllocationModalProps = {
   isOpen: boolean
   onClose: () => void
-  onSaved: () => void
+  /** Called after save. Pass allocationsChanged: true when income_allocations were written (goal allocation added). */
+  onSaved: (options?: IncomeSavedOptions) => void
   /** When set, modal is in edit mode: title "Edit income", pre-fill, submit = PUT */
   initialRecord?: IncomeRecordForEdit | null
 }
@@ -106,7 +109,7 @@ export default function IncomeAllocationModal({
         return
       }
       handleClose()
-      onSaved()
+      onSaved({})
       return
     }
 
@@ -126,6 +129,7 @@ export default function IncomeAllocationModal({
       setLoading(false)
       return
     }
+    let allocationsChanged = false
     if (allocateGoalId && allocateAmount && allocated > 0 && incomeData) {
       const { error: allocErr } = await supabase.from('income_allocations').insert({
         income_record_id: incomeData.id,
@@ -137,10 +141,11 @@ export default function IncomeAllocationModal({
         setLoading(false)
         return
       }
+      allocationsChanged = true
     }
     setLoading(false)
     handleClose()
-    onSaved()
+    onSaved({ allocationsChanged })
   }
 
   const inputStyle: React.CSSProperties = {

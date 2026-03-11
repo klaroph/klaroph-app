@@ -29,7 +29,11 @@ import { usePremiumGate } from '@/hooks/usePremiumGate'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { useTriggerDateRangeBeyond90 } from '@/hooks/useSmartUpgradeTriggers'
 import { getAllTimeRangeAndGrouping, type AllTimeRangeResult } from '@/lib/allTimeRange'
-import { DASHBOARD_REFRESH_EVENT, dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
+import {
+  DASHBOARD_REFRESH_EVENT,
+  DASHBOARD_TRANSACTIONS_REFRESH_EVENT,
+  dispatchDashboardTransactionsRefresh,
+} from '@/lib/dashboardRefresh'
 import { toLocalDateString } from '@/lib/format'
 
 type ExpenseRow = {
@@ -220,7 +224,11 @@ export default function ExpensesPage() {
   useEffect(() => {
     const onRefresh = () => setRefreshTrigger((n) => n + 1)
     window.addEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
-    return () => window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+    window.addEventListener(DASHBOARD_TRANSACTIONS_REFRESH_EVENT, onRefresh)
+    return () => {
+      window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+      window.removeEventListener(DASHBOARD_TRANSACTIONS_REFRESH_EVENT, onRefresh)
+    }
   }, [])
 
   const userPlan = isPro ? 'pro' : 'free'
@@ -816,7 +824,7 @@ export default function ExpensesPage() {
                                   return
                                 }
                                 setRefreshTrigger((n) => n + 1)
-                                dispatchDashboardRefresh()
+                                dispatchDashboardTransactionsRefresh()
                               }}
                               title="Delete"
                               aria-label="Delete"
@@ -846,8 +854,7 @@ export default function ExpensesPage() {
         onClose={() => setModalOpen(false)}
         onSaved={() => {
           setRefreshTrigger((n) => n + 1)
-          router.refresh()
-          dispatchDashboardRefresh()
+          dispatchDashboardTransactionsRefresh()
         }}
       />
       <EditExpenseModal
@@ -856,8 +863,7 @@ export default function ExpensesPage() {
         onSaved={() => {
           setRefreshTrigger((n) => n + 1)
           setEditingExpense(null)
-          router.refresh()
-          dispatchDashboardRefresh()
+          dispatchDashboardTransactionsRefresh()
         }}
         expense={editingExpense}
       />
@@ -866,7 +872,7 @@ export default function ExpensesPage() {
         onClose={() => setBudgetPlannerOpen(false)}
         onSaved={() => {
           setBudgetRefreshKey(Date.now())
-          dispatchDashboardRefresh()
+          dispatchDashboardTransactionsRefresh()
         }}
       />
       <MonthOverrideModal
@@ -874,7 +880,7 @@ export default function ExpensesPage() {
         onClose={() => setMonthOverrideOpen(false)}
         onSaved={() => {
           setBudgetRefreshKey(Date.now())
-          dispatchDashboardRefresh()
+          dispatchDashboardTransactionsRefresh()
         }}
         month={overrideMonth}
       />

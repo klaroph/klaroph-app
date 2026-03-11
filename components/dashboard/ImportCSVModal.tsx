@@ -7,7 +7,7 @@ import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { INCOME_SOURCES } from '@/lib/incomeSources'
 import type { ImportRow } from '@/lib/expensesImport'
-import { dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
+import { dispatchDashboardTransactionsRefresh } from '@/lib/dashboardRefresh'
 
 const MAX_ROWS = 500
 const ACCEPTED = '.csv,text/csv,text/plain'
@@ -181,7 +181,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
       }
       refresh()
       onSuccess()
-      dispatchDashboardRefresh()
+      dispatchDashboardTransactionsRefresh()
       handleClose()
     } catch {
       setError('Network error. Please try again.')

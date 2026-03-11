@@ -26,7 +26,12 @@ import { usePremiumGate } from '@/hooks/usePremiumGate'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { useTriggerDateRangeBeyond90 } from '@/hooks/useSmartUpgradeTriggers'
 import { getAllTimeRangeAndGrouping, type AllTimeRangeResult } from '@/lib/allTimeRange'
-import { DASHBOARD_REFRESH_EVENT, dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
+import {
+  DASHBOARD_REFRESH_EVENT,
+  DASHBOARD_TRANSACTIONS_REFRESH_EVENT,
+  dispatchDashboardTransactionsRefresh,
+  dispatchDashboardGoalsRefresh,
+} from '@/lib/dashboardRefresh'
 import { toLocalDateString } from '@/lib/format'
 
 type IncomeRecord = {
@@ -176,7 +181,11 @@ export default function IncomePage() {
   useEffect(() => {
     const onRefresh = () => setRefreshTrigger((n) => n + 1)
     window.addEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
-    return () => window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+    window.addEventListener(DASHBOARD_TRANSACTIONS_REFRESH_EVENT, onRefresh)
+    return () => {
+      window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+      window.removeEventListener(DASHBOARD_TRANSACTIONS_REFRESH_EVENT, onRefresh)
+    }
   }, [])
 
   const userPlan = isPro ? 'pro' : 'free'
@@ -727,7 +736,7 @@ export default function IncomePage() {
                                   return
                                 }
                                 setRefreshTrigger((n) => n + 1)
-                                dispatchDashboardRefresh()
+                                dispatchDashboardTransactionsRefresh()
                               }}
                               title="Delete"
                               aria-label="Delete"
@@ -755,11 +764,11 @@ export default function IncomePage() {
       <IncomeAllocationModal
         isOpen={modalOpen}
         onClose={() => { setModalOpen(false); setEditingRecord(null) }}
-        onSaved={() => {
+        onSaved={(opts) => {
           setRefreshTrigger((n) => n + 1)
           setEditingRecord(null)
-          router.refresh()
-          dispatchDashboardRefresh()
+          dispatchDashboardTransactionsRefresh()
+          if (opts?.allocationsChanged) dispatchDashboardGoalsRefresh()
         }}
         initialRecord={editingRecord}
       />

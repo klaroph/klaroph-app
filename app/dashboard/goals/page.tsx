@@ -11,7 +11,7 @@ import UpgradeCTA from '../../../components/ui/UpgradeCTA'
 import PremiumBadge from '../../../components/ui/PremiumBadge'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { PLAN_LIMITS } from '@/lib/planLimits'
-import { DASHBOARD_REFRESH_EVENT, dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
+import { DASHBOARD_REFRESH_EVENT, DASHBOARD_GOALS_REFRESH_EVENT, dispatchDashboardGoalsRefresh } from '@/lib/dashboardRefresh'
 
 const defaultSummary: GoalSummary = {
   totalSaved: 0,
@@ -35,7 +35,11 @@ export default function GoalsPage() {
   useEffect(() => {
     const onRefresh = () => setRefreshTrigger((n) => n + 1)
     window.addEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
-    return () => window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+    window.addEventListener(DASHBOARD_GOALS_REFRESH_EVENT, onRefresh)
+    return () => {
+      window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+      window.removeEventListener(DASHBOARD_GOALS_REFRESH_EVENT, onRefresh)
+    }
   }, [])
 
   useEffect(() => {
@@ -76,7 +80,7 @@ export default function GoalsPage() {
       return
     }
     setRefreshTrigger((n) => n + 1)
-    dispatchDashboardRefresh()
+    dispatchDashboardGoalsRefresh()
   }
 
   return (

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
+import type { NormalizedSubscription } from '@/lib/subscriptionState'
 
 /**
  * Single source of truth for plan entitlements used by API routes.
@@ -40,46 +41,27 @@ const PRO_PLAN_BASE: Omit<ResolvedPlan, 'is_grace' | 'can_create_goals'> = {
   full_budgeting_entitled: true,
 }
 
-export async function resolveUserPlan(userId: string): Promise<ResolvedPlan> {
+/**
+ * Derives plan from already-resolved subscription state (avoids duplicate subscription query).
+ * Use when the caller has already called resolveSubscriptionState.
+ */
+export async function resolveUserPlanFromSubscription(sub: NormalizedSubscription): Promise<ResolvedPlan> {
   try {
-    if (!userId) return FREE_PLAN
-
-    const sub = await resolveSubscriptionState(userId)
-
     if (sub.state === 'NONE' || sub.state === 'EXPIRED' || !sub.planId) {
       return FREE_PLAN
     }
-
-    const { data: planRow, error: planError } = await supabaseAdmin
-      .from('plans')
-      .select('id, name, max_goals, has_export, has_analytics, has_budgeting')
-      .eq('id', sub.planId)
-      .maybeSingle()
-
-    if (planError) return FREE_PLAN
-
-    const row = planRow as {
-      id?: string
-      name?: string
-      max_goals?: number | null
-      has_export?: boolean | null
-      has_analytics?: boolean | null
-      has_budgeting?: boolean | null
-    } | null
-
-    const planName = String(row?.name ?? 'free').trim().toLowerCase()
+    const planRow = await getPlanRow(sub.planId)
+    if (!planRow) return FREE_PLAN
+    const planName = String(planRow?.name ?? 'free').trim().toLowerCase()
     const isProPlan = planName === 'pro' || planName === 'clarity_premium'
-
     if (!isProPlan) return FREE_PLAN
-
-    const maxGoals = typeof row?.max_goals === 'number' ? row.max_goals : PRO_PLAN_BASE.max_goals
+    const maxGoals = typeof planRow?.max_goals === 'number' ? planRow.max_goals : PRO_PLAN_BASE.max_goals
     const exportEnabled =
-      typeof row?.has_export === 'boolean' ? row.has_export : PRO_PLAN_BASE.export_enabled
+      typeof planRow?.has_export === 'boolean' ? planRow.has_export : PRO_PLAN_BASE.export_enabled
     const advancedAnalytics =
-      typeof row?.has_analytics === 'boolean' ? row.has_analytics : PRO_PLAN_BASE.advanced_analytics
+      typeof planRow?.has_analytics === 'boolean' ? planRow.has_analytics : PRO_PLAN_BASE.advanced_analytics
     const fullBudgetingEntitled =
-      typeof row?.has_budgeting === 'boolean' ? row.has_budgeting : PRO_PLAN_BASE.full_budgeting_entitled
-
+      typeof planRow?.has_budgeting === 'boolean' ? planRow.has_budgeting : PRO_PLAN_BASE.full_budgeting_entitled
     return {
       plan_name: 'pro',
       max_goals: maxGoals,
@@ -93,4 +75,27 @@ export async function resolveUserPlan(userId: string): Promise<ResolvedPlan> {
   } catch {
     return FREE_PLAN
   }
+}
+
+async function getPlanRow(planId: string) {
+  const { data: planRow, error: planError } = await supabaseAdmin
+    .from('plans')
+    .select('id, name, max_goals, has_export, has_analytics, has_budgeting')
+    .eq('id', planId)
+    .maybeSingle()
+  if (planError) return null
+  return planRow as {
+    id?: string
+    name?: string
+    max_goals?: number | null
+    has_export?: boolean | null
+    has_analytics?: boolean | null
+    has_budgeting?: boolean | null
+  } | null
+}
+
+export async function resolveUserPlan(userId: string): Promise<ResolvedPlan> {
+  if (!userId) return FREE_PLAN
+  const sub = await resolveSubscriptionState(userId)
+  return resolveUserPlanFromSubscription(sub)
 }

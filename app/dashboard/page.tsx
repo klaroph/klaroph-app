@@ -3,7 +3,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { DASHBOARD_REFRESH_EVENT, dispatchDashboardRefresh } from '@/lib/dashboardRefresh'
+import {
+  DASHBOARD_REFRESH_EVENT,
+  DASHBOARD_GOALS_REFRESH_EVENT,
+  DASHBOARD_TRANSACTIONS_REFRESH_EVENT,
+  dispatchDashboardRefresh,
+} from '@/lib/dashboardRefresh'
 import type { GoalRow, GoalWithSaved } from '@/types/database'
 import GoalMomentumSection from '@/components/dashboard/GoalMomentumSection'
 import ExpensesTrendChartCard from '@/components/dashboard/ExpensesTrendChartCard'
@@ -31,13 +36,25 @@ export default function DashboardPage() {
   const { features, isPro, loading: subscriptionLoading, refresh } = useSubscription()
   const { openUpgradeModal } = useUpgradeTrigger()
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [goalsRefreshTrigger, setGoalsRefreshTrigger] = useState(0)
   const currentMonthFirst = useMemo(() => getCurrentMonthFirst(), [])
   const [budgetMonth, setBudgetMonth] = useState(currentMonthFirst)
 
   useEffect(() => {
-    const onRefresh = () => setRefreshTrigger((n) => n + 1)
-    window.addEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
-    return () => window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+    const onFull = () => {
+      setGoalsRefreshTrigger((n) => n + 1)
+      setRefreshTrigger((n) => n + 1)
+    }
+    const onGoals = () => setGoalsRefreshTrigger((n) => n + 1)
+    const onTransactions = () => setRefreshTrigger((n) => n + 1)
+    window.addEventListener(DASHBOARD_REFRESH_EVENT, onFull)
+    window.addEventListener(DASHBOARD_GOALS_REFRESH_EVENT, onGoals)
+    window.addEventListener(DASHBOARD_TRANSACTIONS_REFRESH_EVENT, onTransactions)
+    return () => {
+      window.removeEventListener(DASHBOARD_REFRESH_EVENT, onFull)
+      window.removeEventListener(DASHBOARD_GOALS_REFRESH_EVENT, onGoals)
+      window.removeEventListener(DASHBOARD_TRANSACTIONS_REFRESH_EVENT, onTransactions)
+    }
   }, [])
   const [goals, setGoals] = useState<GoalWithSaved[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,7 +103,7 @@ export default function DashboardPage() {
     }))
     setGoals(withSaved)
     setLoading(false)
-  }, [refreshTrigger])
+  }, [goalsRefreshTrigger])
 
   useEffect(() => {
     loadData()
@@ -195,6 +212,7 @@ export default function DashboardPage() {
         isOpen={manageGoalsOpen}
         onClose={() => setManageGoalsOpen(false)}
         onGoalsChange={() => {
+          setGoalsRefreshTrigger((n) => n + 1)
           setRefreshTrigger((n) => n + 1)
           dispatchDashboardRefresh()
         }}
@@ -208,6 +226,7 @@ export default function DashboardPage() {
         onClose={() => setAddGoalOpen(false)}
         onGoalCreated={() => {
           setAddGoalOpen(false)
+          setGoalsRefreshTrigger((n) => n + 1)
           setRefreshTrigger((n) => n + 1)
           router.refresh()
           dispatchDashboardRefresh()
