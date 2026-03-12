@@ -6,13 +6,21 @@ import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legalVersions'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendWelcomeEmail } from '@/lib/welcomeEmail'
 
-// OAuth redirect base is ONLY from env. Never use request origin.
-// Supabase Dashboard → Authentication → URL Configuration:
-//   Site URL must equal NEXT_PUBLIC_APP_URL. Do NOT leave localhost as primary Site URL during ngrok testing.
-// If using ngrok: always access app via ngrok domain; never initiate login via localhost. OAuth will return to the domain defined by NEXT_PUBLIC_APP_URL.
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL
-if (!APP_URL) {
-  throw new Error('NEXT_PUBLIC_APP_URL is required for OAuth redirect safety.')
+/**
+ * Resolve redirect base URL. Production (VERCEL_ENV=production) must use NEXT_PUBLIC_APP_URL.
+ * Preview and development use request host + protocol (https for preview, http for localhost).
+ */
+function getRedirectBase(request: Request): string {
+  if (process.env.VERCEL_ENV === 'production') {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    if (!appUrl?.trim()) {
+      throw new Error('NEXT_PUBLIC_APP_URL is required for OAuth redirect safety.')
+    }
+    return appUrl.replace(/\/$/, '')
+  }
+  const host = request.headers.get('host') ?? new URL(request.url).host
+  const protocol = host === 'localhost' || host.startsWith('localhost:') ? 'http' : 'https'
+  return `${protocol}://${host}`
 }
 
 type ProfileRow = {
@@ -25,21 +33,22 @@ type ProfileRow = {
 }
 
 export async function GET(request: Request) {
+  const baseUrl = getRedirectBase(request)
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
 
   if (process.env.NODE_ENV === 'development') {
     console.log('Callback hit on:', request.url)
-    console.log('Resolved redirect base:', process.env.NEXT_PUBLIC_APP_URL)
+    console.log('Resolved redirect base:', baseUrl)
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL('/login', APP_URL))
+    return NextResponse.redirect(new URL('/login', baseUrl))
   }
 
   const cookieStore = await cookies()
 
-  const response = NextResponse.redirect(new URL('/dashboard', APP_URL))
+  const response = NextResponse.redirect(new URL('/dashboard', baseUrl))
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,7 +78,7 @@ export async function GET(request: Request) {
 
   if (error) {
     console.error('OAuth error:', error.message)
-    return NextResponse.redirect(new URL('/login', APP_URL))
+    return NextResponse.redirect(new URL('/login', baseUrl))
   }
 
   if (data?.session?.user?.id) {
@@ -112,7 +121,7 @@ export async function GET(request: Request) {
         const sent = await sendWelcomeEmail(
           data.session.user.email,
           fullName,
-          APP_URL ?? 'https://klaroph.com'
+          baseUrl
         )
         if (sent) {
           await supabaseAdmin
