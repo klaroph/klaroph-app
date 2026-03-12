@@ -10,6 +10,7 @@ import {
 } from '@/types/profile'
 import ClarityBadge from '@/components/profile/ClarityBadge'
 import ProfileActionCTA from '@/components/profile/ProfileActionCTA'
+import DeleteAccountSection from '@/components/profile/DeleteAccountSection'
 
 
 type ProfileState = {
@@ -374,6 +375,8 @@ export default function ProfilePage() {
       {/* Section 4 — Action Engine */}
       <ProfileActionCTA isComplete={isComplete} />
 
+      {/* Section 5 — Delete account (danger zone) */}
+      <DeleteAccountSection />
     </div>
   )
 }
