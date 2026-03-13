@@ -123,6 +123,15 @@ export default function IncomeAllocationModal({
   const goalsNotAllocated = goals.filter((g) => !allocationsEdit.some((a) => a.goal_id === g.id))
   const canAddAllocation = goalsNotAllocated.length > 0
 
+  const addModeAllocAmount =
+    !isEditMode && allocateGoalId && allocateAmount ? parseFloat(allocateAmount) : 0
+  const addModeAllocExceeds =
+    !isEditMode &&
+    incomeNumOrZero > 0 &&
+    !Number.isNaN(addModeAllocAmount) &&
+    addModeAllocAmount > 0 &&
+    addModeAllocAmount > incomeNumOrZero
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -176,6 +185,11 @@ export default function IncomeAllocationModal({
 
     const allocNum = allocateGoalId && allocateAmount ? parseFloat(allocateAmount) : 0
     const allocated = !isNaN(allocNum) && allocNum > 0 ? allocNum : 0
+    if (allocated > incomeNum) {
+      setError('Allocated amount cannot exceed income amount.')
+      setLoading(false)
+      return
+    }
     const disposableAmount = Math.max(0, incomeNum - allocated)
 
     const { data: incomeData, error: incomeErr } = await supabase.from('income_records').insert({
@@ -417,7 +431,7 @@ export default function IncomeAllocationModal({
         {error && <p style={{ margin: 0, marginBottom: 16, fontSize: 13, color: '#b91c1c' }}>{error}</p>}
         <button
           type="submit"
-          disabled={loading || (isEditMode && allocationExceedsIncome)}
+          disabled={loading || (isEditMode && allocationExceedsIncome) || addModeAllocExceeds}
           style={{
             padding: '10px 18px',
             fontSize: 14,
