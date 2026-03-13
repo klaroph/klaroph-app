@@ -70,8 +70,7 @@ export async function sendWelcomeEmail(
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey?.trim()) return false
 
-  const baseUrl = appUrl || 'https://klaroph.com'
-  const logoUrl = `${baseUrl.replace(/\/$/, '')}/logo-klaroph-blue.png`
+  const logoUrl = 'https://klaroph.com/logo-klaroph-blue.png'
   const html = buildWelcomeHtml(firstName, logoUrl)
 
   try {

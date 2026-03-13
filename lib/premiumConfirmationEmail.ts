@@ -97,8 +97,7 @@ async function sendPremiumConfirmationEmail(
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey?.trim()) return false
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://klaroph.com'
-  const logoUrl = `${baseUrl.replace(/\/$/, '')}/logo-klaroph-blue.png`
+  const logoUrl = 'https://klaroph.com/logo-klaroph-blue.png'
   const html = buildPremiumConfirmationHtml(firstName, planName, logoUrl, validUntilFormatted)
 
   try {

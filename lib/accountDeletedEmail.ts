@@ -57,7 +57,7 @@ export async function sendAccountDeletedEmail(to: string): Promise<boolean> {
   if (!apiKey?.trim()) return false
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://klaroph.com'
-  const logoUrl = `${baseUrl.replace(/\/$/, '')}/logo-klaroph-blue.png`
+  const logoUrl = 'https://klaroph.com/logo-klaroph-blue.png'
   const html = buildAccountDeletedHtml(logoUrl, baseUrl)
 
   try {
