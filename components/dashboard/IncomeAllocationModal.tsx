@@ -424,6 +424,11 @@ export default function IncomeAllocationModal({
                   onChange={(e) => setAllocateAmount(e.target.value)}
                   style={inputStyle}
                 />
+                {addModeAllocExceeds && (
+                  <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-danger, #b91c1c)' }}>
+                    Allocated amount cannot exceed income amount. Lower the amount or increase income to save.
+                  </p>
+                )}
               </div>
             )}
           </>
