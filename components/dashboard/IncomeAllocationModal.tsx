@@ -7,6 +7,9 @@ import { INCOME_SOURCES, type IncomeSource } from '../../lib/incomeSources'
 
 type Goal = { id: string; name: string; target_amount: number }
 
+/** One allocation row in the edit UI (amount as string for input). */
+export type AllocationRow = { goal_id: string; goal_name: string; amount: string }
+
 export type IncomeRecordForEdit = {
   id: string
   total_amount: number
@@ -37,6 +40,9 @@ export default function IncomeAllocationModal({
   const [allocateGoalId, setAllocateGoalId] = useState('')
   const [allocateAmount, setAllocateAmount] = useState('')
   const [goals, setGoals] = useState<Goal[]>([])
+  const [allocationsEdit, setAllocationsEdit] = useState<AllocationRow[]>([])
+  const [addGoalId, setAddGoalId] = useState('')
+  const [addAmount, setAddAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -52,6 +58,9 @@ export default function IncomeAllocationModal({
       setIncomeSource((validSource ? initialRecord.income_source : INCOME_SOURCES[0]) as IncomeSource)
       setAllocateGoalId('')
       setAllocateAmount('')
+      setAllocationsEdit([])
+      setAddGoalId('')
+      setAddAmount('')
     }
   }, [isOpen, initialRecord])
 
@@ -64,15 +73,55 @@ export default function IncomeAllocationModal({
     load()
   }, [isOpen])
 
+  useEffect(() => {
+    if (!isOpen || !initialRecord?.id || goals.length === 0) {
+      if (!isOpen || !initialRecord) setAllocationsEdit([])
+      return
+    }
+    const loadAllocations = async () => {
+      const { data } = await supabase
+        .from('income_allocations')
+        .select('goal_id, amount')
+        .eq('income_record_id', initialRecord.id)
+      const rows = (data ?? []) as { goal_id: string; amount: number }[]
+      const goalMap = new Map(goals.map((g) => [g.id, g.name]))
+      setAllocationsEdit(
+        rows.map((r) => ({
+          goal_id: r.goal_id,
+          goal_name: goalMap.get(r.goal_id) ?? 'Goal',
+          amount: String(r.amount),
+        }))
+      )
+    }
+    loadAllocations()
+  }, [isOpen, initialRecord?.id, goals])
+
   const handleClose = () => {
     setAmount('')
     setDate(new Date().toISOString().slice(0, 10))
     setIncomeSource(INCOME_SOURCES[0])
     setAllocateGoalId('')
     setAllocateAmount('')
+    setAllocationsEdit([])
+    setAddGoalId('')
+    setAddAmount('')
     setError(null)
     onClose()
   }
+
+  const incomeNumOrZero = (() => {
+    const n = parseFloat(amount)
+    return !Number.isNaN(n) && n > 0 ? n : 0
+  })()
+  const allocationsSum = allocationsEdit.reduce((s, row) => {
+    const n = parseFloat(row.amount)
+    return s + (!Number.isNaN(n) && n >= 0 ? n : 0)
+  }, 0)
+  const remaining = Math.max(0, incomeNumOrZero - allocationsSum)
+  const allocationExceedsIncome = incomeNumOrZero > 0 && allocationsSum > incomeNumOrZero
+
+  const goalsNotAllocated = goals.filter((g) => !allocationsEdit.some((a) => a.goal_id === g.id))
+  const canAddAllocation = goalsNotAllocated.length > 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -92,6 +141,17 @@ export default function IncomeAllocationModal({
     }
 
     if (isEditMode && initialRecord) {
+      const goalIds = new Set(goals.map((g) => g.id))
+      const allocPayload = allocationsEdit
+        .filter((a) => goalIds.has(a.goal_id))
+        .map((a) => ({ goal_id: a.goal_id, amount: parseFloat(a.amount) }))
+        .filter((a) => !Number.isNaN(a.amount) && a.amount > 0)
+      const totalAlloc = allocPayload.reduce((s, a) => s + a.amount, 0)
+      if (totalAlloc > incomeNum) {
+        setError('Total allocations cannot exceed income amount.')
+        setLoading(false)
+        return
+      }
       const res = await fetch(`/api/income/${initialRecord.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -99,6 +159,7 @@ export default function IncomeAllocationModal({
           total_amount: incomeNum,
           date,
           income_source: incomeSource || null,
+          allocations: allocPayload,
         }),
         credentials: 'include',
       })
@@ -109,7 +170,7 @@ export default function IncomeAllocationModal({
         return
       }
       handleClose()
-      onSaved({})
+      onSaved({ allocationsChanged: true })
       return
     }
 
@@ -199,6 +260,124 @@ export default function IncomeAllocationModal({
             style={inputStyle}
           />
         </div>
+        {isEditMode && goals.length > 0 && (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#374151', fontWeight: 500 }}>
+                Goal allocations (optional)
+              </label>
+              {allocationsEdit.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 13, color: '#6b7280' }}>No allocations. Add one below if you want to allocate part of this income to a goal.</p>
+              ) : (
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {allocationsEdit.map((row) => (
+                    <li
+                      key={row.goal_id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 8,
+                        padding: '8px 0',
+                        borderBottom: '1px solid var(--border, #e5e7eb)',
+                      }}
+                    >
+                      <span style={{ flex: '1 1 auto', fontSize: 14, color: '#374151' }}>{row.goal_name}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={row.amount}
+                        onChange={(e) =>
+                          setAllocationsEdit((prev) =>
+                            prev.map((a) => (a.goal_id === row.goal_id ? { ...a, amount: e.target.value } : a))
+                          )
+                        }
+                        style={{ ...inputStyle, width: 100, marginBottom: 0 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAllocationsEdit((prev) => prev.filter((a) => a.goal_id !== row.goal_id))
+                        }
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: 13,
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 8,
+                          background: '#fff',
+                          color: '#6b7280',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: allocationExceedsIncome ? '#b91c1c' : '#374151' }}>
+              Remaining unallocated: ₱{remaining.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {allocationExceedsIncome && ' — Total allocations exceed income amount.'}
+            </p>
+            {canAddAllocation && (
+              <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+                <div style={{ flex: '1 1 140px', minWidth: 0 }}>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#6b7280' }}>Add to goal</label>
+                  <select
+                    value={addGoalId}
+                    onChange={(e) => setAddGoalId(e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="">Select goal</option>
+                    {goalsNotAllocated.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ width: 100 }}>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#6b7280' }}>Amount (₱)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={addAmount}
+                    onChange={(e) => setAddAmount(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!addGoalId || !addAmount) return
+                    const n = parseFloat(addAmount)
+                    if (Number.isNaN(n) || n <= 0) return
+                    const goal = goals.find((g) => g.id === addGoalId)
+                    if (!goal) return
+                    setAllocationsEdit((prev) => [...prev, { goal_id: addGoalId, goal_name: goal.name, amount: addAmount }])
+                    setAddGoalId('')
+                    setAddAmount('')
+                  }}
+                  disabled={!addGoalId || !addAmount || parseFloat(addAmount) <= 0}
+                  style={{
+                    padding: '10px 14px',
+                    fontSize: 14,
+                    border: 'none',
+                    borderRadius: 8,
+                    backgroundColor: '#059669',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+            )}
+          </>
+        )}
         {goals.length > 0 && !isEditMode && (
           <>
             <div style={{ marginBottom: 16 }}>
@@ -238,7 +417,7 @@ export default function IncomeAllocationModal({
         {error && <p style={{ margin: 0, marginBottom: 16, fontSize: 13, color: '#b91c1c' }}>{error}</p>}
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || (isEditMode && allocationExceedsIncome)}
           style={{
             padding: '10px 18px',
             fontSize: 14,
