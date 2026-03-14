@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import {
@@ -30,6 +30,28 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
 
   const showChips = suggestionResult.confidence === 'high' || suggestionResult.confidence === 'medium'
   const chips = showChips ? suggestionResult.suggestions : []
+
+  const [budgetNotes, setBudgetNotes] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    fetch('/api/budget-plan', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: unknown) => {
+        if (cancelled || !Array.isArray(data)) return
+        const map: Record<string, string> = {}
+        for (const row of data) {
+          const r = row as { category?: string; note?: string | null }
+          if (r.category && typeof r.note === 'string' && r.note.trim()) {
+            map[r.category] = r.note.trim()
+          }
+        }
+        setBudgetNotes(map)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [isOpen])
 
   const handleClose = () => {
     setDescription('')
@@ -184,6 +206,11 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
               </option>
             ))}
           </select>
+          {category && budgetNotes[category] && (
+            <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted, #94a3b8)', lineHeight: 1.4 }}>
+              {budgetNotes[category]}
+            </p>
+          )}
         </div>
 
         {/* 5. Date */}

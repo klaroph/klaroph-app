@@ -13,7 +13,15 @@ function toFirstDayOfMonth(input?: string | number): string {
   return d.toISOString().slice(0, 10)
 }
 
-type PatchBody = { amount?: number; month?: string }
+const NOTE_MAX_LENGTH = 150
+
+function trimNote(v: unknown): string | null {
+  if (v == null) return null
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s === '' ? null : s.length > NOTE_MAX_LENGTH ? s.slice(0, NOTE_MAX_LENGTH) : s
+}
+
+type PatchBody = { amount?: number; month?: string; note?: string | null }
 
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
@@ -55,9 +63,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       typeof body?.amount === 'number' ? body.amount : Number(body?.amount)
     const monthInput = typeof body?.month === 'string' ? body.month : undefined
 
-    const payload: { amount?: number; month?: string } = {}
+    const payload: { amount?: number; month?: string; note?: string | null } = {}
     if (!Number.isNaN(amount) && amount >= 0) payload.amount = amount
     if (monthInput !== undefined) payload.month = toFirstDayOfMonth(monthInput)
+    if (body?.note !== undefined) payload.note = trimNote(body.note) ?? null
 
     if (Object.keys(payload).length === 0) {
       return NextResponse.json(
@@ -71,7 +80,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       .update(payload)
       .eq('id', id)
       .eq('user_id', user.id)
-      .select('id, user_id, category, amount, month, created_at')
+      .select('id, user_id, category, amount, month, note, created_at')
       .single()
 
     if (error) {

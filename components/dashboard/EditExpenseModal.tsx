@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Modal from '../ui/Modal'
 import { EXPENSE_CATEGORIES, getTypeForCategory } from '../../lib/expenseCategories'
 
@@ -32,6 +32,8 @@ export default function EditExpenseModal({
   const [date, setDate] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [budgetNotes, setBudgetNotes] = useState<Record<string, string>>({})
+  const budgetNotesFetched = useRef(false)
 
   useEffect(() => {
     if (expense) {
@@ -41,6 +43,25 @@ export default function EditExpenseModal({
       setDate(expense.date)
     }
   }, [expense])
+
+  useEffect(() => {
+    if (!isOpen || budgetNotesFetched.current) return
+    budgetNotesFetched.current = true
+    fetch('/api/budget-plan', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: unknown) => {
+        if (!Array.isArray(data)) return
+        const map: Record<string, string> = {}
+        for (const row of data) {
+          const r = row as { category?: string; note?: string | null }
+          if (r.category && typeof r.note === 'string' && r.note.trim()) {
+            map[r.category] = r.note.trim()
+          }
+        }
+        setBudgetNotes(map)
+      })
+      .catch(() => {})
+  }, [isOpen])
 
   const handleClose = () => {
     setError(null)
@@ -111,6 +132,11 @@ export default function EditExpenseModal({
               </option>
             ))}
           </select>
+          {category && budgetNotes[category] && (
+            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>
+              {budgetNotes[category]}
+            </p>
+          )}
         </div>
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#374151' }}>

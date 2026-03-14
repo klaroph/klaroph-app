@@ -28,11 +28,11 @@ export async function GET(request: Request) {
     const [planRes, overridesRes] = await Promise.all([
       supabase
         .from('budget_plans')
-        .select('category, amount')
+        .select('category, amount, note')
         .eq('user_id', user.id),
       supabase
         .from('budget_overrides')
-        .select('category, amount')
+        .select('category, amount, note')
         .eq('user_id', user.id)
         .eq('month', month),
     ])
@@ -52,16 +52,16 @@ export async function GET(request: Request) {
       )
     }
 
-    const planByCategory: Record<string, number> = {}
+    const planByCategory: Record<string, { amount: number; note?: string | null }> = {}
     for (const row of planRes.data ?? []) {
-      const r = row as { category: string; amount: number }
-      planByCategory[r.category] = Number(r.amount)
+      const r = row as { category: string; amount: number; note?: string | null }
+      planByCategory[r.category] = { amount: Number(r.amount), note: r.note ?? null }
     }
 
-    const overrideByCategory: Record<string, number> = {}
+    const overrideByCategory: Record<string, { amount: number; note?: string | null }> = {}
     for (const row of overridesRes.data ?? []) {
-      const r = row as { category: string; amount: number }
-      overrideByCategory[r.category] = Number(r.amount)
+      const r = row as { category: string; amount: number; note?: string | null }
+      overrideByCategory[r.category] = { amount: Number(r.amount), note: r.note ?? null }
     }
 
     const categories = new Set([
@@ -69,13 +69,13 @@ export async function GET(request: Request) {
       ...Object.keys(overrideByCategory),
     ])
 
-    const effective: { category: string; amount: number }[] = []
+    const effective: { category: string; amount: number; note?: string | null }[] = []
     for (const category of categories) {
-      const amount =
-        overrideByCategory[category] ??
-        planByCategory[category] ??
-        0
-      effective.push({ category, amount })
+      const override = overrideByCategory[category]
+      const plan = planByCategory[category]
+      const amount = override?.amount ?? plan?.amount ?? 0
+      const note = override?.note ?? plan?.note ?? null
+      effective.push({ category, amount, note: note || undefined })
     }
     effective.sort((a, b) => a.category.localeCompare(b.category))
 

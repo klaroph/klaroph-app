@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { useSubscriptionOptional } from '@/contexts/SubscriptionContext'
@@ -9,7 +9,7 @@ import { toLocalDateString } from '@/lib/format'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 import LockIcon from '@/components/ui/LockIcon'
 
-type EffectiveItem = { category: string; amount: number }
+type EffectiveItem = { category: string; amount: number; note?: string | null }
 
 type BudgetOverviewProps = {
   spendingByCategory?: Record<string, number>
@@ -155,6 +155,19 @@ export default function BudgetOverview({
   const [effectiveBudgets, setEffectiveBudgets] = useState<EffectiveItem[]>([])
   const [loading, setLoading] = useState(true)
   const [spendingByCategoryFetched, setSpendingByCategoryFetched] = useState<Record<string, number>>({})
+  const [noteTooltipCategory, setNoteTooltipCategory] = useState<string | null>(null)
+  const [noteHoverCategory, setNoteHoverCategory] = useState<string | null>(null)
+  const notePopoverRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!noteTooltipCategory) return
+    const handleClickOutside = (e: MouseEvent) => {
+      const el = notePopoverRef.current
+      if (el && !el.contains(e.target as Node)) setNoteTooltipCategory(null)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [noteTooltipCategory])
 
   const isCurrentMonth = selectedMonth === currentMonthFirst
   const spendingByCategory =
@@ -227,12 +240,12 @@ export default function BudgetOverview({
 
   /** Categories with a budget allocation, plus any category with spending and no budget (amount 0) so actual expenses match the breakdown. */
   const mergedBudgets = useMemo(() => {
-    const byCategory = new Map<string, number>()
-    for (const b of effectiveBudgets) byCategory.set(b.category, b.amount)
+    const byCategory = new Map<string, { amount: number; note?: string | null }>()
+    for (const b of effectiveBudgets) byCategory.set(b.category, { amount: b.amount, note: b.note ?? undefined })
     for (const cat of Object.keys(spendingByCategory)) {
-      if (!byCategory.has(cat)) byCategory.set(cat, 0)
+      if (!byCategory.has(cat)) byCategory.set(cat, { amount: 0 })
     }
-    return Array.from(byCategory.entries()).map(([category, amount]) => ({ category, amount }))
+    return Array.from(byCategory.entries()).map(([category, { amount, note }]) => ({ category, amount, note }))
   }, [effectiveBudgets, spendingByCategory])
 
   /** Sort: 1) Unbudgeted spending, 2) Overspending, 3) Highest usage ratio */
@@ -502,9 +515,79 @@ export default function BudgetOverview({
                     ? formatPeso(remaining)
                     : '₱0'
 
+              const noteText = b.note?.trim()
+              const showNoteTooltip = noteText && (noteHoverCategory === b.category || noteTooltipCategory === b.category)
               return (
-                <div key={b.category} className="budget-category-item">
-                  <div className="budget-category-name">{label}</div>
+                <div
+                  key={b.category}
+                  className="budget-category-item"
+                  onMouseEnter={() => {
+                    if (noteText) {
+                      setNoteHoverCategory(b.category)
+                      setNoteTooltipCategory(null)
+                    }
+                  }}
+                  onMouseLeave={() => setNoteHoverCategory(null)}
+                >
+                  <div className="budget-category-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {label}
+                    {noteText ? (
+                      <span ref={noteTooltipCategory === b.category ? notePopoverRef : undefined} style={{ position: 'relative', display: 'inline-flex' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setNoteHoverCategory(null); setNoteTooltipCategory((prev) => (prev === b.category ? null : b.category)) }}
+                          className="budget-note-icon-btn"
+                          style={{
+                            padding: 4,
+                            margin: -4,
+                            border: 'none',
+                            background: 'none',
+                            cursor: 'pointer',
+                            color: '#475569',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 4,
+                            transition: 'color 0.15s ease, background-color 0.15s ease',
+                          }}
+                          aria-label={`Note: ${noteText}`}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                          </svg>
+                        </button>
+                        {showNoteTooltip && (
+                          <div
+                            role="tooltip"
+                            style={{
+                              position: 'absolute',
+                              left: 0,
+                              top: '100%',
+                              marginTop: 6,
+                              padding: '8px 12px',
+                              minWidth: 140,
+                              maxWidth: 220,
+                              fontSize: 12,
+                              lineHeight: 1.45,
+                              color: 'var(--text-muted, #64748b)',
+                              backgroundColor: 'var(--surface, #fff)',
+                              border: '1px solid var(--border, #e5e7eb)',
+                              borderRadius: 8,
+                              boxShadow: '0 6px 16px rgba(0,0,0,0.1)',
+                              whiteSpace: 'normal',
+                              zIndex: 10,
+                            }}
+                          >
+                            {noteText}
+                          </div>
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
                   {(isNormal || isOverspent) && (
                     <div className="budget-category-amount">
                       {formatPeso(spent)} / {formatPeso(budget)}

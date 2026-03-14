@@ -715,6 +715,29 @@ select:focus-visible {
   background: var(--color-blue-muted, rgba(0, 56, 168, 0.06));
 }
 
+/* Budget planner / override modal — input borders and focus */
+.budget-planner-amount-input:focus-visible,
+.budget-planner-note-input:focus-visible {
+  outline: none;
+}
+.budget-planner-amount-input:focus-visible {
+  border-color: var(--color-primary, #2563eb) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+.budget-planner-note-input:focus-visible {
+  border-color: #94a3b8 !important;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.2);
+}
+
+/* Budget card note icon — hover / tap feedback */
+.budget-note-icon-btn:hover {
+  color: #334155;
+  background-color: rgba(71, 85, 105, 0.08);
+}
+.budget-note-icon-btn:active {
+  background-color: rgba(71, 85, 105, 0.12);
+}
+
 @media (max-width: 768px) {
   .modal-backdrop {
     padding: var(--space-2);

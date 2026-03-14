@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
+import { getBudgetNotePlaceholder } from '@/lib/budgetNotePlaceholders'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 
@@ -13,7 +14,7 @@ type MonthOverrideModalProps = {
   month: string
 }
 
-type EffectiveItem = { category: string; amount: number }
+type EffectiveItem = { category: string; amount: number; note?: string | null }
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -29,6 +30,7 @@ export default function MonthOverrideModal({
   month,
 }: MonthOverrideModalProps) {
   const [amounts, setAmounts] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [fetchLoading, setFetchLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,11 +43,14 @@ export default function MonthOverrideModal({
     fetch(`/api/budget-effective?month=${month}`, { credentials: 'include' })
       .then((res) => res.json())
       .then((data: EffectiveItem[]) => {
-        const next: Record<string, string> = {}
+        const nextAmt: Record<string, string> = {}
+        const nextNotes: Record<string, string> = {}
         for (const item of data ?? []) {
-          next[item.category] = String(item.amount)
+          nextAmt[item.category] = String(item.amount)
+          nextNotes[item.category] = (item.note ?? '').trim()
         }
-        setAmounts(next)
+        setAmounts(nextAmt)
+        setNotes(nextNotes)
       })
       .catch(() => setAmounts({}))
       .finally(() => setFetchLoading(false))
@@ -66,11 +71,17 @@ export default function MonthOverrideModal({
       for (const category of categoriesToSave) {
         const amount = parseFloat(String(amounts[category]).replace(/[^0-9.]/g, '')) || 0
         if (amount < 0) continue
+        const noteStr = (notes[category] ?? '').trim().slice(0, 150)
         const res = await fetch('/api/budget-overrides', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ category, amount, month }),
+          body: JSON.stringify({
+            category,
+            amount,
+            month,
+            note: noteStr === '' ? null : noteStr,
+          }),
         })
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
@@ -96,10 +107,20 @@ export default function MonthOverrideModal({
     padding: '10px 12px',
     width: 100,
     fontSize: 14,
-    border: '1px solid var(--border)',
+    border: '1px solid var(--border, #d1d5db)',
     borderRadius: 8,
     fontFamily: 'inherit',
     boxSizing: 'border-box',
+  }
+  const noteInputStyle: React.CSSProperties = {
+    padding: '6px 10px',
+    width: '100%',
+    fontSize: 12,
+    border: '1px solid var(--border-muted, #d1d5db)',
+    borderRadius: 6,
+    fontFamily: 'inherit',
+    boxSizing: 'border-box',
+    color: 'var(--text-muted, #64748b)',
   }
 
   const categoriesToShow = Object.keys(amounts)
@@ -111,6 +132,7 @@ export default function MonthOverrideModal({
       onClose={handleClose}
       title={`Edit ${formatMonthLabel(month)}`}
       contentMaxWidth={420}
+      closeOnOutsideClick={false}
     >
       {fetchLoading ? (
         <p style={{ margin: 0, color: 'var(--text-muted)' }}>Loading…</p>
@@ -135,7 +157,7 @@ export default function MonthOverrideModal({
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 4,
+                    gap: 0,
                     marginBottom: 10,
                   }}
                 >
@@ -164,9 +186,20 @@ export default function MonthOverrideModal({
                       onChange={(e) =>
                         setAmounts((prev) => ({ ...prev, [category]: e.target.value }))
                       }
+                      className="budget-planner-amount-input"
                       style={inputStyle}
                     />
                   </div>
+                  <input
+                    type="text"
+                    placeholder={`Optional reminder (e.g. ${getBudgetNotePlaceholder(category)})`}
+                    maxLength={150}
+                    value={notes[category] ?? ''}
+                    onChange={(e) => setNotes((prev) => ({ ...prev, [category]: e.target.value }))}
+                    className="budget-planner-note-input"
+                    style={{ ...noteInputStyle, marginTop: 8 }}
+                    aria-label={`Note for ${label}`}
+                  />
                   {isZero && (
                     <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 0 }}>
                       No budget this month

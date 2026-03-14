@@ -4,11 +4,19 @@ import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
+const NOTE_MAX_LENGTH = 150
+
 function toFirstDayOfMonth(input?: string | number): string {
   const d = new Date(input ?? Date.now())
   d.setDate(1)
   d.setHours(0, 0, 0, 0)
   return d.toISOString().slice(0, 10)
+}
+
+function trimNote(v: unknown): string | null {
+  if (v == null) return null
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s === '' ? null : s.length > NOTE_MAX_LENGTH ? s.slice(0, NOTE_MAX_LENGTH) : s
 }
 
 export async function GET(request: Request) {
@@ -27,7 +35,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabase
       .from('budget_overrides')
-      .select('id, user_id, category, amount, month, created_at')
+      .select('id, user_id, category, amount, month, note, created_at')
       .eq('user_id', user.id)
       .eq('month', month)
       .order('category')
@@ -49,7 +57,7 @@ export async function GET(request: Request) {
   }
 }
 
-type PostBody = { category?: string; amount?: number; month?: string }
+type PostBody = { category?: string; amount?: number; month?: string; note?: string | null }
 
 export async function POST(request: Request) {
   try {
@@ -92,6 +100,8 @@ export async function POST(request: Request) {
       )
     }
 
+    const note = trimNote(body?.note) ?? null
+
     const { data, error } = await supabase
       .from('budget_overrides')
       .upsert(
@@ -100,10 +110,11 @@ export async function POST(request: Request) {
           category,
           amount,
           month,
+          note,
         },
         { onConflict: 'user_id,category,month', ignoreDuplicates: false }
       )
-      .select('id, user_id, category, amount, month, created_at')
+      .select('id, user_id, category, amount, month, note, created_at')
       .single()
 
     if (error) {
