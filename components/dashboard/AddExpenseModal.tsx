@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import posthog from 'posthog-js'
 import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import {
@@ -101,6 +102,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
       setError(err.message)
       return
     }
+    posthog.capture('expense_created', { amount: num, category: category.trim() })
     handleClose()
     onSaved()
   }

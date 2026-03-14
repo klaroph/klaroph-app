@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import posthog from 'posthog-js'
 import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import { INCOME_SOURCES, type IncomeSource } from '../../lib/incomeSources'
@@ -204,6 +205,7 @@ export default function IncomeAllocationModal({
       setLoading(false)
       return
     }
+    posthog.capture('income_created', { amount: incomeNum, source: incomeSource || undefined })
     let allocationsChanged = false
     if (allocateGoalId && allocateAmount && allocated > 0 && incomeData) {
       const { error: allocErr } = await supabase.from('income_allocations').insert({

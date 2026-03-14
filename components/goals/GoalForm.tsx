@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import posthog from 'posthog-js'
 import { supabase } from '../../lib/supabaseClient'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
@@ -56,6 +57,7 @@ export default function GoalForm({ onGoalCreated }: GoalFormProps) {
         return
       }
 
+      posthog.capture('goal_created', { target_amount: amount, name: name.trim() })
       setName('')
       setTargetAmount('')
       onGoalCreated()

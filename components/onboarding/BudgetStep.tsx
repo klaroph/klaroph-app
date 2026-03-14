@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import posthog from 'posthog-js'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 
 const BUDGET_ONBOARDING_CATEGORIES = EXPENSE_CATEGORIES.filter((c) =>
@@ -51,6 +52,7 @@ export default function BudgetStep({
         setLoading(false)
         return
       }
+      posthog.capture('budget_created')
       onNext()
     } catch {
       setError('Something went wrong.')

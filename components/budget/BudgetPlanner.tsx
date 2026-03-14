@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import posthog from 'posthog-js'
 import Modal from '@/components/ui/Modal'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { getBudgetNotePlaceholder } from '@/lib/budgetNotePlaceholders'
@@ -132,6 +133,7 @@ export default function BudgetPlanner({
         setLoading(false)
         return
       }
+      posthog.capture('budget_created')
       handleClose()
       onSaved()
     } catch {
