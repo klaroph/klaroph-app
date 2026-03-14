@@ -125,6 +125,13 @@ export default function MonthOverrideModal({
 
   const categoriesToShow = Object.keys(amounts)
   const hasAny = categoriesToShow.length > 0
+  const hiddenCategories = EXPENSE_CATEGORIES.filter((c) => !(c.value in amounts))
+
+  const handleAddCategory = (categoryValue: string) => {
+    if (!categoryValue) return
+    setAmounts((prev) => ({ [categoryValue]: '0', ...prev }))
+    setNotes((prev) => ({ ...prev, [categoryValue]: '' }))
+  }
 
   return (
     <Modal
@@ -145,6 +152,55 @@ export default function MonthOverrideModal({
           <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
             Override budget amounts for {formatMonthLabel(month)} only.
           </p>
+          {hiddenCategories.length > 0 && (
+            <div
+              style={{
+                marginBottom: 16,
+                paddingBottom: 16,
+                borderBottom: '1px solid var(--border-muted, #e2e8f0)',
+              }}
+            >
+              <label
+                htmlFor="month-override-add-category"
+                style={{
+                  display: 'block',
+                  marginBottom: 10,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                Add category for this month
+              </label>
+              <select
+                id="month-override-add-category"
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v) handleAddCategory(v)
+                  e.target.value = ''
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: 14,
+                  border: '1px solid var(--border, #d1d5db)',
+                  borderRadius: 8,
+                  fontFamily: 'inherit',
+                  backgroundColor: 'var(--surface, #fff)',
+                  color: 'var(--text-secondary)',
+                }}
+                aria-label="Add category for this month"
+              >
+                <option value="">Select a category to add…</option>
+                {hiddenCategories.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div style={{ maxHeight: 320, overflow: 'auto', marginBottom: 16 }}>
             {categoriesToShow.map((category) => {
               const label = EXPENSE_CATEGORIES.find((c) => c.value === category)?.label ?? category
