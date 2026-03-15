@@ -14,12 +14,11 @@ export const FREE_PLAN_FEATURES = [
   'Import CSV (Income and Expenses) — up to 2 imports only',
 ] as const
 
-/** Financial Clarity Tools — each on its own line (strong selling points) */
+/** Financial Clarity Tools — each on its own line (dashboard-native modules like Financial Health are not listed here) */
 export const FREE_PLAN_TOOLS = [
   'Salary Calculator',
   '13th Month Pay Calculator',
   'Loan Calculator',
-  'Financial Health Check',
 ] as const
 
 /** Pro core features. premium: true = show premium indicator (badge/icon) */
@@ -27,6 +26,7 @@ export const PRO_PLAN_FEATURES: ReadonlyArray<{ label: string; premium: boolean 
   { label: '20 Active Goals', premium: false },
   { label: 'Income Tracker', premium: false },
   { label: 'Expense Tracker', premium: false },
+  { label: 'Financial Health Insights', premium: true },
   { label: 'Monthly Budgeting', premium: true },
   { label: 'Unlimited History & Insights', premium: true },
   { label: 'Export CSV (Income and Expenses)', premium: true },
@@ -34,12 +34,11 @@ export const PRO_PLAN_FEATURES: ReadonlyArray<{ label: string; premium: boolean 
   { label: 'Advanced Charts', premium: true },
 ]
 
-/** Pro Financial Clarity Tools — shared tools plus Pro-only */
+/** Pro Financial Clarity Tools — shared tools plus Pro-only (dashboard-native modules like Financial Health are not listed here) */
 export const PRO_PLAN_TOOLS: ReadonlyArray<{ label: string; premium: boolean }> = [
   { label: 'Salary Calculator', premium: false },
   { label: '13th Month Pay Calculator', premium: false },
   { label: 'Loan Calculator', premium: false },
-  { label: 'Financial Health Check', premium: false },
   { label: 'Early Access to New Financial Tools', premium: true },
   { label: 'Advanced Financial Metrics', premium: true },
 ]
@@ -62,7 +61,6 @@ export const UPGRADE_MODAL_PRO_FIRST_TOOLS = [
   'Salary Calculator',
   '13th Month Pay Calculator',
   'Loan Calculator',
-  'Financial Health Check',
   'Early Access to New Financial Tools',
   'Advanced Financial Metrics',
 ] as const

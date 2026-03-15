@@ -7,7 +7,6 @@ const TOOL_LINKS = [
   { href: '/tools/salary-calculator', label: 'Salary Calculator' },
   { href: '/tools/loan-calculator', label: 'Loan Calculator' },
   { href: '/tools/13th-month-calculator', label: '13th Month Calculator' },
-  { href: '/tools/financial-health-check', label: 'Financial Health Check' },
 ] as const
 
 export default function ToolsCalcColumn({ children }: { children: React.ReactNode }) {

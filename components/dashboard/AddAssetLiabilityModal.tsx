@@ -1,14 +1,38 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
+import {
+  ASSET_SUBTYPES,
+  LIABILITY_SUBTYPES,
+  SUBTYPE_LABELS,
+  type AssetSubtype,
+  type LiabilitySubtype,
+} from '@/lib/financialAccounts'
 
 type AddAssetLiabilityModalProps = {
   isOpen: boolean
   onClose: () => void
   onSaved: () => void
   defaultTab?: 'asset' | 'liability'
+}
+
+const inputStyle: React.CSSProperties = {
+  padding: '10px 12px',
+  width: '100%',
+  fontSize: 14,
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  marginBottom: 6,
+  fontSize: 13,
+  color: 'var(--text-secondary)',
 }
 
 export default function AddAssetLiabilityModal({
@@ -18,13 +42,27 @@ export default function AddAssetLiabilityModal({
   defaultTab = 'asset',
 }: AddAssetLiabilityModalProps) {
   const [tab, setTab] = useState<'asset' | 'liability'>(defaultTab)
-  const [name, setName] = useState('')
+  const [subtype, setSubtype] = useState<string>(defaultTab === 'asset' ? 'bank_account' : 'credit_card')
+  const [institutionOrLabel, setInstitutionOrLabel] = useState('')
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const assetSubtypes = ASSET_SUBTYPES as readonly string[]
+  const liabilitySubtypes = LIABILITY_SUBTYPES as readonly string[]
+
+  useEffect(() => {
+    if (isOpen) {
+      setTab(defaultTab)
+      setSubtype(defaultTab === 'asset' ? 'bank_account' : 'credit_card')
+      setInstitutionOrLabel('')
+      setAmount('')
+      setError(null)
+    }
+  }, [isOpen, defaultTab])
+
   const reset = () => {
-    setName('')
+    setInstitutionOrLabel('')
     setAmount('')
     setError(null)
   }
@@ -32,6 +70,14 @@ export default function AddAssetLiabilityModal({
   const handleClose = () => {
     reset()
     onClose()
+  }
+
+  const handleTabChange = (newTab: 'asset' | 'liability') => {
+    setTab(newTab)
+    setSubtype(newTab === 'asset' ? 'bank_account' : 'credit_card')
+    setInstitutionOrLabel('')
+    setAmount('')
+    setError(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,15 +91,21 @@ export default function AddAssetLiabilityModal({
       return
     }
     const num = parseFloat(amount)
-    if (!name.trim() || isNaN(num) || num < 0) {
-      setError('Enter a valid name and amount.')
+    if (isNaN(num) || num < 0) {
+      setError('Enter a valid amount.')
       setLoading(false)
       return
     }
-    const table = tab === 'asset' ? 'assets' : 'liabilities'
-    const { error: err } = await supabase.from(table).insert({
+    const type = tab === 'asset' ? 'asset' : 'liability'
+    const subtypeToSave = tab === 'asset'
+      ? (assetSubtypes.includes(subtype) ? subtype : 'custom')
+      : (liabilitySubtypes.includes(subtype) ? subtype : 'other')
+    const { error: err } = await supabase.from('financial_accounts').insert({
       user_id: user.id,
-      name: name.trim(),
+      type,
+      subtype: subtypeToSave,
+      institution_name: null,
+      custom_name: institutionOrLabel.trim() || null,
       amount: num,
     })
     setLoading(false)
@@ -65,70 +117,57 @@ export default function AddAssetLiabilityModal({
     onSaved()
   }
 
-  const inputStyle: React.CSSProperties = {
-    padding: '10px 12px',
-    width: '100%',
-    fontSize: 14,
-    border: '1px solid #e5e7eb',
-    borderRadius: 8,
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-  }
+  const options = tab === 'asset' ? assetSubtypes : liabilitySubtypes
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Add asset or liability">
       <div style={{ marginBottom: 16 }}>
         <button
           type="button"
-          onClick={() => setTab('asset')}
-          style={{
-            padding: '8px 16px',
-            marginRight: 8,
-            fontSize: 13,
-            border: '1px solid #e5e7eb',
-            borderRadius: 8,
-            backgroundColor: tab === 'asset' ? '#059669' : '#fff',
-            color: tab === 'asset' ? '#fff' : '#6b7280',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
+          onClick={() => handleTabChange('asset')}
+          className={tab === 'asset' ? 'btn-primary' : 'btn-secondary'}
+          style={{ marginRight: 8, padding: '8px 16px', fontSize: 13 }}
         >
           Asset
         </button>
         <button
           type="button"
-          onClick={() => setTab('liability')}
-          style={{
-            padding: '8px 16px',
-            fontSize: 13,
-            border: '1px solid #e5e7eb',
-            borderRadius: 8,
-            backgroundColor: tab === 'liability' ? '#059669' : '#fff',
-            color: tab === 'liability' ? '#fff' : '#6b7280',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
+          onClick={() => handleTabChange('liability')}
+          className={tab === 'liability' ? 'btn-primary' : 'btn-secondary'}
+          style={{ padding: '8px 16px', fontSize: 13 }}
         >
           Liability
         </button>
       </div>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#374151' }}>
-            Name
-          </label>
+          <label style={labelStyle}>Category</label>
+          <select
+            value={subtype}
+            onChange={(e) => setSubtype(e.target.value)}
+            style={inputStyle}
+            required
+            aria-label="Account category"
+          >
+            {options.map((value) => (
+              <option key={value} value={value}>
+                {SUBTYPE_LABELS[value] ?? value}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Institution or label (optional)</label>
           <input
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={tab === 'asset' ? 'e.g. Savings account' : 'e.g. Credit card'}
+            value={institutionOrLabel}
+            onChange={(e) => setInstitutionOrLabel(e.target.value)}
+            placeholder={tab === 'asset' ? 'e.g. BPI Savings' : 'e.g. BPI Credit Card'}
             style={inputStyle}
           />
         </div>
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#374151' }}>
-            Amount (₱)
-          </label>
+          <label style={labelStyle}>Amount (₱)</label>
           <input
             type="number"
             min="0"
@@ -136,25 +175,13 @@ export default function AddAssetLiabilityModal({
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             style={inputStyle}
+            required
           />
         </div>
         {error && (
-          <p style={{ margin: 0, marginBottom: 16, fontSize: 13, color: '#b91c1c' }}>{error}</p>
+          <p style={{ margin: 0, marginBottom: 16, fontSize: 13, color: 'var(--color-error)' }}>{error}</p>
         )}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '10px 18px',
-            fontSize: 14,
-            border: 'none',
-            borderRadius: 8,
-            backgroundColor: '#059669',
-            color: '#fff',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
+        <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? 'Saving...' : tab === 'asset' ? 'Add asset' : 'Add liability'}
         </button>
       </form>

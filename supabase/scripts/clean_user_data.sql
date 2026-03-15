@@ -30,6 +30,9 @@ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'liabilities') THEN
     TRUNCATE TABLE liabilities CASCADE;
   END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'financial_accounts') THEN
+    TRUNCATE TABLE financial_accounts CASCADE;
+  END IF;
 END $$;
 
 -- Optional: reset profile completion/gamification (keeps profile row, clears optional fields)

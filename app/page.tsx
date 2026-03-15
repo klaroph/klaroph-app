@@ -55,7 +55,7 @@ const FEATURES = [
   },
   {
     title: 'Essential Financial Calculators (Free)',
-    desc: 'Financial Health Check, Salary calculator, 13th month pay and Loan estimator.',
+    desc: 'Salary calculator, 13th month pay and Loan estimator.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V18Zm2.498-6.75h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V13.5Zm0 2.25h.007v.008h-.007v-.008Zm0 2.25h.007v.008h-.007V18Zm2.504-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008V18Zm2.498-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5ZM8.25 6h7.5v2.25h-7.5V6ZM12 2.25c-1.892 0-3.758.11-5.593.322C5.307 2.7 4.5 3.65 4.5 4.757V19.5a2.25 2.25 0 0 0 2.25 2.25h10.5a2.25 2.25 0 0 0 2.25-2.25V4.757c0-1.108-.806-2.057-1.907-2.185A48.507 48.507 0 0 0 12 2.25Z" />
@@ -303,10 +303,6 @@ export default function LandingPage() {
           <a href="/tools/13th-month-calculator" className="landing-tool-card">
             <h3>13th Month Calculator</h3>
             <p>Compute 13th month pay from basic salary and months worked. Tax threshold included.</p>
-          </a>
-          <a href="/tools/financial-health-check" className="landing-tool-card">
-            <h3>Financial Health Check</h3>
-            <p>Quick read on your financial position from assets and liabilities. No account needed.</p>
           </a>
         </div>
         <p className="landing-tools-cta">No signup required</p>

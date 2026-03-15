@@ -4,9 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import AddAssetLiabilityModal from './AddAssetLiabilityModal'
-
-type AssetRow = { id: string; name: string; amount: number }
-type LiabilityRow = { id: string; name: string; amount: number }
+import { getAccountDisplayLabel, type FinancialAccount } from '@/lib/financialAccounts'
 
 type ManageAssetsLiabilitiesModalProps = {
   isOpen: boolean
@@ -19,24 +17,26 @@ export default function ManageAssetsLiabilitiesModal({
   onClose,
   onSaved,
 }: ManageAssetsLiabilitiesModalProps) {
-  const [assets, setAssets] = useState<AssetRow[]>([])
-  const [liabilities, setLiabilities] = useState<LiabilityRow[]>([])
+  const [accounts, setAccounts] = useState<FinancialAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editAmount, setEditAmount] = useState('')
-  const [editTable, setEditTable] = useState<'assets' | 'liabilities'>('assets')
+  const [editingType, setEditingType] = useState<'asset' | 'liability'>('asset')
 
   const load = async () => {
     if (!isOpen) return
     setLoading(true)
-    const { data: a } = await supabase.from('assets').select('id, name, amount')
-    const { data: l } = await supabase.from('liabilities').select('id, name, amount')
-    setAssets((a as AssetRow[]) || [])
-    setLiabilities((l as LiabilityRow[]) || [])
+    const { data } = await supabase
+      .from('financial_accounts')
+      .select('id, user_id, type, subtype, institution_name, custom_name, amount, notes, created_at, updated_at')
+    setAccounts((data as FinancialAccount[]) || [])
     setLoading(false)
   }
+
+  const assets = accounts.filter((a) => a.type === 'asset')
+  const liabilities = accounts.filter((a) => a.type === 'liability')
 
   useEffect(() => {
     if (isOpen) load()
@@ -48,10 +48,10 @@ export default function ManageAssetsLiabilitiesModal({
     onSaved()
   }
 
-  const startEdit = (row: { id: string; name: string; amount: number }, table: 'assets' | 'liabilities') => {
+  const startEdit = (row: FinancialAccount) => {
     setEditingId(row.id)
-    setEditTable(table)
-    setEditName(row.name)
+    setEditingType(row.type as 'asset' | 'liability')
+    setEditName(row.custom_name?.trim() || row.institution_name?.trim() || '')
     setEditAmount(String(row.amount))
   }
 
@@ -66,8 +66,8 @@ export default function ManageAssetsLiabilitiesModal({
     const num = parseFloat(editAmount)
     if (isNaN(num) || num < 0) return
     const { error } = await supabase
-      .from(editTable)
-      .update({ name: editName.trim(), amount: num })
+      .from('financial_accounts')
+      .update({ custom_name: editName.trim() || null, amount: num, updated_at: new Date().toISOString() })
       .eq('id', editingId)
     if (!error) {
       cancelEdit()
@@ -76,9 +76,9 @@ export default function ManageAssetsLiabilitiesModal({
     }
   }
 
-  const deleteRow = async (id: string, table: 'assets' | 'liabilities') => {
+  const deleteRow = async (id: string) => {
     if (!confirm('Remove this item?')) return
-    await supabase.from(table).delete().eq('id', id)
+    await supabase.from('financial_accounts').delete().eq('id', id)
     load()
     onSaved()
   }
@@ -142,13 +142,13 @@ export default function ManageAssetsLiabilitiesModal({
                         borderBottom: '1px solid #f3f4f6',
                       }}
                     >
-                      {editingId === row.id && editTable === 'assets' ? (
+                      {editingId === row.id && editingType === 'asset' ? (
                         <>
                           <input
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             style={{ ...inputStyle, flex: 1 }}
-                            placeholder="Name"
+                            placeholder="Name (optional)"
                           />
                           <input
                             type="number"
@@ -167,20 +167,20 @@ export default function ManageAssetsLiabilitiesModal({
                         </>
                       ) : (
                         <>
-                          <span style={{ flex: 1, fontSize: 14 }}>{row.name}</span>
+                          <span style={{ flex: 1, fontSize: 14 }}>{getAccountDisplayLabel(row)}</span>
                           <span style={{ fontSize: 14, color: '#374151' }}>
                             ₱{Number(row.amount).toLocaleString()}
                           </span>
                           <button
                             type="button"
-                            onClick={() => startEdit(row, 'assets')}
+                            onClick={() => startEdit(row)}
                             style={{ fontSize: 12, padding: '4px 8px' }}
                           >
                             Edit
                           </button>
                           <button
                             type="button"
-                            onClick={() => deleteRow(row.id, 'assets')}
+                            onClick={() => deleteRow(row.id)}
                             style={{ fontSize: 12, padding: '4px 8px', color: '#b91c1c' }}
                           >
                             Delete
@@ -211,13 +211,13 @@ export default function ManageAssetsLiabilitiesModal({
                         borderBottom: '1px solid #f3f4f6',
                       }}
                     >
-                      {editingId === row.id && editTable === 'liabilities' ? (
+                      {editingId === row.id && editingType === 'liability' ? (
                         <>
                           <input
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             style={{ ...inputStyle, flex: 1 }}
-                            placeholder="Name"
+                            placeholder="Name (optional)"
                           />
                           <input
                             type="number"
@@ -236,20 +236,20 @@ export default function ManageAssetsLiabilitiesModal({
                         </>
                       ) : (
                         <>
-                          <span style={{ flex: 1, fontSize: 14 }}>{row.name}</span>
+                          <span style={{ flex: 1, fontSize: 14 }}>{getAccountDisplayLabel(row)}</span>
                           <span style={{ fontSize: 14, color: '#374151' }}>
                             ₱{Number(row.amount).toLocaleString()}
                           </span>
                           <button
                             type="button"
-                            onClick={() => startEdit(row, 'liabilities')}
+                            onClick={() => startEdit(row)}
                             style={{ fontSize: 12, padding: '4px 8px' }}
                           >
                             Edit
                           </button>
                           <button
                             type="button"
-                            onClick={() => deleteRow(row.id, 'liabilities')}
+                            onClick={() => deleteRow(row.id)}
                             style={{ fontSize: 12, padding: '4px 8px', color: '#b91c1c' }}
                           >
                             Delete

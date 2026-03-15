@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
+import { getAccountDisplayLabel, type FinancialAccount } from '@/lib/financialAccounts'
+import { getWeightedLiquidAssets } from '@/lib/financialHealthInsights'
 import ManageAssetsLiabilitiesModal from './ManageAssetsLiabilitiesModal'
 
 type SnapshotItem = { name: string; amount: number }
@@ -143,8 +145,8 @@ function SnapshotCard({ label, value, breakdown, netWorthBreakdown }: SnapshotCa
 type FinancialSnapshotSectionProps = {
   refreshTrigger?: number
   onDataChange?: () => void
-  /** Called when snapshot totals are known (for assessment). */
-  onSnapshotTotals?: (assetsSum: number, liabilitiesSum: number, net: number) => void
+  /** Called when snapshot totals are known (for assessment/insights). weightedLiquid = liquidity-adjusted asset strength. */
+  onSnapshotTotals?: (assetsSum: number, liabilitiesSum: number, net: number, weightedLiquidAssets: number) => void
 }
 
 export default function FinancialSnapshotSection({
@@ -153,29 +155,35 @@ export default function FinancialSnapshotSection({
   onSnapshotTotals,
 }: FinancialSnapshotSectionProps) {
   const [modalOpen, setModalOpen] = useState(false)
-  const [assets, setAssets] = useState<SnapshotItem[]>([])
-  const [liabilities, setLiabilities] = useState<SnapshotItem[]>([])
+  const [accounts, setAccounts] = useState<FinancialAccount[]>([])
   const [refresh, setRefresh] = useState(0)
 
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: assetsData } = await supabase.from('assets').select('name, amount')
-      const { data: liabilitiesData } = await supabase.from('liabilities').select('name, amount')
-      setAssets((assetsData as SnapshotItem[]) || [])
-      setLiabilities((liabilitiesData as SnapshotItem[]) || [])
+      const { data } = await supabase
+        .from('financial_accounts')
+        .select('id, user_id, type, subtype, institution_name, custom_name, amount, notes, created_at, updated_at')
+      setAccounts((data as FinancialAccount[]) || [])
     }
     load()
   }, [refresh, refreshTrigger])
 
-  const assetsSum = assets.reduce((s, r) => s + Number(r.amount ?? 0), 0)
-  const liabilitiesSum = liabilities.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+  const assetsList = accounts.filter((a) => a.type === 'asset')
+  const liabilitiesList = accounts.filter((a) => a.type === 'liability')
+  const assets: SnapshotItem[] = assetsList.map((a) => ({ name: getAccountDisplayLabel(a), amount: Number(a.amount) }))
+  const liabilities: SnapshotItem[] = liabilitiesList.map((a) => ({ name: getAccountDisplayLabel(a), amount: Number(a.amount) }))
+  const assetsSum = assetsList.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+  const liabilitiesSum = liabilitiesList.reduce((s, r) => s + Number(r.amount ?? 0), 0)
   const net = assetsSum - liabilitiesSum
+  const weightedLiquidAssets = getWeightedLiquidAssets(
+    assetsList.map((a) => ({ subtype: a.subtype, amount: Number(a.amount) }))
+  )
 
   useEffect(() => {
-    onSnapshotTotals?.(assetsSum, liabilitiesSum, net)
-  }, [assetsSum, liabilitiesSum, net])
+    onSnapshotTotals?.(assetsSum, liabilitiesSum, net, weightedLiquidAssets)
+  }, [assetsSum, liabilitiesSum, net, weightedLiquidAssets])
 
   return (
     <section

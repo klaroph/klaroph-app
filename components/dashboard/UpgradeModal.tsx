@@ -40,6 +40,16 @@ function UpgradeTableRows() {
         <td className="upgrade-modal-feature">
           <span className="plan-feature-premium">
             <PlanFeaturePremiumIcon />
+            Financial Health Insights
+          </span>
+        </td>
+        <td className="upgrade-modal-free">Snap only – No Insight</td>
+        <td className="upgrade-modal-pro">✓</td>
+      </tr>
+      <tr className="upgrade-modal-row">
+        <td className="upgrade-modal-feature">
+          <span className="plan-feature-premium">
+            <PlanFeaturePremiumIcon />
             Monthly Budgeting
           </span>
         </td>

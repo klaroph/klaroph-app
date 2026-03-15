@@ -1,11 +1,6 @@
-import type { Metadata } from 'next'
-import FinancialHealthCheckPublic from '@/components/tools/FinancialHealthCheckPublic'
+import { redirect } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Financial Health Check | KlaroPH',
-  description: 'Free financial health check. Enter your assets and liabilities for a quick assessment. No account required. Built for Filipinos.',
-}
-
-export default function FinancialHealthCheckPublicPage() {
-  return <FinancialHealthCheckPublic />
+/** Financial Health is now a dashboard module. Redirect old tool URL to dashboard. */
+export default function FinancialHealthCheckRedirect() {
+  redirect('/dashboard/financial-health')
 }
