@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { useSubscriptionOptional } from '@/contexts/SubscriptionContext'
@@ -157,7 +157,9 @@ export default function BudgetOverview({
   const [spendingByCategoryFetched, setSpendingByCategoryFetched] = useState<Record<string, number>>({})
   const [noteTooltipCategory, setNoteTooltipCategory] = useState<string | null>(null)
   const [noteHoverCategory, setNoteHoverCategory] = useState<string | null>(null)
+  const [noteTooltipPlacement, setNoteTooltipPlacement] = useState<'right' | 'left'>('right')
   const notePopoverRef = useRef<HTMLElement>(null)
+  const noteTooltipAnchorRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!noteTooltipCategory) return
@@ -168,6 +170,22 @@ export default function BudgetOverview({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [noteTooltipCategory])
+
+  useLayoutEffect(() => {
+    const anchor = noteTooltipAnchorRef.current
+    if (!anchor) return
+    const anchorRect = anchor.getBoundingClientRect()
+    const gap = 8
+    const padding = 16
+    const maxTooltipWidth = 220
+    const wouldOverflowRight = anchorRect.right + gap + maxTooltipWidth > window.innerWidth - padding
+    const wouldOverflowLeft = anchorRect.left - gap - maxTooltipWidth < padding
+    if (wouldOverflowRight && !wouldOverflowLeft) {
+      setNoteTooltipPlacement('left')
+    } else {
+      setNoteTooltipPlacement('right')
+    }
+  }, [noteTooltipCategory, noteHoverCategory])
 
   const isCurrentMonth = selectedMonth === currentMonthFirst
   const spendingByCategory =
@@ -532,7 +550,14 @@ export default function BudgetOverview({
                   <div className="budget-category-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {label}
                     {noteText ? (
-                      <span ref={noteTooltipCategory === b.category ? notePopoverRef : undefined} style={{ position: 'relative', display: 'inline-flex' }}>
+                      <span
+                        ref={(el) => {
+                          if (showNoteTooltip && el) noteTooltipAnchorRef.current = el
+                          if (el && noteTooltipCategory === b.category) notePopoverRef.current = el
+                          if (el && noteTooltipCategory !== b.category && notePopoverRef.current === el) notePopoverRef.current = null
+                        }}
+                        style={{ position: 'relative', display: 'inline-flex' }}
+                      >
                         <button
                           type="button"
                           onClick={(e) => { e.preventDefault(); setNoteHoverCategory(null); setNoteTooltipCategory((prev) => (prev === b.category ? null : b.category)) }}
@@ -565,9 +590,11 @@ export default function BudgetOverview({
                             role="tooltip"
                             style={{
                               position: 'absolute',
-                              left: 0,
-                              top: '100%',
-                              marginTop: 6,
+                              ...(noteTooltipPlacement === 'right'
+                                ? { left: '100%', marginLeft: 8 }
+                                : { right: '100%', marginRight: 8, left: 'auto' }),
+                              top: '50%',
+                              transform: 'translateY(-50%)',
                               padding: '8px 12px',
                               minWidth: 140,
                               maxWidth: 220,
