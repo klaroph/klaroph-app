@@ -34,7 +34,7 @@ import {
   DASHBOARD_TRANSACTIONS_REFRESH_EVENT,
   dispatchDashboardTransactionsRefresh,
 } from '@/lib/dashboardRefresh'
-import { toLocalDateString } from '@/lib/format'
+import { toLocalDateString, parseLocalDateString } from '@/lib/format'
 
 type ExpenseRow = {
   id: string
@@ -183,25 +183,15 @@ export default function ExpensesPage() {
   const [budgetPlannerOpen, setBudgetPlannerOpen] = useState(false)
   const [monthOverrideOpen, setMonthOverrideOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
-  const [overrideMonth, setOverrideMonth] = useState(() => {
-    const d = new Date()
-    d.setDate(1)
-    d.setHours(0, 0, 0, 0)
-    return d.toISOString().slice(0, 10)
-  })
   const currentMonthFirst = useMemo(() => {
-    const d = new Date()
-    d.setDate(1)
-    d.setHours(0, 0, 0, 0)
-    return d.toISOString().slice(0, 10)
+    const now = new Date()
+    return toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1))
   }, [])
   const previousMonthFirst = useMemo(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    d.setDate(1)
-    d.setHours(0, 0, 0, 0)
-    return d.toISOString().slice(0, 10)
+    const now = new Date()
+    return toLocalDateString(new Date(now.getFullYear(), now.getMonth() - 1, 1))
   }, [])
+  const [overrideMonth, setOverrideMonth] = useState(currentMonthFirst)
   const [budgetSelectedMonth, setBudgetSelectedMonth] = useState(currentMonthFirst)
   const [syncFromBudget, setSyncFromBudget] = useState(false)
 
@@ -240,7 +230,7 @@ export default function ExpensesPage() {
   const safeTrendType: TrendChartType = availableTrendTypes.includes(trendChartType) ? trendChartType : availableTrendTypes[0]
   const safeCategoryType: CategoryChartType = availableCategoryTypes.includes(categoryChartType) ? categoryChartType : availableCategoryTypes[0]
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const today = useMemo(() => toLocalDateString(new Date()), [])
   const range = useMemo(() => {
     if (syncFromBudget) return getMonthRange(budgetSelectedMonth)
     if (period === 'all_time') return allTimeRange ?? { start: today, end: today }
@@ -319,10 +309,10 @@ export default function ExpensesPage() {
     }
     if (trendGrouping === 'day' && range.start && range.end) {
       const out: [string, number][] = []
-      const start = new Date(range.start)
-      const end = new Date(range.end)
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const key = d.toISOString().slice(0, 10)
+      const start = parseLocalDateString(range.start)
+      const end = parseLocalDateString(range.end)
+      for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate()); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = toLocalDateString(d)
         out.push([key, trendMap.get(key) ?? 0])
       }
       return out.sort((a, b) => a[0].localeCompare(b[0]))

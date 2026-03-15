@@ -7,6 +7,7 @@ import {
   EXPENSE_CATEGORIES,
   getTypeForCategory,
 } from '../../lib/expenseCategories'
+import { toLocalDateString } from '@/lib/format'
 import { suggestCategoriesFromDescription } from '../../lib/expenseCategorySuggestion'
 
 type AddExpenseModalProps = {
@@ -19,7 +20,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => toLocalDateString(new Date()))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -57,7 +58,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
     setDescription('')
     setAmount('')
     setCategory('')
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(toLocalDateString(new Date()))
     setError(null)
     onClose()
   }

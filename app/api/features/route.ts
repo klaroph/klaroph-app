@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { resolveUserPlanFromSubscription } from '@/lib/resolveUserPlan'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { getBudgetEditingAllowed } from '@/lib/entitlements'
+import { toLocalDateString } from '@/lib/format'
 import type { UserFeaturesWithSubscription } from '@/types/features'
 
 const FREE_ANALYTICS_DAYS = 90
@@ -15,9 +16,9 @@ function toFeaturesResponse(
   userCreatedAt: string | null | undefined,
   importCount: number
 ): UserFeaturesWithSubscription {
-  const d = new Date()
-  d.setDate(d.getDate() - FREE_ANALYTICS_DAYS)
-  const analyticsCutoffDate = plan.plan_name === 'free' ? d.toISOString().slice(0, 10) : null
+  const now = new Date()
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - FREE_ANALYTICS_DAYS)
+  const analyticsCutoffDate = plan.plan_name === 'free' ? toLocalDateString(d) : null
   const has_budget_editing = getBudgetEditingAllowed(plan, userCreatedAt)
   return {
     plan_name: planLabel,

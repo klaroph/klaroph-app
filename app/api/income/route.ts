@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { toLocalDateString } from '@/lib/format'
 
 type CreateBody = {
   total_amount?: number
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     const date =
       typeof body?.date === 'string' && body.date.trim()
         ? body.date.trim()
-        : new Date().toISOString().slice(0, 10)
+        : toLocalDateString(new Date())
     const incomeSource =
       body?.income_source !== undefined && body.income_source !== null
         ? (typeof body.income_source === 'string' ? body.income_source.trim() || null : null)

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { toLocalDateString, parseLocalDateString } from '@/lib/format'
 
 export type AllTimeTableName = 'income_records' | 'expenses'
 
@@ -34,7 +35,7 @@ export async function getAllTimeRangeAndGrouping(
   userId: string,
   tableName: AllTimeTableName
 ): Promise<AllTimeRangeResult> {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalDateString(new Date())
 
   const { data: minRow } = await supabase
     .from(tableName)
@@ -59,8 +60,8 @@ export async function getAllTimeRangeAndGrouping(
     return { start: today, end: today, grouping: 'day' }
   }
 
-  const minDate = new Date(minDateStr)
-  const maxDate = new Date(maxDateStr)
+  const minDate = parseLocalDateString(minDateStr)
+  const maxDate = parseLocalDateString(maxDateStr)
   const grouping = getGroupingForRange(minDate, maxDate)
 
   return {

@@ -32,7 +32,7 @@ import {
   dispatchDashboardTransactionsRefresh,
   dispatchDashboardGoalsRefresh,
 } from '@/lib/dashboardRefresh'
-import { toLocalDateString } from '@/lib/format'
+import { toLocalDateString, parseLocalDateString } from '@/lib/format'
 
 type IncomeRecord = {
   id: string
@@ -198,7 +198,7 @@ export default function IncomePage() {
   const safeTrendType: TrendChartType = availableTrendTypes.includes(trendChartType) ? trendChartType : availableTrendTypes[0]
   const safeCategoryType: CategoryChartType = availableCategoryTypes.includes(categoryChartType) ? categoryChartType : availableCategoryTypes[0]
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const today = useMemo(() => toLocalDateString(new Date()), [])
   const range = useMemo(() => {
     if (period === 'all_time') return allTimeRange ?? { start: today, end: today }
     return getRange(period, customStart, customEnd)
@@ -265,10 +265,10 @@ export default function IncomePage() {
     }
     if (trendGrouping === 'day' && range.start && range.end) {
       const out: [string, number][] = []
-      const start = new Date(range.start)
-      const end = new Date(range.end)
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const key = d.toISOString().slice(0, 10)
+      const start = parseLocalDateString(range.start)
+      const end = parseLocalDateString(range.end)
+      for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate()); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = toLocalDateString(d)
         out.push([key, trendMap.get(key) ?? 0])
       }
       return out.sort((a, b) => a[0].localeCompare(b[0]))

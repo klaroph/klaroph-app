@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { toLocalDateString } from '@/lib/format'
 import { supabase } from '@/lib/supabaseClient'
 import FinancialChart from '@/components/charts/FinancialChart'
 import { useSubscription } from '@/contexts/SubscriptionContext'
@@ -38,7 +39,7 @@ export default function ExpensesTrendChartCard({ refreshTrigger = 0 }: { refresh
     const last = months[months.length - 1]
     const [y, m] = last.monthFirst.split('-').map(Number)
     const lastDay = new Date(y, m, 0)
-    return lastDay.toISOString().slice(0, 10)
+    return toLocalDateString(lastDay)
   }, [months])
 
   useEffect(() => {

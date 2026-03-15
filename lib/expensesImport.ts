@@ -4,6 +4,7 @@
  * Max 500 rows, max 1MB file. Category set is mode-specific (expense categories vs income sources).
  */
 
+import { toLocalDateString, parseLocalDateString } from '@/lib/format'
 import { EXPENSE_CATEGORIES, getTypeForCategory } from '@/lib/expenseCategories'
 import { INCOME_SOURCES } from '@/lib/incomeSources'
 
@@ -76,12 +77,10 @@ function parseDate(val: string): string | null {
       }
     }
   }
-  const d = new Date(s)
+  // Parse as local when date-only (YYYY-MM-DD) to avoid Safari UTC interpretation
+  const d = /^\d{4}-\d{2}-\d{2}/.test(s) ? parseLocalDateString(s) : new Date(s)
   if (!Number.isNaN(d.getTime())) {
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
+    return toLocalDateString(d)
   }
   return null
 }

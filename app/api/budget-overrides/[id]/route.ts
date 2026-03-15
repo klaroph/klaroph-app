@@ -3,14 +3,17 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { toLocalDateString, parseLocalDateString } from '@/lib/format'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
 function toFirstDayOfMonth(input?: string | number): string {
-  const d = new Date(input ?? Date.now())
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 10)
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}/.test(input)) {
+    const d = parseLocalDateString(input)
+    return toLocalDateString(new Date(d.getFullYear(), d.getMonth(), 1))
+  }
+  const now = typeof input === 'number' ? new Date(input) : new Date()
+  return toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1))
 }
 
 const NOTE_MAX_LENGTH = 150

@@ -11,9 +11,23 @@ export function toLocalDateString(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
-/** Format date as MM/DD/YYYY */
+/**
+ * Parse YYYY-MM-DD as local date (avoids Safari interpreting as UTC).
+ * Use for date-only strings from API or state; do not use new Date(str) for YYYY-MM-DD.
+ */
+export function parseLocalDateString(s: string): Date {
+  const [y, m, d] = s.slice(0, 10).split('-').map(Number)
+  return new Date(y ?? 0, ((m ?? 1) - 1), d ?? 1)
+}
+
+/** Format date as MM/DD/YYYY. Parses YYYY-MM-DD strings as local to avoid Safari UTC shift. */
 export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
+  const d =
+    typeof date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(date)
+      ? parseLocalDateString(date)
+      : typeof date === 'string'
+        ? new Date(date)
+        : date
   if (Number.isNaN(d.getTime())) return ''
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')

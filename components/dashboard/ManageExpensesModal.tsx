@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import AddExpenseModal from './AddExpenseModal'
 import EditExpenseModal, { type ExpenseRecord } from './EditExpenseModal'
+import { toLocalDateString } from '@/lib/format'
 import { EXPENSE_CATEGORIES } from '../../lib/expenseCategories'
 
 type DatePreset = 'current_month' | 'last_3_months' | 'all'
@@ -15,11 +16,11 @@ function getDateRange(preset: DatePreset): { from: string; to: string } | null {
   if (preset === 'current_month') {
     const from = new Date(now.getFullYear(), now.getMonth(), 1)
     const to = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
+    return { from: toLocalDateString(from), to: toLocalDateString(to) }
   }
   const to = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   const from = new Date(now.getFullYear(), now.getMonth() - 2, 1)
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
+  return { from: toLocalDateString(from), to: toLocalDateString(to) }
 }
 
 type ManageExpensesModalProps = {

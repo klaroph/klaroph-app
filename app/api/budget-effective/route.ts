@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { toLocalDateString, parseLocalDateString } from '@/lib/format'
 
 function toFirstDayOfMonth(input?: string | number): string {
-  const d = new Date(input ?? Date.now())
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 10)
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}/.test(input)) {
+    const d = parseLocalDateString(input)
+    return toLocalDateString(new Date(d.getFullYear(), d.getMonth(), 1))
+  }
+  const now = typeof input === 'number' ? new Date(input) : new Date()
+  return toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1))
 }
 
 /** GET /api/budget-effective?month=YYYY-MM-DD

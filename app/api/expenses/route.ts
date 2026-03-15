@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { getTypeForCategory } from '@/lib/expenseCategories'
+import { toLocalDateString } from '@/lib/format'
 
 type CreateBody = {
   category?: string
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
     const date =
       typeof body?.date === 'string' && body.date.trim()
         ? body.date.trim()
-        : new Date().toISOString().slice(0, 10)
+        : toLocalDateString(new Date())
     const description =
       typeof body?.description === 'string' ? body.description.trim() || null : null
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { toLocalDateString } from '@/lib/format'
 
 /**
  * GET /api/expense-months
@@ -16,9 +17,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const cutoff = new Date()
-    cutoff.setMonth(cutoff.getMonth() - 24)
-    const cutoffStr = cutoff.toISOString().slice(0, 10)
+    const now = new Date()
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - 24, now.getDate())
+    const cutoffStr = toLocalDateString(cutoff)
 
     const { data, error } = await supabase
       .from('expenses')

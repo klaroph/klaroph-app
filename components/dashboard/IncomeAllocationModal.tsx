@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { toLocalDateString } from '@/lib/format'
 import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import { INCOME_SOURCES, type IncomeSource } from '../../lib/incomeSources'
@@ -35,7 +36,7 @@ export default function IncomeAllocationModal({
   initialRecord = null,
 }: IncomeAllocationModalProps) {
   const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => toLocalDateString(new Date()))
   const [incomeSource, setIncomeSource] = useState<string>(INCOME_SOURCES[0])
   const [allocateGoalId, setAllocateGoalId] = useState('')
   const [allocateAmount, setAllocateAmount] = useState('')
@@ -98,7 +99,7 @@ export default function IncomeAllocationModal({
 
   const handleClose = () => {
     setAmount('')
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(toLocalDateString(new Date()))
     setIncomeSource(INCOME_SOURCES[0])
     setAllocateGoalId('')
     setAllocateAmount('')
