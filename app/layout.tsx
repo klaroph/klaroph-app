@@ -1,18 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { PostHogProvider } from "./providers";
-import { PostHogPageView } from "./PostHogPageView";
-import { Suspense } from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const viewport: Viewport = {
@@ -51,12 +50,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <PostHogProvider>
-          <Suspense fallback={null}>
-            <PostHogPageView />
-          </Suspense>
-          {children}
-        </PostHogProvider>
+        {children}
       </body>
     </html>
   );

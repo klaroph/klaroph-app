@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
-import HowKlaroPHWorksModal from '../components/onboarding/HowKlaroPHWorksModal'
 import KlaroPHHandLogo from '../components/ui/KlaroPHHandLogo'
-import SignUpModal from '../components/auth/SignUpModal'
-import AddToHomeScreenModal from '../components/landing/AddToHomeScreenModal'
 import PlanFeaturePremiumIcon from '../components/ui/PlanFeaturePremiumIcon'
 import {
   FREE_PLAN_FEATURES,
@@ -16,6 +14,21 @@ import {
   PRO_PLAN_TOOLS,
   PLAN_SECTION_TOOLS_LABEL,
 } from '../lib/planFeatures'
+
+const HowKlaroPHWorksModal = dynamic(
+  () => import('../components/onboarding/HowKlaroPHWorksModal'),
+  { ssr: false }
+)
+
+const SignUpModal = dynamic(
+  () => import('../components/auth/SignUpModal'),
+  { ssr: false }
+)
+
+const AddToHomeScreenModal = dynamic(
+  () => import('../components/landing/AddToHomeScreenModal'),
+  { ssr: false }
+)
 
 const HERO_HEADLINE = 'Take Control of Your Money with Financial Clarity.'
 const HERO_SUBHEADLINE = 'Track expenses, manage budgets, and reach financial goals in one simple dashboard.'
@@ -175,7 +188,7 @@ export default function LandingPage() {
     <div className="landing-page">
       <nav className="landing-nav">
         <a href="/" className="landing-nav-brand">
-          <KlaroPHHandLogo size={56} variant="onBlue" />
+          <KlaroPHHandLogo size={56} variant="onBlue" priority />
         </a>
         <div className="landing-nav-links">
           <div className="landing-nav-links-primary">
@@ -448,6 +461,22 @@ export default function LandingPage() {
             Sign in with Google
           </button>
         </div>
+      </section>
+
+      {/* Follow on Facebook */}
+      <section className="landing-facebook" aria-labelledby="facebook-section-title">
+        <h2 id="facebook-section-title" className="landing-facebook-title">Follow KlaroPH on Facebook</h2>
+        <p className="landing-facebook-body">
+          See feature highlights, product updates, and ongoing improvements as KlaroPH continues to grow.
+        </p>
+        <a
+          href="https://www.facebook.com/profile.php?id=61579674025898"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="landing-cta-btn landing-cta-primary"
+        >
+          Visit Facebook Page
+        </a>
       </section>
 
       <footer className="landing-footer">

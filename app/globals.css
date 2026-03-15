@@ -3678,6 +3678,32 @@ html { scroll-behavior: smooth; }
   text-align: center;
 }
 
+/* Follow on Facebook */
+.landing-facebook {
+  padding: 56px 48px;
+  background: var(--surface);
+  text-align: center;
+  border-top: 1px solid var(--border-muted, #eee);
+}
+.landing-facebook-title {
+  margin: 0 0 12px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.landing-facebook-body {
+  margin: 0 0 24px;
+  font-size: 16px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.landing-facebook .landing-cta-btn {
+  text-decoration: none;
+}
+
 .landing-footer {
   padding: 32px 48px;
   background: var(--color-blue);
@@ -3739,7 +3765,8 @@ html { scroll-behavior: smooth; }
   .landing-how,
   .landing-compare,
   .landing-final-cta,
-  .landing-login { padding-left: var(--space-5); padding-right: var(--space-5); }
+  .landing-login,
+  .landing-facebook { padding-left: var(--space-5); padding-right: var(--space-5); }
 }
 
 /* Landing hero: mobile (768px) — reduce padding, tighten spacing */

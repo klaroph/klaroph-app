@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import posthog from 'posthog-js'
 import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import { GOAL_PRESETS } from '../../lib/goalPresets'
@@ -138,7 +137,6 @@ export default function NewGoalModal({ isOpen, onClose, onGoalCreated, initialGo
         }
         return
       }
-      posthog.capture('goal_created', { target_amount: amount, name: name.trim() })
     }
     handleClose()
     onGoalCreated()

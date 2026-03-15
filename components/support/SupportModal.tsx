@@ -75,10 +75,6 @@ export default function SupportModal({ isOpen, onClose }: SupportModalProps) {
       setSubject('')
       setMessage('')
       setError(null)
-      if (typeof window !== 'undefined') {
-        const w = window as Window & { posthog?: { capture: (event: string) => void } }
-        w.posthog?.capture('support_request_submitted')
-      }
     } finally {
       setLoading(false)
     }

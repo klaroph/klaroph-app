@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import posthog from 'posthog-js'
 import { supabase } from '@/lib/supabaseClient'
 import { GOAL_PRESETS } from '@/lib/goalPresets'
 import { markOnboardingSeen } from './HowKlaroPHWorksModal'
@@ -106,7 +105,6 @@ export default function FirstTimeFlow({ onComplete }: FirstTimeFlowProps) {
         setLoading(false)
         return
       }
-      posthog.capture('goal_created', { name, target_amount: target })
       await supabase.from('profiles').update({
         monthly_income: monthlyIncome > 0 ? monthlyIncome : null,
         income_frequency: frequency,
