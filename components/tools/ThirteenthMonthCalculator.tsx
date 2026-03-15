@@ -20,7 +20,7 @@ export default function ThirteenthMonthCalculator() {
   return (
     <div className="tool-page">
       <div className="page-header">
-        <h1 className="tool-page-title">13th Month Pay Calculator (Philippines)</h1>
+        <h1 className="tool-page-title">13th Month Pay Calculator Philippines</h1>
         <p className="tool-page-desc">Calculate your 13th month pay from basic monthly salary and months worked. Free for Filipino workers.</p>
       </div>
       <div className="dash-card" style={{ maxWidth: 480 }}>

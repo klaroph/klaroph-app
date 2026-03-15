@@ -23,7 +23,7 @@ export default function LoanCalculator() {
   return (
     <div className="tool-page">
       <div className="page-header">
-        <h1 className="tool-page-title">Loan Calculator</h1>
+        <h1 className="tool-page-title">Loan Calculator Philippines</h1>
         <p className="tool-page-desc">Estimate monthly amortization, total interest, and total payment for any loan. Useful for personal loans, housing, and car loans.</p>
       </div>
       <div className="dash-card" style={{ maxWidth: 480 }}>
