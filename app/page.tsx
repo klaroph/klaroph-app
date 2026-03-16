@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabaseClient'
 import KlaroPHHandLogo from '../components/ui/KlaroPHHandLogo'
+import Footer from '../components/Footer'
 import PlanFeaturePremiumIcon from '../components/ui/PlanFeaturePremiumIcon'
 import {
   FREE_PLAN_FEATURES,
@@ -294,7 +295,8 @@ export default function LandingPage() {
         <div className="landing-tools-grid">
           <a href="/tools/salary-calculator" className="landing-tool-card">
             <h3>Salary Calculator</h3>
-            <p>Estimate net pay after SSS, PhilHealth, Pag-IBIG, and tax. For employees and freelancers.</p>
+            <p>Estimate monthly take-home pay using Philippine tax tables, SSS, PhilHealth, and Pag-IBIG contributions, with official government references and payroll context.</p>
+            <span className="landing-tool-badge" aria-hidden="true">Uses current PH payroll contribution tables</span>
           </a>
           <a href="/tools/loan-calculator" className="landing-tool-card">
             <h3>Loan Calculator</h3>
@@ -459,31 +461,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Follow on Facebook */}
-      <section className="landing-facebook" aria-labelledby="facebook-section-title">
-        <h2 id="facebook-section-title" className="landing-facebook-title">Follow KlaroPH on Facebook</h2>
-        <p className="landing-facebook-body">
-          See feature highlights, product updates, and ongoing improvements as KlaroPH continues to grow.
-        </p>
-        <a
-          href="https://www.facebook.com/profile.php?id=61579674025898"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="landing-cta-btn landing-cta-primary"
-        >
-          Visit Facebook Page
-        </a>
-      </section>
-
-      <footer className="landing-footer">
-        <p style={{ margin: 0 }}><strong>KlaroPH</strong> &mdash; Financial clarity for every Filipino</p>
-        <p style={{ margin: '8px 0 0', fontSize: 13 }}>
-          <a href="/privacy" className="landing-footer-legal">Privacy Policy</a>
-          {' | '}
-          <a href="/terms" className="landing-footer-legal">Terms &amp; Conditions</a>
-        </p>
-        <button type="button" className="landing-footer-how" onClick={() => setShowHowItWorks(true)}>How KlaroPH works</button>
-      </footer>
+      <Footer variant="landing" />
 
       <HowKlaroPHWorksModal isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} markSeenOnAccept={false} />
       <SignUpModal isOpen={showSignUpModal} onClose={() => setShowSignUpModal(false)} />

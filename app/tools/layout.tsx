@@ -1,6 +1,8 @@
 import Link from 'next/link'
-import { ToolsPricingFree, ToolsPricingPro } from '@/components/tools/ToolsPricingPanel'
 import ToolsCalcColumn from '@/components/tools/ToolsCalcColumn'
+import ToolsRightColumn from '@/components/tools/ToolsRightColumn'
+import ToolsPublicContentWrapper from '@/components/tools/ToolsPublicContentWrapper'
+import Footer from '@/components/Footer'
 
 export default function ToolsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,14 +16,14 @@ export default function ToolsLayout({ children }: { children: React.ReactNode })
         </Link>
       </header>
       <main className="tools-public-main">
-        <div className="tools-public-content">
+        <ToolsPublicContentWrapper>
           <div className="tools-public-calc">
             <ToolsCalcColumn>{children}</ToolsCalcColumn>
           </div>
-          <ToolsPricingFree />
-          <ToolsPricingPro />
-        </div>
+          <ToolsRightColumn />
+        </ToolsPublicContentWrapper>
       </main>
+      <Footer variant="default" />
     </div>
   )
 }

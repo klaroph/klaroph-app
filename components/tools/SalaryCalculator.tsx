@@ -38,10 +38,10 @@ export default function SalaryCalculator() {
 
   return (
     <div className="tool-page">
-      <div className="page-header">
-        <h1 className="tool-page-title">Salary Calculator Philippines</h1>
+      <header className="page-header">
+        <h2 className="tool-page-title">Salary Calculator Philippines</h2>
         <p className="tool-page-desc">Estimate your net pay after SSS, PhilHealth, Pag-IBIG, and withholding tax. Free for Filipino private employees.</p>
-      </div>
+      </header>
       <div className="dash-card" style={{ maxWidth: 560 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
           <div>

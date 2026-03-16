@@ -11,6 +11,7 @@ import GraceBanner from '../../components/dashboard/GraceBanner'
 import NewGoalModal from '../../components/dashboard/NewGoalModal'
 import IncomeAllocationModal from '../../components/dashboard/IncomeAllocationModal'
 import AddExpenseModal from '../../components/dashboard/AddExpenseModal'
+import Footer from '../../components/Footer'
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext'
 import { UpgradeTriggerProvider, useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { DashboardProfileProvider } from '@/contexts/DashboardProfileContext'
@@ -177,9 +178,7 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
               <main className="main-content">
                 {children}
               </main>
-              <footer className="dashboard-footer">
-                © 2026 KlaroPH. Established 2025. Developed by JDS.
-              </footer>
+              <Footer variant="default" />
             </div>
             <HowKlaroPHWorksModal
               isOpen={showOnboarding}

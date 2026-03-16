@@ -3,7 +3,7 @@ import SalaryCalculator from '@/components/tools/SalaryCalculator'
 
 const canonicalUrl = 'https://klaroph.com/tools/salary-calculator'
 const title = 'Salary Calculator Philippines 2026 | Net Pay, Tax, SSS, PhilHealth, Pag-IBIG | KlaroPH'
-const description = 'Compute your net salary in the Philippines instantly. Includes tax, SSS, PhilHealth, and Pag-IBIG deductions for employees and freelancers.'
+const description = 'Estimate monthly take-home pay using Philippine tax tables, SSS, PhilHealth, and Pag-IBIG contributions, with official government references and payroll context.'
 
 export const metadata: Metadata = {
   title,

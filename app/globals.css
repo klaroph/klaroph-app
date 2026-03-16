@@ -3648,6 +3648,16 @@ html { scroll-behavior: smooth; }
   color: var(--text-secondary);
   line-height: 1.5;
 }
+.landing-tool-badge {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--border-muted);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
 .landing-tools-cta {
   text-align: center;
   font-size: 13px;
@@ -3704,40 +3714,175 @@ html { scroll-behavior: smooth; }
   text-decoration: none;
 }
 
-.landing-footer {
-  padding: 32px 48px;
-  background: var(--color-blue);
-  color: rgba(255, 255, 255, 0.6);
-  text-align: center;
-  font-size: 14px;
+/* Compact 3-column Footer — landing, dashboard, tools (~120–140px desktop) */
+.footer {
+  flex-shrink: 0;
+}
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 48px 16px;
+}
+.footer-columns {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 32px 48px;
+  align-items: start;
+}
+.footer-col {
+  min-width: 0;
 }
 
-.landing-footer strong {
-  color: var(--text-inverse);
+/* Column 1 — Brand */
+.footer-brand-title {
+  margin: 0 0 4px;
+  font-size: 15px;
   font-weight: 600;
+  color: var(--text-primary);
+}
+.footer-brand-tagline {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  max-width: 220px;
 }
 
-.landing-footer-how {
-  display: block;
-  margin-top: 12px;
-  padding: 0;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 14px;
-  text-decoration: underline;
-  cursor: pointer;
+/* Column 2 — Social */
+.footer-social-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.footer-fb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 9999px;
+  text-decoration: none;
   font-family: inherit;
+  color: #fff;
+  background: #1877F2;
+  border: 1px solid #1877F2;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.footer-fb-btn:hover {
+  background: #166fe5;
+  border-color: #166fe5;
+  color: #fff;
 }
 
-.landing-footer-how:hover {
+/* Column 3 — Legal links */
+.footer-col-legal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+.footer-legal-link {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.footer-legal-link:hover {
+  color: var(--text-primary);
+}
+
+/* Bottom legal row */
+.footer-bottom-row {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-muted);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Footer variant: landing (blue) */
+.footer-variant-landing {
+  background: var(--color-blue);
+}
+.footer-variant-landing .footer-inner {
+  padding: 20px 48px 16px;
+}
+.footer-variant-landing .footer-brand-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+.footer-variant-landing .footer-brand-tagline {
+  color: rgba(255, 255, 255, 0.65);
+}
+.footer-variant-landing .footer-social-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+.footer-variant-landing .footer-fb-btn {
+  background: #1877F2;
+  border-color: #1877F2;
+  color: #fff;
+}
+.footer-variant-landing .footer-fb-btn:hover {
+  background: #166fe5;
+  border-color: #166fe5;
+  color: #fff;
+}
+.footer-variant-landing .footer-legal-link {
+  color: rgba(255, 255, 255, 0.75);
+}
+.footer-variant-landing .footer-legal-link:hover {
   color: var(--text-inverse);
 }
-.landing-footer-legal {
-  color: rgba(255, 255, 255, 0.85);
-  text-decoration: underline;
+.footer-variant-landing .footer-bottom-row {
+  border-top-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.55);
 }
-.landing-footer-legal:hover { color: var(--text-inverse); }
+
+/* Footer variant: default (surface) */
+.footer-variant-default {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.footer-variant-default .footer-inner {
+  padding: 20px 24px 16px;
+}
+
+/* Footer responsive: stack columns on mobile */
+@media (max-width: 640px) {
+  .footer-inner {
+    padding: 20px 24px 16px;
+  }
+  .footer-variant-landing .footer-inner {
+    padding: 20px 24px 16px;
+  }
+  .footer-columns {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    text-align: center;
+  }
+  .footer-brand-tagline {
+    max-width: none;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .footer-col-social {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .footer-col-legal {
+    align-items: center;
+    gap: 8px;
+  }
+  .footer-bottom-row {
+    margin-top: 16px;
+    padding-top: 14px;
+  }
+}
 
 /* Landing: tablet */
 @media (max-width: 900px) {
@@ -6126,14 +6271,199 @@ html { scroll-behavior: smooth; }
   gap: 48px 40px;
   align-items: start;
 }
+/* Salary calculator: 40% calc | 60% guide card */
+.tools-public-content-salary {
+  grid-template-columns: minmax(320px, 0.8fr) minmax(480px, 1.2fr);
+  gap: 48px 56px;
+}
+.tools-right-col-salary {
+  min-width: 0;
+  order: 2;
+}
+.salary-calc-info-card {
+  position: sticky;
+  top: 96px;
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+}
+.salary-guide-card-header {
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.salary-guide-card-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.salary-guide-card-badge {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.salary-guide-card-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px 40px;
+}
+.salary-guide-col {
+  min-width: 0;
+}
+.salary-guide-section {
+  margin-bottom: 28px;
+}
+.salary-guide-section:last-child {
+  margin-bottom: 0;
+}
+.salary-guide-section-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.salary-guide-list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.salary-guide-list li {
+  margin-bottom: 4px;
+}
+.salary-guide-formula-box {
+  margin-top: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--border-muted);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-primary);
+}
+.salary-guide-note-box {
+  margin-top: 12px;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--border-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.salary-guide-note-box p {
+  margin: 0;
+}
+.salary-guide-note-example {
+  margin-top: 10px !important;
+}
+.salary-guide-links {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.salary-guide-links li {
+  margin-bottom: 10px;
+}
+.salary-calc-official-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-size: 14px;
+}
+.salary-calc-official-link:hover {
+  text-decoration: underline;
+}
+.salary-guide-disclaimer {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.salary-guide-disclaimer-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+.salary-guide-footer {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.salary-calc-table-wrap {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+.salary-calc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.salary-calc-table th,
+.salary-calc-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.salary-calc-table th {
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--border-muted);
+}
+.salary-calc-table td {
+  color: var(--text-secondary);
+}
+.salary-calc-table-compact th,
+.salary-calc-table-compact td {
+  padding: 8px 12px;
+}
 @media (max-width: 1024px) {
-  .tools-public-content {
+  .tools-public-content,
+  .tools-public-content-salary {
     grid-template-columns: 1fr;
     gap: 40px;
   }
   .tools-public-calc { order: 1; }
   .tools-pricing-col-free { order: 2; }
   .tools-pricing-col-pro { order: 3; }
+  .tools-right-col-salary { order: 2; }
+  .salary-calc-info-card {
+    position: static;
+  }
+  .salary-guide-card-inner {
+    grid-template-columns: 1fr;
+  }
+}
+/* Shared salary layout for dashboard (same 40/60 grid) */
+.salary-tool-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.8fr) minmax(480px, 1.2fr);
+  gap: 48px 56px;
+  align-items: start;
+}
+.salary-tool-calc-col {
+  min-width: 0;
+}
+.salary-tool-guide-col {
+  position: sticky;
+  top: 96px;
+  min-width: 0;
+}
+@media (max-width: 1024px) {
+  .salary-tool-layout {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .salary-tool-guide-col {
+    position: static;
+  }
 }
 
 .tools-public-calc {

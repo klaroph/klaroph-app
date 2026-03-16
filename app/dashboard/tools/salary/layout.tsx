@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Philippine Salary Calculator | KlaroPH',
-  description: 'Free Philippine salary calculator. Estimate net pay after SSS, PhilHealth, Pag-IBIG, and withholding tax. For Filipino employees and freelancers.',
+  description: 'Estimate monthly take-home pay using Philippine tax tables, SSS, PhilHealth, and Pag-IBIG contributions, with official government references and payroll context.',
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
