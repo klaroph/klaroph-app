@@ -48,6 +48,7 @@ export default function Footer({ variant = 'default' }: FooterProps) {
           <div className="footer-col footer-col-legal">
             <Link href="/privacy" className="footer-legal-link">Privacy Policy</Link>
             <Link href="/terms" className="footer-legal-link">Terms of Service</Link>
+            <a href="mailto:support@klaroph.com?subject=KlaroPH Inquiry" className="footer-legal-link">Contact Us</a>
           </div>
         </div>
 
