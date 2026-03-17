@@ -2311,6 +2311,7 @@ select:focus-visible {
 html { scroll-behavior: smooth; }
 
 .landing-page {
+  position: relative;
   min-height: 100%;
   overflow-x: hidden;
   background: var(--background);
@@ -2387,6 +2388,26 @@ html { scroll-behavior: smooth; }
 @media (max-width: 600px) {
   .legal-main { padding: var(--space-4) var(--space-4); }
   .legal-header { padding: var(--space-3) var(--space-4); }
+}
+
+.landing-skip-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  padding: 12px 20px;
+  background: var(--color-blue, #0038A8);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 var(--radius-sm) 0;
+  transform: translateY(-100%);
+  transition: transform 0.2s ease;
+}
+.landing-skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 .landing-nav {
@@ -2528,7 +2549,7 @@ html { scroll-behavior: smooth; }
 .landing-hero-subheadline {
   margin: 0 0 36px;
   font-size: 18px;
-  color: rgba(255, 255, 255, 0.9);
+  color: #ffffff;
   line-height: 1.55;
   max-width: 420px;
 }
@@ -3142,6 +3163,22 @@ html { scroll-behavior: smooth; }
   font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.5;
+}
+.pwa-cta-desktop-fallback.pwa-cta-subtitle {
+  margin-bottom: 20px;
+}
+.pwa-cta-desktop-fallback p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.pwa-cta-desktop-fallback p:last-child {
+  margin-bottom: 0;
+}
+.pwa-cta-desktop-steps {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 .pwa-cta-icon-wrap {
   margin-bottom: 20px;
@@ -3813,13 +3850,13 @@ html { scroll-behavior: smooth; }
   padding: 20px 48px 16px;
 }
 .footer-variant-landing .footer-brand-title {
-  color: rgba(255, 255, 255, 0.95);
+  color: #ffffff;
 }
 .footer-variant-landing .footer-brand-tagline {
-  color: rgba(255, 255, 255, 0.65);
+  color: #ffffff;
 }
 .footer-variant-landing .footer-social-label {
-  color: rgba(255, 255, 255, 0.6);
+  color: #ffffff;
 }
 .footer-variant-landing .footer-fb-btn {
   background: #1877F2;
@@ -3832,14 +3869,15 @@ html { scroll-behavior: smooth; }
   color: #fff;
 }
 .footer-variant-landing .footer-legal-link {
-  color: rgba(255, 255, 255, 0.75);
+  color: #ffffff;
 }
 .footer-variant-landing .footer-legal-link:hover {
-  color: var(--text-inverse);
+  color: #ffffff;
+  text-decoration: underline;
 }
 .footer-variant-landing .footer-bottom-row {
-  border-top-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.55);
+  border-top-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
 }
 
 /* Footer variant: default (surface) */

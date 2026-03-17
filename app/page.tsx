@@ -97,7 +97,9 @@ export default function LandingPage() {
   const [showPwaInNav, setShowPwaInNav] = useState(false)
   const deferredPromptRef = useRef<(Event & { prompt: () => Promise<{ outcome: string }> }) | null>(null)
 
+  // Capture beforeinstallprompt globally on mount so it's ready before any modal interaction
   useEffect(() => {
+    if (typeof window === 'undefined') return
     const handler = (e: Event) => {
       e.preventDefault()
       deferredPromptRef.current = e as Event & { prompt: () => Promise<{ outcome: string }> }
@@ -187,6 +189,7 @@ export default function LandingPage() {
 
   return (
     <div className="landing-page">
+      <a href="#main-content" className="landing-skip-link">Skip to main content</a>
       <nav className="landing-nav">
         <a href="/" className="landing-nav-brand">
           <KlaroPHHandLogo size={56} variant="onBlue" priority />
@@ -204,7 +207,7 @@ export default function LandingPage() {
               type="button"
               className="landing-nav-add-home"
               onClick={() => setShowAddToHomeModal(true)}
-              aria-label="Add KlaroPH to your home screen"
+              aria-label="Quick access to KlaroPH"
             >
               <span className="landing-nav-add-home-icon" aria-hidden>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -212,14 +215,15 @@ export default function LandingPage() {
                   <line x1="12" y1="18" x2="12.01" y2="18" />
                 </svg>
               </span>
-              <span className="landing-nav-add-home-label landing-nav-add-home-label-desktop">Add to Home Screen</span>
-              <span className="landing-nav-add-home-label landing-nav-add-home-label-mobile">Add App</span>
+              <span className="landing-nav-add-home-label landing-nav-add-home-label-desktop">Quick Access</span>
+              <span className="landing-nav-add-home-label landing-nav-add-home-label-mobile">Quick Access</span>
             </button>
           )}
           <a href="#login" className="landing-nav-link landing-nav-signin">Sign In</a>
         </div>
       </nav>
 
+      <main id="main-content" role="main">
       {/* Hero: two-column */}
       <section className="landing-hero landing-hero-saas">
         <div className="landing-hero-inner">
@@ -231,7 +235,7 @@ export default function LandingPage() {
                 Create Free Account
               </button>
               <button type="button" className="landing-cta-btn landing-cta-secondary" onClick={() => setShowAddToHomeModal(true)}>
-                Add to Home Screen
+                Quick Access
               </button>
             </div>
             <p className="landing-hero-pwa-helper">Fast mobile access. No download required.</p>
@@ -460,6 +464,8 @@ export default function LandingPage() {
           </button>
         </div>
       </section>
+
+      </main>
 
       <Footer variant="landing" />
 
