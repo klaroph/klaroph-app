@@ -2243,6 +2243,20 @@ select:focus-visible {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-blue-muted);
 }
+.login-forgot-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-blue);
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+}
+.login-forgot-link:hover {
+  text-decoration: underline;
+}
 
 .login-btn-primary {
   width: 100%;
@@ -3061,6 +3075,79 @@ html { scroll-behavior: smooth; }
   max-width: 420px;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border);
+}
+.forgot-password-modal {
+  padding: 40px;
+}
+.forgot-password-modal .login-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-blue);
+}
+.forgot-password-modal .login-subtitle {
+  margin: 0 0 24px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+.forgot-success-msg,
+.forgot-error-msg {
+  margin: 0 0 16px;
+  padding: 12px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  line-height: 1.45;
+}
+.forgot-success-msg {
+  color: var(--color-success);
+  background: var(--color-primary-muted);
+}
+.forgot-error-msg {
+  color: var(--color-error);
+  background: var(--color-error-bg);
+}
+
+/* Reset password page (matches login card) */
+.reset-password-wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.reset-password-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+}
+.reset-password-logo {
+  display: flex;
+  align-items: center;
+}
+.reset-password-back {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-blue);
+  text-decoration: none;
+}
+.reset-password-back:hover {
+  text-decoration: underline;
+}
+.reset-password-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  padding: 40px;
 }
 
 .consent-modal h3 {

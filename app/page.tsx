@@ -30,6 +30,10 @@ const AddToHomeScreenModal = dynamic(
   () => import('../components/landing/AddToHomeScreenModal'),
   { ssr: false }
 )
+const ForgotPasswordModal = dynamic(
+  () => import('../components/auth/ForgotPasswordModal'),
+  { ssr: false }
+)
 
 const HERO_HEADLINE = 'Take Control of Your Money with Financial Clarity.'
 const HERO_SUBHEADLINE = 'Track expenses, manage budgets, and reach financial goals in one simple dashboard.'
@@ -93,6 +97,7 @@ export default function LandingPage() {
   const [showGoogleConsentModal, setShowGoogleConsentModal] = useState(false)
   const [googleConsentChecked, setGoogleConsentChecked] = useState(false)
   const [showAddToHomeModal, setShowAddToHomeModal] = useState(false)
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
   const [hasInstallPrompt, setHasInstallPrompt] = useState(false)
   const [showPwaInNav, setShowPwaInNav] = useState(false)
   const deferredPromptRef = useRef<(Event & { prompt: () => Promise<{ outcome: string }> }) | null>(null)
@@ -420,7 +425,17 @@ export default function LandingPage() {
               />
             </div>
             <div>
-              <label htmlFor="login-password" style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Password</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <label htmlFor="login-password" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Password</label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPasswordModal(true)}
+                  className="login-forgot-link"
+                  aria-label="Reset your password"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <input
                 id="login-password"
                 type="password"
@@ -475,6 +490,10 @@ export default function LandingPage() {
         isOpen={showAddToHomeModal}
         onClose={() => setShowAddToHomeModal(false)}
         deferredPromptRef={deferredPromptRef}
+      />
+      <ForgotPasswordModal
+        isOpen={showForgotPasswordModal}
+        onClose={() => setShowForgotPasswordModal(false)}
       />
 
       {showGoogleConsentModal &&
