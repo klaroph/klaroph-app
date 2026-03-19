@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { computeSalaryResult } from '@/lib/salaryCalculations'
+import ToolSeoFaq from '@/components/tools/ToolSeoFaq'
 
 function Row({ label, value, bold, color, empty }: { label: string; value: number; bold?: boolean; color?: string; empty?: boolean }) {
   return (
@@ -39,8 +40,10 @@ export default function SalaryCalculator() {
   return (
     <div className="tool-page">
       <header className="page-header">
-        <h2 className="tool-page-title">Salary Calculator Philippines</h2>
-        <p className="tool-page-desc">Estimate your net pay after SSS, PhilHealth, Pag-IBIG, and withholding tax. Free for Filipino private employees.</p>
+        <h1 className="tool-page-title">Salary Calculator Philippines</h1>
+        <p className="tool-page-desc">
+          A salary calculator helps estimate take-home pay after deductions in the Philippines, including government contributions and taxes.
+        </p>
       </header>
       <div className="dash-card" style={{ maxWidth: 560 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
@@ -105,6 +108,27 @@ export default function SalaryCalculator() {
           )}
         </div>
       </div>
+
+      <ToolSeoFaq
+        title="Frequently Asked Questions"
+        items={[
+          {
+            question: 'What does this salary calculator estimate?',
+            answer:
+              'It estimates take-home pay by calculating SSS, PhilHealth, and Pag-IBIG contributions, then estimating withholding tax, and finally adding any non-taxable income you enter.',
+          },
+          {
+            question: 'Does it include SSS, PhilHealth, and Pag-IBIG deductions?',
+            answer:
+              'Yes. The calculator computes SSS, PhilHealth, and Pag-IBIG based on your gross taxable income inputs, then uses those deductions to produce the net pay estimate.',
+          },
+          {
+            question: 'Why might my result differ from my payslip?',
+            answer:
+              'Your payslip may include additional adjustments, different exemptions, and payroll rounding. Use this tool as an estimate and compare the main deductions (contributions and withholding tax) with your payslip.',
+          },
+        ]}
+      />
     </div>
   )
 }

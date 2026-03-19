@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const TOOL_LINKS = [
-  { href: '/tools/salary-calculator', label: 'Salary Calculator' },
-  { href: '/tools/loan-calculator', label: 'Loan Calculator' },
-  { href: '/tools/13th-month-calculator', label: '13th Month Calculator' },
+  { href: '/tools/salary-calculator', label: 'Salary Calculator Philippines' },
+  { href: '/tools/loan-calculator', label: 'Loan Calculator Philippines' },
+  { href: '/tools/13th-month-calculator', label: '13th Month Pay Calculator Philippines' },
 ] as const
 
 export default function ToolsCalcColumn({ children }: { children: React.ReactNode }) {

@@ -7,10 +7,13 @@ import { usePathname } from 'next/navigation'
  */
 export default function ToolsPublicContentWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? ''
-  const isSalary = pathname.includes('salary-calculator')
+  const isTwoColumnGuide =
+    pathname.includes('salary-calculator') ||
+    pathname.includes('loan-calculator') ||
+    pathname.includes('13th-month-calculator')
   return (
     <div
-      className={`tools-public-content${isSalary ? ' tools-public-content-salary' : ''}`}
+      className={`tools-public-content${isTwoColumnGuide ? ' tools-public-content-salary' : ''}`}
       id="tools-public-content"
     >
       {children}

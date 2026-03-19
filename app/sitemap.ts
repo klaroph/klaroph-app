@@ -10,6 +10,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   ]
 
   const toolPages: MetadataRoute.Sitemap = [
+    { url: `${baseUrl}/tools`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.9 },
     { url: `${baseUrl}/tools/salary-calculator`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
     { url: `${baseUrl}/tools/loan-calculator`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
     { url: `${baseUrl}/tools/13th-month-calculator`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
