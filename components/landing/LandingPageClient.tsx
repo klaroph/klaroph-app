@@ -504,18 +504,26 @@ export default function LandingPageClient() {
 
       <Footer variant="landing" />
 
-      <HowKlaroPHWorksModal
-        isOpen={showHowItWorks}
-        onClose={() => setShowHowItWorks(false)}
-        markSeenOnAccept={false}
-      />
-      <SignUpModal isOpen={showSignUpModal} onClose={() => setShowSignUpModal(false)} />
-      <AddToHomeScreenModal
-        isOpen={showAddToHomeModal}
-        onClose={() => setShowAddToHomeModal(false)}
-        deferredPromptRef={deferredPromptRef}
-      />
-      <ForgotPasswordModal isOpen={showForgotPasswordModal} onClose={() => setShowForgotPasswordModal(false)} />
+      {showHowItWorks && (
+        <HowKlaroPHWorksModal
+          isOpen={showHowItWorks}
+          onClose={() => setShowHowItWorks(false)}
+          markSeenOnAccept={false}
+        />
+      )}
+      {showSignUpModal && (
+        <SignUpModal isOpen={showSignUpModal} onClose={() => setShowSignUpModal(false)} />
+      )}
+      {showAddToHomeModal && (
+        <AddToHomeScreenModal
+          isOpen={showAddToHomeModal}
+          onClose={() => setShowAddToHomeModal(false)}
+          deferredPromptRef={deferredPromptRef}
+        />
+      )}
+      {showForgotPasswordModal && (
+        <ForgotPasswordModal isOpen={showForgotPasswordModal} onClose={() => setShowForgotPasswordModal(false)} />
+      )}
 
       {showGoogleConsentModal &&
         typeof document !== 'undefined' &&
