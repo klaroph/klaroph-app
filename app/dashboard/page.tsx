@@ -12,6 +12,8 @@ import {
 } from '@/lib/dashboardRefresh'
 import type { GoalRow, GoalWithSaved } from '@/types/database'
 import IncomeExpenseFlow from '@/components/dashboard/IncomeExpenseFlow'
+/** Static import: full card shell + title paint in initial bundle (LCP); data hydrates inside the component. */
+import BudgetOverview from '@/components/dashboard/BudgetOverview'
 import ActivationCelebration from '@/components/dashboard/ActivationCelebration'
 import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
 import { useSubscription } from '@/contexts/SubscriptionContext'
@@ -35,17 +37,6 @@ const ExpensesTrendChartCard = dynamic(
   () => import('@/components/dashboard/ExpensesTrendChartCard'),
   {
     loading: () => <div className="dashboard-expenses-trend-placeholder" aria-hidden />,
-  },
-)
-const BudgetOverview = dynamic(
-  () => import('@/components/dashboard/BudgetOverview'),
-  {
-    loading: () => (
-      <div
-        className="card dash-card budget-overview-card budget-overview-loading-skeleton budget-overview-dynamic-placeholder"
-        aria-hidden
-      />
-    ),
   },
 )
 const ManageGoalsModal = dynamic(

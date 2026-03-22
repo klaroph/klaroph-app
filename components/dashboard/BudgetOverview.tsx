@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useMemo, useRef, useLayoutEffect, startTransition } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { useSubscriptionOptional } from '@/contexts/SubscriptionContext'
@@ -202,10 +202,19 @@ export default function BudgetOverview({
     fetch(`/api/budget-effective?month=${selectedMonth}`, { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
-        if (mounted && Array.isArray(data)) setEffectiveBudgets(data)
+        if (!mounted) return
+        startTransition(() => {
+          setEffectiveBudgets(Array.isArray(data) ? data : [])
+          setLoading(false)
+        })
       })
-      .catch(() => mounted && setEffectiveBudgets([]))
-      .finally(() => mounted && setLoading(false))
+      .catch(() => {
+        if (!mounted) return
+        startTransition(() => {
+          setEffectiveBudgets([])
+          setLoading(false)
+        })
+      })
     return () => { mounted = false }
   }, [selectedMonth, budgetRefreshKey])
 
@@ -299,33 +308,45 @@ export default function BudgetOverview({
   const canEditBudget = features?.has_budget_editing ?? true
   const openUpgrade = useUpgradeTriggerOptional()?.openUpgradeModal
 
-  if (loading && effectiveBudgets.length === 0) {
-    /* Same outer layout as loaded card + placeholder columns to limit CLS when data arrives */
+  const sectionTitle = breakdownTitleProp ?? 'Category Breakdown'
+  const sectionTitleMobile = breakdownTitleMobileProp ?? sectionTitle
+
+  /** Budget API not back yet — show full card shell + placeholders (LCP: h3 paints immediately) */
+  const showBudgetPlaceholderBody = loading && effectiveBudgets.length === 0
+
+  if (!loading && mergedBudgets.length === 0) {
     return (
-      <div
-        className="card dash-card budget-overview-card budget-overview-loading-skeleton"
-        aria-busy="true"
-        aria-label="Loading budget overview"
-      >
+      <div className="card dash-card budget-overview-card budget-overview-empty-state">
         <div className="budget-overview-header">
           <h3 className="budget-overview-title">Monthly Budget Overview</h3>
-          <div className="budget-overview-controls" aria-hidden>
-            <span className="budget-skeleton-select" />
+          <div className="budget-overview-controls">
+            <label htmlFor="budget-month-picker-empty" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Month:
+            </label>
+            <select
+              id="budget-month-picker-empty"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={{
+                fontSize: 13,
+                padding: '6px 10px',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                fontFamily: 'inherit',
+                color: 'var(--text-primary)',
+                backgroundColor: 'var(--surface)',
+              }}
+            >
+              {selectableMonths.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {headerAction}
           </div>
         </div>
-        <div className="budget-overview-two-col budget-overview-skeleton-cols">
-          <div className="budget-health-card budget-skeleton-block" aria-hidden />
-          <div className="budget-breakdown-card budget-skeleton-block budget-skeleton-breakdown" aria-hidden />
-        </div>
-      </div>
-    )
-  }
-
-  if (mergedBudgets.length === 0) {
-    return (
-      <div className="card dash-card" style={{ padding: 24 }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>Monthly Budget Overview</h3>
-        <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)', fontSize: 14 }}>
+        <p className="budget-overview-empty-message">
           You have not set any spending limits yet.
         </p>
         {onSetBudget && canEditBudget && (
@@ -348,24 +369,36 @@ export default function BudgetOverview({
     )
   }
 
-  const budgetUsedPct = summary.totalBudget > 0 ? (summary.totalSpent / summary.totalBudget) * 100 : 0
   const monthProgressPct = getMonthProgress(selectedMonth) * 100
-  const spendingFasterThanTime = budgetUsedPct > monthProgressPct
-  const usedPctLabel = summary.totalBudget > 0 ? Math.round((summary.totalSpent / summary.totalBudget) * 100) : 0
-
-  const healthLabel =
-    summary.totalBudget > 0
+  const budgetUsedPct = showBudgetPlaceholderBody
+    ? 0
+    : summary.totalBudget > 0
+      ? (summary.totalSpent / summary.totalBudget) * 100
+      : 0
+  const spendingFasterThanTime = showBudgetPlaceholderBody ? false : budgetUsedPct > monthProgressPct
+  const usedPctLabel = showBudgetPlaceholderBody
+    ? 0
+    : summary.totalBudget > 0
+      ? Math.round((summary.totalSpent / summary.totalBudget) * 100)
+      : 0
+  const healthLabel = showBudgetPlaceholderBody
+    ? 'No Budget Set'
+    : summary.totalBudget > 0
       ? `${usedPctLabel}% Used`
       : summary.totalSpent > 0
         ? 'Unplanned Spending'
         : 'No Budget Set'
-
-  const displayBudgets = maxCategories != null ? sortedBudgets.slice(0, maxCategories) : sortedBudgets
-  const sectionTitle = breakdownTitleProp ?? 'Category Breakdown'
-  const sectionTitleMobile = breakdownTitleMobileProp ?? sectionTitle
+  const displayBudgets = showBudgetPlaceholderBody
+    ? []
+    : maxCategories != null
+      ? sortedBudgets.slice(0, maxCategories)
+      : sortedBudgets
 
   return (
-    <div className="card dash-card budget-overview-card">
+    <div
+      className="card dash-card budget-overview-card"
+      aria-busy={showBudgetPlaceholderBody}
+    >
       <div className="budget-overview-header">
         <h3 className="budget-overview-title">Monthly Budget Overview</h3>
         <div className="budget-overview-controls">
@@ -435,82 +468,142 @@ export default function BudgetOverview({
 
       {/* 2 nested sections: Budget Health card (left) | Category Breakdown card (right) */}
       <div className="budget-overview-two-col">
-        {/* Left: Budget Health — inner card with donut + simplified text + burn bars */}
-        <div className="budget-health-card">
-          <h4 className="budget-section-title">Budget Health</h4>
-          <div className="budget-health-donut-block">
-            <div className="budget-health-donut-ring">
-              <div className="budget-health-donut-wrap">
-                <BudgetHealthDonut
-                spentPct={summary.totalBudget > 0 ? budgetUsedPct : 0}
-                color={
-                  summary.totalBudget === 0
-                    ? 'var(--text-muted, #94a3b8)'
-                    : summary.usagePct > 100
-                      ? '#dc2626'
-                      : summary.usagePct >= 90
-                        ? '#ea580c'
-                        : summary.usagePct >= 60
-                          ? '#eab308'
-                          : '#16a34a'
-                }
-              />
-              <div className="budget-health-donut-center">
-                <span className="budget-health-donut-pct">
-                  {summary.totalBudget > 0 ? `${usedPctLabel}%` : '—'}
-                </span>
+        {showBudgetPlaceholderBody ? (
+          <>
+            <div className="budget-health-card">
+              <h4 className="budget-section-title">Budget Health</h4>
+              <div className="budget-health-donut-block">
+                <div className="budget-health-donut-ring">
+                  <div className="budget-health-donut-wrap">
+                    <BudgetHealthDonut spentPct={0} color="var(--text-muted, #94a3b8)" />
+                    <div className="budget-health-donut-center">
+                      <span className="budget-health-donut-pct">—</span>
+                    </div>
+                  </div>
+                </div>
               </div>
+              <p className="budget-health-used-label">No Budget Set</p>
+              <div className="budget-health-numbers">
+                <div className="budget-health-row">
+                  <span className="budget-health-label">Spent</span>
+                  <span className="budget-health-value">{formatPeso(0)}</span>
+                </div>
+                <div className="budget-health-row">
+                  <span className="budget-health-label">Budget</span>
+                  <span className="budget-health-value">{formatPeso(0)}</span>
+                </div>
+                <div className="budget-health-row">
+                  <span className="budget-health-label">Remaining</span>
+                  <span className="budget-health-value">{formatPeso(0)}</span>
+                </div>
+              </div>
+              <div className="budget-burn-indicator">
+                <div className="budget-burn-row">
+                  <span className="budget-burn-label">Budget Used</span>
+                  <div className="budget-burn-bar-track">
+                    <div className="budget-burn-bar-fill" style={{ width: '0%' }} />
+                  </div>
+                </div>
+                <div className="budget-burn-row">
+                  <span className="budget-burn-label">Month Progress</span>
+                  <div className="budget-burn-bar-track">
+                    <div className="budget-burn-bar-fill budget-burn-bar-month" style={{ width: `${monthProgressPct}%` }} />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-          <p className="budget-health-used-label">{healthLabel}</p>
-          <div className="budget-health-numbers">
-            <div className="budget-health-row">
-              <span className="budget-health-label">Spent</span>
-              <span className="budget-health-value">{formatPeso(summary.totalSpent)}</span>
+            <div className="budget-breakdown-card">
+              <h4 className="budget-section-title">
+                <span className="lg:hidden">{sectionTitleMobile}</span>
+                <span className="hidden lg:inline">{sectionTitle}</span>
+              </h4>
+              <div
+                className="budget-overview-rows budget-overview-rows-deferred"
+                aria-busy="true"
+                aria-label="Loading category breakdown"
+              >
+                <div className="budget-breakdown-deferred-loading">Loading…</div>
+              </div>
             </div>
-            <div className="budget-health-row">
-              <span className="budget-health-label">Budget</span>
-              <span className="budget-health-value">{formatPeso(summary.totalBudget)}</span>
-            </div>
-            <div className="budget-health-row">
-              <span className="budget-health-label">Remaining</span>
-              <span className={`budget-health-value ${summary.remaining < 0 ? 'budget-health-value-over' : ''}`}>
-                {summary.remaining >= 0 ? formatPeso(summary.remaining) : `-${formatPeso(-summary.remaining)}`}
-              </span>
-            </div>
-          </div>
+          </>
+        ) : (
+          <>
+            {/* Left: Budget Health — inner card with donut + simplified text + burn bars */}
+            <div className="budget-health-card">
+              <h4 className="budget-section-title">Budget Health</h4>
+              <div className="budget-health-donut-block">
+                <div className="budget-health-donut-ring">
+                  <div className="budget-health-donut-wrap">
+                    <BudgetHealthDonut
+                      spentPct={summary.totalBudget > 0 ? budgetUsedPct : 0}
+                      color={
+                        summary.totalBudget === 0
+                          ? 'var(--text-muted, #94a3b8)'
+                          : summary.usagePct > 100
+                            ? '#dc2626'
+                            : summary.usagePct >= 90
+                              ? '#ea580c'
+                              : summary.usagePct >= 60
+                                ? '#eab308'
+                                : '#16a34a'
+                      }
+                    />
+                    <div className="budget-health-donut-center">
+                      <span className="budget-health-donut-pct">
+                        {summary.totalBudget > 0 ? `${usedPctLabel}%` : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p className="budget-health-used-label">{healthLabel}</p>
+              <div className="budget-health-numbers">
+                <div className="budget-health-row">
+                  <span className="budget-health-label">Spent</span>
+                  <span className="budget-health-value">{formatPeso(summary.totalSpent)}</span>
+                </div>
+                <div className="budget-health-row">
+                  <span className="budget-health-label">Budget</span>
+                  <span className="budget-health-value">{formatPeso(summary.totalBudget)}</span>
+                </div>
+                <div className="budget-health-row">
+                  <span className="budget-health-label">Remaining</span>
+                  <span className={`budget-health-value ${summary.remaining < 0 ? 'budget-health-value-over' : ''}`}>
+                    {summary.remaining >= 0 ? formatPeso(summary.remaining) : `-${formatPeso(-summary.remaining)}`}
+                  </span>
+                </div>
+              </div>
 
-          <div className="budget-burn-indicator">
-            <div className="budget-burn-row">
-              <span className="budget-burn-label">Budget Used</span>
-              <div className="budget-burn-bar-track">
-                <div
-                  className={`budget-burn-bar-fill ${spendingFasterThanTime ? 'budget-burn-bar-warning' : ''} ${spendingFasterThanTime ? 'budget-burn-shimmer' : ''}`}
-                  style={{ width: `${Math.min(100, budgetUsedPct)}%` }}
-                />
+              <div className="budget-burn-indicator">
+                <div className="budget-burn-row">
+                  <span className="budget-burn-label">Budget Used</span>
+                  <div className="budget-burn-bar-track">
+                    <div
+                      className={`budget-burn-bar-fill ${spendingFasterThanTime ? 'budget-burn-bar-warning' : ''} ${spendingFasterThanTime ? 'budget-burn-shimmer' : ''}`}
+                      style={{ width: `${Math.min(100, budgetUsedPct)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="budget-burn-row">
+                  <span className="budget-burn-label">Month Progress</span>
+                  <div className="budget-burn-bar-track">
+                    <div className="budget-burn-bar-fill budget-burn-bar-month" style={{ width: `${monthProgressPct}%` }} />
+                  </div>
+                </div>
+                {spendingFasterThanTime && (
+                  <p className="budget-burn-warning">Spending faster than expected</p>
+                )}
               </div>
             </div>
-            <div className="budget-burn-row">
-              <span className="budget-burn-label">Month Progress</span>
-              <div className="budget-burn-bar-track">
-                <div className="budget-burn-bar-fill budget-burn-bar-month" style={{ width: `${monthProgressPct}%` }} />
-              </div>
-            </div>
-            {spendingFasterThanTime && (
-              <p className="budget-burn-warning">Spending faster than expected</p>
-            )}
-          </div>
-        </div>
 
-        {/* Right: Category Breakdown / Top N Spending to Watch */}
-        <div className="budget-breakdown-card">
-          <h4 className="budget-section-title">
-            <span className="lg:hidden">{sectionTitleMobile}</span>
-            <span className="hidden lg:inline">{sectionTitle}</span>
-          </h4>
-          <div className="budget-overview-rows">
-            {displayBudgets.map((b) => {
+            {/* Right: Category Breakdown / Top N Spending to Watch */}
+            <div className="budget-breakdown-card">
+              <h4 className="budget-section-title">
+                <span className="lg:hidden">{sectionTitleMobile}</span>
+                <span className="hidden lg:inline">{sectionTitle}</span>
+              </h4>
+              <div className="budget-overview-rows">
+                {displayBudgets.map((b) => {
               const spent = spendingByCategory[b.category] ?? 0
               const budget = b.amount
               const label = EXPENSE_CATEGORIES.find((c) => c.value === b.category)?.label ?? b.category
@@ -673,8 +766,10 @@ export default function BudgetOverview({
                 </div>
               )
             })}
-          </div>
-        </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

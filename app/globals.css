@@ -1689,23 +1689,6 @@ select:focus-visible {
   background: var(--surface);
   box-sizing: border-box;
 }
-.budget-overview-dynamic-placeholder {
-  min-height: 560px;
-}
-@media (max-width: 1279px) {
-  .budget-overview-dynamic-placeholder {
-    min-height: 480px;
-  }
-}
-.dashboard-page .budget-overview-dynamic-placeholder {
-  min-height: 640px;
-}
-@media (max-width: 1279px) {
-  .dashboard-page .budget-overview-dynamic-placeholder {
-    min-height: 540px;
-  }
-}
-
 /* Income & Expenses block: reserve space before lazy chunk + data (LCP / CLS) */
 .dashboard-income-expense-flow-placeholder {
   width: 100%;
@@ -1981,6 +1964,39 @@ select:focus-visible {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+/* Reserve breakdown grid height while data loads (CLS / LCP shell) */
+.budget-overview-rows-deferred {
+  min-height: 200px;
+}
+@media (min-width: 1280px) {
+  .budget-breakdown-card .budget-overview-rows-deferred {
+    min-height: 160px;
+  }
+}
+.budget-breakdown-deferred-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.dashboard-page .budget-overview-rows-deferred {
+  min-height: 260px;
+}
+@media (min-width: 1280px) {
+  .dashboard-page .budget-breakdown-card .budget-overview-rows-deferred {
+    min-height: 180px;
+  }
+}
+
+.budget-overview-empty-state .budget-overview-empty-message {
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .budget-category-item {
   display: flex;
   flex-direction: column;
