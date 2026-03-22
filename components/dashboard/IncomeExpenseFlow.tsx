@@ -206,7 +206,8 @@ export default function IncomeExpenseFlow({
   const [overridePeriod, setOverridePeriod] = useState<FilterKey | null>(null)
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([])
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([])
-  const [loading, setLoading] = useState(true)
+  /** Snapshot (Income / Expenses / Net) renders immediately from rows; breakdown tables wait for fetch */
+  const [breakdownLoading, setBreakdownLoading] = useState(true)
   const { isPro } = useSubscription()
   const openUpgrade = useUpgradeTriggerOptional()?.openUpgradeModal
 
@@ -221,13 +222,16 @@ export default function IncomeExpenseFlow({
   }, [monthFirstProp, overridePeriod, period, customStart, customEnd])
 
   useEffect(() => {
+    let cancelled = false
     const load = async () => {
-      setLoading(true)
+      setBreakdownLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setIncomeRows([])
-        setExpenseRows([])
-        setLoading(false)
+        if (!cancelled) {
+          setIncomeRows([])
+          setExpenseRows([])
+          setBreakdownLoading(false)
+        }
         return
       }
 
@@ -246,11 +250,15 @@ export default function IncomeExpenseFlow({
           .order('date', { ascending: false }),
       ])
 
+      if (cancelled) return
       setIncomeRows((incRes.data as IncomeRow[]) || [])
       setExpenseRows((expRes.data as ExpenseRow[]) || [])
-      setLoading(false)
+      setBreakdownLoading(false)
     }
     load()
+    return () => {
+      cancelled = true
+    }
   }, [range.start, range.end, refreshTrigger])
 
   const totalIncome = incomeRows.reduce((s, r) => s + Number(r.total_amount), 0)
@@ -390,149 +398,153 @@ export default function IncomeExpenseFlow({
         </div>
       </div>
 
-      {loading ? (
-        <div className="flow-loading">Loading...</div>
-      ) : (
-        <div className="flow-three-col">
-          {/* Column 1: Snapshot */}
-          <div className="flow-col flow-col-snapshot">
-            <div className="flow-snapshot-card flow-snapshot-income">
-              <IncomeIcon />
-              <div>
-                <div className="flow-snapshot-label">Income</div>
-                <div className="flow-snapshot-value">
-                  <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalIncome)}</span>
-                  <span className="hidden lg:inline tabular-nums">₱{totalIncome.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flow-snapshot-card flow-snapshot-expense">
-              <ExpenseIcon />
-              <div>
-                <div className="flow-snapshot-label">Expenses</div>
-                <div className="flow-snapshot-value">
-                  <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalExpenses)}</span>
-                  <span className="hidden lg:inline tabular-nums">₱{totalExpenses.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-            <div className={`flow-snapshot-card flow-snapshot-net ${netFlow >= 0 ? 'positive' : 'negative'}`}>
-              <NetIcon />
-              <div>
-                <div className="flow-snapshot-label">Net Flow</div>
-                <div className="flow-snapshot-value">
-                  <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(netFlow)}</span>
-                  <span className="hidden lg:inline tabular-nums">
-                    {netFlow < 0 ? '−' : ''}₱{Math.abs(netFlow).toLocaleString()}
-                  </span>
-                </div>
+      <div className="flow-three-col">
+        {/* Column 1: Snapshot — always mounted (placeholders ₱0 until fetch; then stale totals until new fetch completes) */}
+        <div className="flow-col flow-col-snapshot">
+          <div className="flow-snapshot-card flow-snapshot-income">
+            <IncomeIcon />
+            <div>
+              <div className="flow-snapshot-label">Income</div>
+              <div className="flow-snapshot-value">
+                <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalIncome)}</span>
+                <span className="hidden lg:inline tabular-nums">₱{totalIncome.toLocaleString()}</span>
               </div>
             </div>
           </div>
-
-          {/* Column 2: Income breakdown (scrollable) */}
-          <div className="flow-col flow-col-income">
-            <div className="flow-table-header">Income breakdown</div>
-            {incomeBreakdownRows.length === 0 ? (
-              <div className="flow-empty">No income in this period</div>
-            ) : (
-              <div className="flow-table-scroll">
-                <table className="flow-table">
-                  <thead>
-                    <tr>
-                      {isDateMode ? (
-                        <>
-                          <th>Date</th>
-                          <th>Source</th>
-                          <th style={{ textAlign: 'right' }}>Amount</th>
-                        </>
-                      ) : (
-                        <>
-                          <th>Period</th>
-                          <th style={{ textAlign: 'right' }}>Amount</th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {incomeBreakdownRows.map((row, i) => (
-                      <tr key={isDateMode ? `${(row as DateRow).dateFormatted}-${i}` : `${(row as SummaryRow).periodLabel}-${i}`}>
-                        {isDateMode ? (
-                          <>
-                            <td>{(row as DateRow).dateFormatted}</td>
-                            <td>{(row as DateRow).source}</td>
-                            <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>₱{(row as DateRow).amount.toLocaleString()}</td>
-                          </>
-                        ) : (
-                          <>
-                            <td>{(row as SummaryRow).periodLabel}</td>
-                            <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>₱{(row as SummaryRow).amount.toLocaleString()}</td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                    <tr className="flow-table-total">
-                      <td colSpan={isDateMode ? 2 : 1}>Total</td>
-                      <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>₱{totalIncome.toLocaleString()}</td>
-                    </tr>
-                  </tbody>
-                </table>
+          <div className="flow-snapshot-card flow-snapshot-expense">
+            <ExpenseIcon />
+            <div>
+              <div className="flow-snapshot-label">Expenses</div>
+              <div className="flow-snapshot-value">
+                <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalExpenses)}</span>
+                <span className="hidden lg:inline tabular-nums">₱{totalExpenses.toLocaleString()}</span>
               </div>
-            )}
+            </div>
           </div>
-
-          {/* Column 3: Expense breakdown (scrollable) */}
-          <div className="flow-col flow-col-expense">
-            <div className="flow-table-header">Expense breakdown</div>
-            {expenseBreakdownRows.length === 0 ? (
-              <div className="flow-empty">No expenses in this period</div>
-            ) : (
-              <div className="flow-table-scroll">
-                <table className="flow-table">
-                  <thead>
-                    <tr>
-                      {isDateMode ? (
-                        <>
-                          <th>Date</th>
-                          <th>Category</th>
-                          <th style={{ textAlign: 'right' }}>Amount</th>
-                        </>
-                      ) : (
-                        <>
-                          <th>Period</th>
-                          <th style={{ textAlign: 'right' }}>Amount</th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expenseBreakdownRows.map((row, i) => (
-                      <tr key={isDateMode ? `${(row as DateRow).dateFormatted}-${i}` : `${(row as SummaryRow).periodLabel}-${i}`}>
-                        {isDateMode ? (
-                          <>
-                            <td>{(row as DateRow).dateFormatted}</td>
-                            <td>{(row as DateRow).source}</td>
-                            <td style={{ textAlign: 'right', color: 'var(--color-red)' }}>₱{(row as DateRow).amount.toLocaleString()}</td>
-                          </>
-                        ) : (
-                          <>
-                            <td>{(row as SummaryRow).periodLabel}</td>
-                            <td style={{ textAlign: 'right', color: 'var(--color-red)' }}>₱{(row as SummaryRow).amount.toLocaleString()}</td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                    <tr className="flow-table-total">
-                      <td colSpan={isDateMode ? 2 : 1}>Total</td>
-                      <td style={{ textAlign: 'right', color: 'var(--color-red)' }}>₱{totalExpenses.toLocaleString()}</td>
-                    </tr>
-                  </tbody>
-                </table>
+          <div className={`flow-snapshot-card flow-snapshot-net ${netFlow >= 0 ? 'positive' : 'negative'}`}>
+            <NetIcon />
+            <div>
+              <div className="flow-snapshot-label">Net Flow</div>
+              <div className="flow-snapshot-value">
+                <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(netFlow)}</span>
+                <span className="hidden lg:inline tabular-nums">
+                  {netFlow < 0 ? '−' : ''}₱{Math.abs(netFlow).toLocaleString()}
+                </span>
               </div>
-            )}
+            </div>
           </div>
         </div>
-      )}
+
+        {/* Column 2: Income breakdown — hydrates after first paint */}
+        <div className="flow-col flow-col-income">
+          <div className="flow-table-header">Income breakdown</div>
+          {breakdownLoading ? (
+            <div className="flow-breakdown-loading" aria-busy="true" aria-label="Loading income breakdown">
+              Loading…
+            </div>
+          ) : incomeBreakdownRows.length === 0 ? (
+            <div className="flow-empty">No income in this period</div>
+          ) : (
+            <div className="flow-table-scroll">
+              <table className="flow-table">
+                <thead>
+                  <tr>
+                    {isDateMode ? (
+                      <>
+                        <th>Date</th>
+                        <th>Source</th>
+                        <th style={{ textAlign: 'right' }}>Amount</th>
+                      </>
+                    ) : (
+                      <>
+                        <th>Period</th>
+                        <th style={{ textAlign: 'right' }}>Amount</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {incomeBreakdownRows.map((row, i) => (
+                    <tr key={isDateMode ? `${(row as DateRow).dateFormatted}-${i}` : `${(row as SummaryRow).periodLabel}-${i}`}>
+                      {isDateMode ? (
+                        <>
+                          <td>{(row as DateRow).dateFormatted}</td>
+                          <td>{(row as DateRow).source}</td>
+                          <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>₱{(row as DateRow).amount.toLocaleString()}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td>{(row as SummaryRow).periodLabel}</td>
+                          <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>₱{(row as SummaryRow).amount.toLocaleString()}</td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                  <tr className="flow-table-total">
+                    <td colSpan={isDateMode ? 2 : 1}>Total</td>
+                    <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>₱{totalIncome.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Column 3: Expense breakdown */}
+        <div className="flow-col flow-col-expense">
+          <div className="flow-table-header">Expense breakdown</div>
+          {breakdownLoading ? (
+            <div className="flow-breakdown-loading" aria-busy="true" aria-label="Loading expense breakdown">
+              Loading…
+            </div>
+          ) : expenseBreakdownRows.length === 0 ? (
+            <div className="flow-empty">No expenses in this period</div>
+          ) : (
+            <div className="flow-table-scroll">
+              <table className="flow-table">
+                <thead>
+                  <tr>
+                    {isDateMode ? (
+                      <>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th style={{ textAlign: 'right' }}>Amount</th>
+                      </>
+                    ) : (
+                      <>
+                        <th>Period</th>
+                        <th style={{ textAlign: 'right' }}>Amount</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenseBreakdownRows.map((row, i) => (
+                    <tr key={isDateMode ? `${(row as DateRow).dateFormatted}-${i}` : `${(row as SummaryRow).periodLabel}-${i}`}>
+                      {isDateMode ? (
+                        <>
+                          <td>{(row as DateRow).dateFormatted}</td>
+                          <td>{(row as DateRow).source}</td>
+                          <td style={{ textAlign: 'right', color: 'var(--color-red)' }}>₱{(row as DateRow).amount.toLocaleString()}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td>{(row as SummaryRow).periodLabel}</td>
+                          <td style={{ textAlign: 'right', color: 'var(--color-red)' }}>₱{(row as SummaryRow).amount.toLocaleString()}</td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                  <tr className="flow-table-total">
+                    <td colSpan={isDateMode ? 2 : 1}>Total</td>
+                    <td style={{ textAlign: 'right', color: 'var(--color-red)' }}>₱{totalExpenses.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

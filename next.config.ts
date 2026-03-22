@@ -2,8 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    /** Tree-shake barrel imports: only pull Chart.js / wrappers actually used */
-    optimizePackageImports: ["chart.js", "react-chartjs-2"],
+    /** Tree-shake barrel imports: only pull symbols actually used */
+    optimizePackageImports: [
+      "chart.js",
+      "react-chartjs-2",
+      "@supabase/supabase-js",
+    ],
   },
   async redirects() {
     return [

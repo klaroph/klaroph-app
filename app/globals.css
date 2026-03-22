@@ -7000,6 +7000,43 @@ html { scroll-behavior: smooth; }
   font-size: 14px;
 }
 
+/* Breakdown columns only: stable height vs loaded tables (CLS) */
+.flow-breakdown-loading {
+  box-sizing: border-box;
+  padding: 32px 16px;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.income-expense-flow--dashboard-page .flow-breakdown-loading {
+  min-height: 220px;
+}
+@media (max-width: 1279px) {
+  .income-expense-flow--dashboard-page .flow-breakdown-loading {
+    min-height: 180px;
+  }
+}
+
+/* Deferred Goal Momentum chunk: match executive card footprint */
+.goal-momentum-section-placeholder {
+  min-height: 280px;
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: linear-gradient(160deg, var(--surface) 0%, var(--color-blue-muted) 45%, var(--surface) 100%);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+}
+@media (max-width: 1279px) {
+  .goal-momentum-section-placeholder {
+    min-height: 300px;
+  }
+}
+
 /* Dashboard home: approximate loaded flow height so "Loading…" → grid does not jump (CLS) */
 .income-expense-flow--dashboard-page .flow-loading {
   min-height: 260px;

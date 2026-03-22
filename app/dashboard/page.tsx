@@ -11,8 +11,24 @@ import {
   dispatchDashboardRefresh,
 } from '@/lib/dashboardRefresh'
 import type { GoalRow, GoalWithSaved } from '@/types/database'
-import GoalMomentumSection from '@/components/dashboard/GoalMomentumSection'
+import IncomeExpenseFlow from '@/components/dashboard/IncomeExpenseFlow'
 import ActivationCelebration from '@/components/dashboard/ActivationCelebration'
+import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
+import { useSubscription } from '@/contexts/SubscriptionContext'
+import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
+import { PLAN_LIMITS } from '@/lib/planLimits'
+import { toLocalDateString } from '@/lib/format'
+import Link from 'next/link'
+import UpgradeCTA from '@/components/ui/UpgradeCTA'
+import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
+import { useDashboardActions } from './DashboardLayoutClient'
+
+const GoalMomentumSection = dynamic(
+  () => import('@/components/dashboard/GoalMomentumSection'),
+  {
+    loading: () => <div className="goal-momentum-section-placeholder" aria-hidden />,
+  },
+)
 
 /* SSR enabled so first paint reserves real markup; still code-split. Avoids empty → pop-in CLS from ssr:false. */
 const ExpensesTrendChartCard = dynamic(
@@ -32,12 +48,6 @@ const BudgetOverview = dynamic(
     ),
   },
 )
-const IncomeExpenseFlow = dynamic(
-  () => import('@/components/dashboard/IncomeExpenseFlow'),
-  {
-    loading: () => <div className="dashboard-income-expense-flow-placeholder" aria-hidden />,
-  },
-)
 const ManageGoalsModal = dynamic(
   () => import('@/components/dashboard/ManageGoalsModal'),
   { ssr: false },
@@ -46,15 +56,6 @@ const NewGoalModal = dynamic(
   () => import('@/components/dashboard/NewGoalModal'),
   { ssr: false },
 )
-import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
-import { useSubscription } from '@/contexts/SubscriptionContext'
-import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
-import { PLAN_LIMITS } from '@/lib/planLimits'
-import { toLocalDateString } from '@/lib/format'
-import Link from 'next/link'
-import UpgradeCTA from '@/components/ui/UpgradeCTA'
-import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
-import { useDashboardActions } from './DashboardLayoutClient'
 
 function getCurrentMonthFirst(): string {
   const d = new Date()
@@ -87,7 +88,8 @@ export default function DashboardPage() {
     }
   }, [])
   const [goals, setGoals] = useState<GoalWithSaved[]>([])
-  const [loading, setLoading] = useState(true)
+  /** false on first paint so header + Income/Expenses summary are not blocked by goals fetch */
+  const [loading, setLoading] = useState(false)
   const [manageGoalsOpen, setManageGoalsOpen] = useState(false)
   const [addGoalOpen, setAddGoalOpen] = useState(false)
 
