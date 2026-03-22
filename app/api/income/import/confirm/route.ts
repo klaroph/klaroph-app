@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     if (plan.plan_name !== 'pro' && importCount >= FREE_IMPORT_LIMIT) {
       return NextResponse.json(
         {
-          error: "You've used your 2 free imports. Upgrade to Pro for unlimited CSV imports.",
+          error: "You've used your 2 free imports. Explore KlaroPH Pro for unlimited CSV imports.",
           code: 'IMPORT_QUOTA_EXCEEDED',
         },
         { status: 403 }

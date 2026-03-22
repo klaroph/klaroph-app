@@ -155,7 +155,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
 
   const handleConfirmImport = async () => {
     if (quotaExhausted) {
-      openUpgradeModal({ message: "You've used your 2 free imports. Upgrade to Pro for unlimited CSV imports and faster migration." })
+      openUpgradeModal({ message: "You've used your 2 free imports. Explore KlaroPH Pro for unlimited CSV imports and faster migration." })
       return
     }
     if (!validation?.rows?.length) return
@@ -172,7 +172,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
       if (!res.ok) {
         if (data.code === 'IMPORT_QUOTA_EXCEEDED') {
           refresh()
-          openUpgradeModal({ message: "You've used your 2 free imports. Upgrade to Pro for unlimited CSV imports and faster migration." })
+          openUpgradeModal({ message: "You've used your 2 free imports. Explore KlaroPH Pro for unlimited CSV imports and faster migration." })
         } else {
           setError(data.error ?? 'Import failed.')
         }
@@ -198,7 +198,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
       {!isPro && (
         <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)' }}>
           {quotaExhausted
-            ? "You've used your 2 free imports. Upgrade to Pro for unlimited CSV imports."
+            ? "You've used your 2 free imports. Explore KlaroPH Pro for unlimited CSV imports."
             : `${importUsed} of ${importLimit} free imports used`}
         </p>
       )}
@@ -308,7 +308,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
           {quotaExhausted ? (
             <button
               type="button"
-              onClick={() => openUpgradeModal({ message: "You've used your 2 free imports. Upgrade to Pro for unlimited CSV imports and faster migration." })}
+              onClick={() => openUpgradeModal({ message: "You've used your 2 free imports. Explore KlaroPH Pro for unlimited CSV imports and faster migration." })}
               style={{
                 padding: '12px 20px',
                 fontSize: 14,
@@ -320,7 +320,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
                 cursor: 'pointer',
               }}
             >
-              Upgrade to Pro for unlimited CSV imports
+              Explore KlaroPH Pro for unlimited CSV imports
             </button>
           ) : (
             <button

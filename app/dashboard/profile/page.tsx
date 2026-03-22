@@ -11,6 +11,7 @@ import {
 import ClarityBadge from '@/components/profile/ClarityBadge'
 import ProfileActionCTA from '@/components/profile/ProfileActionCTA'
 import DeleteAccountSection from '@/components/profile/DeleteAccountSection'
+import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
 
 
 type ProfileState = {
@@ -142,8 +143,15 @@ export default function ProfilePage() {
   return (
     <div className="profile-page premium-page">
       <div className="page-header">
-        <h2>Financial Identity</h2>
-        <p>Your profile helps us give you smarter, more personal clarity.</p>
+        <div className="min-w-0 flex-1 max-lg:w-full">
+          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
+            <h2 className="max-lg:mb-0">Financial Identity</h2>
+            <DashboardMobileHeaderLogo />
+          </div>
+          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
+            Your profile helps us give you smarter, more personal clarity.
+          </p>
+        </div>
       </div>
 
       {error && (

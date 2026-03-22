@@ -127,6 +127,30 @@ const FILTER_BUTTONS: { key: FilterKey; label: string }[] = [
 const PREMIUM_FILTER_KEYS = new Set<FilterKey>(['previous_quarter', 'this_year', 'previous_year', 'all_time', 'custom'])
 const LOCKED_FILTER_TOOLTIP = 'Available in Pro — unlock unlimited history.'
 
+/** Display-only: rounded whole peso, abbreviated K/M for mobile; does not change stored totals. */
+function formatPesoAbbrevDisplay(amount: number): string {
+  const neg = amount < 0
+  const v = Math.round(Math.abs(Number(amount)))
+  let text: string
+  if (v >= 1_000_000) {
+    const m = v / 1_000_000
+    if (m >= 100) text = `₱${Math.round(m)}M`
+    else {
+      const x = Math.round(m * 100) / 100
+      let s = x.toFixed(2)
+      if (s.endsWith('.00')) s = s.slice(0, -3)
+      else if (s.endsWith('0')) s = s.slice(0, -1)
+      text = `₱${s}M`
+    }
+  } else if (v >= 1_000) {
+    const k = Math.round((v / 1000) * 10) / 10
+    text = `₱${Number.isInteger(k) ? k : k.toFixed(1)}K`
+  } else {
+    text = `₱${v.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`
+  }
+  return neg ? `−${text}` : text
+}
+
 /** Philippine Peso (₱) icon */
 function IncomeIcon() {
   return (
@@ -164,6 +188,7 @@ export default function IncomeExpenseFlow({
   showTitle,
   monthFirst: monthFirstProp,
   onMonthChange,
+  className,
 }: {
   refreshTrigger?: number
   showTitle?: boolean
@@ -171,6 +196,8 @@ export default function IncomeExpenseFlow({
   monthFirst?: string
   /** When monthFirst is set, called when user changes period so parent can sync (e.g. Budget Overview). */
   onMonthChange?: (monthFirst: string) => void
+  /** Optional BEM-style modifier for page-specific responsive CSS (e.g. dashboard mobile row). */
+  className?: string
 }) {
   const [period, setPeriod] = useState<FilterKey>('current_month')
   const [customStart, setCustomStart] = useState('')
@@ -294,8 +321,16 @@ export default function IncomeExpenseFlow({
 
   const isDateMode = breakdownMode === 'date'
 
+  /** Dashboard home only: mobile CSS hides all filters without this data attribute */
+  const isDashboardHomeFlow = (className ?? '').includes('income-expense-flow--dashboard-page')
+  const MOBILE_DASHBOARD_FILTER_KEEP: ReadonlySet<FilterKey> = new Set([
+    'current_month',
+    'previous_month',
+    'custom',
+  ])
+
   return (
-    <div className="income-expense-flow">
+    <div className={['income-expense-flow', className].filter(Boolean).join(' ')}>
       <div className="flow-header-and-filters">
         {showTitle && <h3 className="dash-card-title">Income & Expenses</h3>}
         <div className="flow-filter-row">
@@ -312,6 +347,10 @@ export default function IncomeExpenseFlow({
             <button
               key={f.key}
               type="button"
+              data-flow-period={f.key}
+              {...(isDashboardHomeFlow && MOBILE_DASHBOARD_FILTER_KEEP.has(f.key)
+                ? { 'data-mobile-dashboard-filter': 'keep' as const }
+                : {})}
               title={isLocked ? LOCKED_FILTER_TOOLTIP : undefined}
               className={`flow-filter-btn${isActive ? ' active' : ''}${isLocked ? ' analytics-filter-locked' : ''}`}
               style={isLocked ? { display: 'inline-flex', alignItems: 'center', gap: 4 } : undefined}
@@ -361,14 +400,20 @@ export default function IncomeExpenseFlow({
               <IncomeIcon />
               <div>
                 <div className="flow-snapshot-label">Income</div>
-                <div className="flow-snapshot-value">₱{totalIncome.toLocaleString()}</div>
+                <div className="flow-snapshot-value">
+                  <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalIncome)}</span>
+                  <span className="hidden lg:inline tabular-nums">₱{totalIncome.toLocaleString()}</span>
+                </div>
               </div>
             </div>
             <div className="flow-snapshot-card flow-snapshot-expense">
               <ExpenseIcon />
               <div>
                 <div className="flow-snapshot-label">Expenses</div>
-                <div className="flow-snapshot-value">₱{totalExpenses.toLocaleString()}</div>
+                <div className="flow-snapshot-value">
+                  <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalExpenses)}</span>
+                  <span className="hidden lg:inline tabular-nums">₱{totalExpenses.toLocaleString()}</span>
+                </div>
               </div>
             </div>
             <div className={`flow-snapshot-card flow-snapshot-net ${netFlow >= 0 ? 'positive' : 'negative'}`}>
@@ -376,7 +421,10 @@ export default function IncomeExpenseFlow({
               <div>
                 <div className="flow-snapshot-label">Net Flow</div>
                 <div className="flow-snapshot-value">
-                  {netFlow < 0 ? '−' : ''}₱{Math.abs(netFlow).toLocaleString()}
+                  <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(netFlow)}</span>
+                  <span className="hidden lg:inline tabular-nums">
+                    {netFlow < 0 ? '−' : ''}₱{Math.abs(netFlow).toLocaleString()}
+                  </span>
                 </div>
               </div>
             </div>

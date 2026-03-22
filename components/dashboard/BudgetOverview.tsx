@@ -24,6 +24,8 @@ type BudgetOverviewProps = {
   maxCategories?: number
   /** Breakdown section title (e.g. "Top 10 Spending to Watch") */
   breakdownTitle?: string
+  /** Optional narrower title on small screens (e.g. "Top 3 Spending to Watch"); desktop uses breakdownTitle */
+  breakdownTitleMobile?: string
   /** Optional header action, e.g. "Expenses Page →" */
   headerAction?: React.ReactNode
   /** Hide budget editor buttons while keeping the standard card layout */
@@ -138,6 +140,7 @@ export default function BudgetOverview({
   onMonthChange,
   maxCategories,
   breakdownTitle: breakdownTitleProp,
+  breakdownTitleMobile: breakdownTitleMobileProp,
   headerAction,
   showBudgetEditorButtons = true,
 }: BudgetOverviewProps) {
@@ -297,10 +300,23 @@ export default function BudgetOverview({
   const openUpgrade = useUpgradeTriggerOptional()?.openUpgradeModal
 
   if (loading && effectiveBudgets.length === 0) {
+    /* Same outer layout as loaded card + placeholder columns to limit CLS when data arrives */
     return (
-      <div className="card dash-card" style={{ padding: 24 }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>Monthly Budget Overview</h3>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>Loading…</p>
+      <div
+        className="card dash-card budget-overview-card budget-overview-loading-skeleton"
+        aria-busy="true"
+        aria-label="Loading budget overview"
+      >
+        <div className="budget-overview-header">
+          <h3 className="budget-overview-title">Monthly Budget Overview</h3>
+          <div className="budget-overview-controls" aria-hidden>
+            <span className="budget-skeleton-select" />
+          </div>
+        </div>
+        <div className="budget-overview-two-col budget-overview-skeleton-cols">
+          <div className="budget-health-card budget-skeleton-block" aria-hidden />
+          <div className="budget-breakdown-card budget-skeleton-block budget-skeleton-breakdown" aria-hidden />
+        </div>
       </div>
     )
   }
@@ -346,6 +362,7 @@ export default function BudgetOverview({
 
   const displayBudgets = maxCategories != null ? sortedBudgets.slice(0, maxCategories) : sortedBudgets
   const sectionTitle = breakdownTitleProp ?? 'Category Breakdown'
+  const sectionTitleMobile = breakdownTitleMobileProp ?? sectionTitle
 
   return (
     <div className="card dash-card budget-overview-card">
@@ -488,7 +505,10 @@ export default function BudgetOverview({
 
         {/* Right: Category Breakdown / Top N Spending to Watch */}
         <div className="budget-breakdown-card">
-          <h4 className="budget-section-title">{sectionTitle}</h4>
+          <h4 className="budget-section-title">
+            <span className="lg:hidden">{sectionTitleMobile}</span>
+            <span className="hidden lg:inline">{sectionTitle}</span>
+          </h4>
           <div className="budget-overview-rows">
             {displayBudgets.map((b) => {
               const spent = spendingByCategory[b.category] ?? 0

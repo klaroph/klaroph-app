@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Sidebar from '../../components/layout/Sidebar'
-import MobileQuickActions from '../../components/layout/MobileQuickActions'
+import MobileBottomNav from '../../components/layout/MobileBottomNav'
 import HowKlaroPHWorksModal, { hasSeenOnboarding } from '../../components/onboarding/HowKlaroPHWorksModal'
 import UpgradeModal from '../../components/dashboard/UpgradeModal'
 import PaymentQRModal from '../../components/dashboard/PaymentQRModal'
@@ -178,19 +178,19 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
               <main className="main-content">
                 {children}
               </main>
-              <Footer variant="default" />
+              <Footer variant="default" className="footer-dashboard-mobile" />
             </div>
+            <MobileBottomNav
+              onOpenMenu={() => setDrawerOpen(true)}
+              onAddIncome={() => setFabIncomeOpen(true)}
+              onAddExpense={() => setFabExpenseOpen(true)}
+            />
             <HowKlaroPHWorksModal
               isOpen={showOnboarding}
               onClose={handleOnboardingClose}
               markSeenOnAccept
             />
             <UpgradeModalGate />
-            <MobileQuickActions
-              onAddGoal={() => setFabGoalOpen(true)}
-              onAddIncome={() => setFabIncomeOpen(true)}
-              onAddExpense={() => setFabExpenseOpen(true)}
-            />
             <NewGoalModal
               isOpen={fabGoalOpen}
               onClose={() => setFabGoalOpen(false)}

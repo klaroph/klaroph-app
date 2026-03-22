@@ -11,6 +11,7 @@ import LockIcon from '@/components/ui/LockIcon'
 import AddAssetLiabilityModal from '@/components/dashboard/AddAssetLiabilityModal'
 import EditFinancialAccountModal from '@/components/dashboard/EditFinancialAccountModal'
 import FinancialAccountIcon from '@/components/dashboard/FinancialAccountIcon'
+import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
 
 export default function FinancialHealthPage() {
   const { isPro } = useSubscription()
@@ -75,9 +76,14 @@ export default function FinancialHealthPage() {
   return (
     <div className="dashboard-page">
       <div className="page-header">
-        <div>
-          <h2>Financial Health</h2>
-          <p>Track your assets, liabilities, and net worth. Get a clear snapshot and premium insights on your financial position.</p>
+        <div className="min-w-0 flex-1 max-lg:w-full">
+          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
+            <h2 className="max-lg:mb-0">Financial Health</h2>
+            <DashboardMobileHeaderLogo />
+          </div>
+          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
+            Track your assets, liabilities, and net worth. Get a clear snapshot and premium insights on your financial position.
+          </p>
         </div>
       </div>
       {lastUpdatedLabel != null && (
@@ -195,7 +201,7 @@ export default function FinancialHealthPage() {
           <p style={{ margin: '0 0 16px', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
             {isPro
               ? 'Advisory-style insights on your net worth, liquidity, and debt pressure.'
-              : 'Upgrade to Pro to unlock detailed insights on your financial position, liquidity, and debt pressure.'}
+              : 'Explore KlaroPH Pro to unlock detailed insights on your financial position, liquidity, and debt pressure.'}
           </p>
           {!isPro ? (
             <div className="premium-gate-block" style={{ padding: 16, background: 'var(--border-muted)', borderRadius: 8, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>

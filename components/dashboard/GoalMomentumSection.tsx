@@ -37,7 +37,7 @@ export default function GoalMomentumSection({
         titleAs="h2"
         titleId="goal-momentum-heading"
         actions={
-          <Link href="/dashboard/goals" className="card-outline-link">
+          <Link href="/dashboard/goals" className="card-outline-link max-lg:hidden">
             Goals Page →
           </Link>
         }

@@ -11,12 +11,12 @@ function FacebookIcon() {
   )
 }
 
-type FooterProps = { variant?: 'landing' | 'default' }
+type FooterProps = { variant?: 'landing' | 'default'; className?: string }
 
-export default function Footer({ variant = 'default' }: FooterProps) {
+export default function Footer({ variant = 'default', className }: FooterProps) {
   return (
     <footer
-      className={`footer footer-variant-${variant}`}
+      className={['footer', `footer-variant-${variant}`, className].filter(Boolean).join(' ')}
       role="contentinfo"
       aria-label="Site footer"
     >

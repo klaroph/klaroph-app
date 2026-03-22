@@ -1,5 +1,7 @@
 'use client'
 
+import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
+
 const ARTICLES = [
   {
     title: 'Start with one goal',
@@ -37,8 +39,15 @@ export default function LearningPage() {
   return (
     <div className="learning-page premium-page">
       <div className="page-header">
-        <h2>Learning</h2>
-        <p>Build your money mindset. Small lessons today lead to lasting financial habits.</p>
+        <div className="min-w-0 flex-1 max-lg:w-full">
+          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
+            <h2 className="max-lg:mb-0">Learning</h2>
+            <DashboardMobileHeaderLogo />
+          </div>
+          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
+            Build your money mindset. Small lessons today lead to lasting financial habits.
+          </p>
+        </div>
       </div>
 
       <div className="premium-banner-message">

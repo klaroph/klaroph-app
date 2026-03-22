@@ -12,6 +12,7 @@ import PremiumBadge from '../../../components/ui/PremiumBadge'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { PLAN_LIMITS } from '@/lib/planLimits'
 import { DASHBOARD_REFRESH_EVENT, DASHBOARD_GOALS_REFRESH_EVENT, dispatchDashboardGoalsRefresh } from '@/lib/dashboardRefresh'
+import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
 
 const defaultSummary: GoalSummary = {
   totalSaved: 0,
@@ -86,8 +87,15 @@ export default function GoalsPage() {
   return (
     <div className="goals-page">
       <div className="page-header">
-        <h2>Goals</h2>
-        <p>Track your savings targets. One goal at a time.</p>
+        <div className="min-w-0 flex-1 max-lg:w-full">
+          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
+            <h2 className="max-lg:mb-0">Goals</h2>
+            <DashboardMobileHeaderLogo />
+          </div>
+          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
+            Track your savings targets. One goal at a time.
+          </p>
+        </div>
       </div>
 
       {atLimit && (
@@ -99,7 +107,7 @@ export default function GoalsPage() {
             You&apos;ve reached your Free plan limit (2/2 goals).
           </div>
           <p className="goals-page-limit-desc">
-            Upgrade to Pro to create up to 20 goals.
+            Explore KlaroPH Pro to create up to 20 goals.
           </p>
           <UpgradeCTA variant="compact" />
         </div>
@@ -119,7 +127,7 @@ export default function GoalsPage() {
           {atLimit ? (
             <span
               title="Create up to 20 goals with Pro"
-              className="goals-page-add-disabled header-add-btn-desktop-only"
+              className="goals-page-add-disabled"
               aria-disabled="true"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -130,7 +138,14 @@ export default function GoalsPage() {
               <PremiumBadge size="sm" />
             </span>
           ) : (
-            <button className="btn-primary header-add-btn-desktop-only" onClick={() => { setEditingGoal(null); setModalOpen(true) }}>
+            <button
+              type="button"
+              className="btn-primary goals-page-add-goal-btn"
+              onClick={() => {
+                setEditingGoal(null)
+                setModalOpen(true)
+              }}
+            >
               + Add New Goal
             </button>
           )}

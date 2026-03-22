@@ -86,6 +86,14 @@ const NAV_ITEMS: Array<{ label: string; href: string; icon: React.ReactNode }> =
   },
 ]
 
+/** Hidden in drawer on ≤1024px — same destinations exist on mobile bottom nav */
+const SIDEBAR_NAV_HIDE_ON_MOBILE = new Set([
+  '/dashboard',
+  '/dashboard/goals',
+  '/dashboard/income',
+  '/dashboard/expenses',
+])
+
 const TOOLS_ITEMS: Array<{ label: string; href: string; icon: React.ReactNode }> = [
   {
     label: 'Salary Calculator',
@@ -156,20 +164,26 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose }: SidebarPr
       className={`sidebar${drawerOpen ? ' drawer-open' : ''}`}
       aria-label="Main navigation"
     >
-      <div className="sidebar-head">
-        <div className="sidebar-logo">
-          <span className="sidebar-logo-inner">
-            <KlaroPHHandLogo size={48} variant="onBlue" />
-          </span>
-        </div>
+      {/*
+        Single scroll column: logo + nav scroll; footer uses sticky + margin-top:auto so it
+        stays pinned to the bottom of the drawer on mobile while nav scrolls above.
+      */}
+      <div className="sidebar-nav-scroll min-h-0 overflow-y-auto overscroll-y-contain">
+        <div className="sidebar-scroll-column">
+          <div className="sidebar-logo">
+            <span className="sidebar-logo-inner">
+              <KlaroPHHandLogo size={48} variant="onBlue" />
+            </span>
+          </div>
 
-        <div className="sidebar-nav-scroll">
-          <nav className="sidebar-nav" aria-label="Main navigation">
+          <nav className="sidebar-nav max-lg:gap-1 lg:gap-[4px]" aria-label="Main navigation">
             {NAV_ITEMS.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`sidebar-link${isActive(item.href) ? ' active' : ''}`}
+                className={`sidebar-link${isActive(item.href) ? ' active' : ''}${
+                  SIDEBAR_NAV_HIDE_ON_MOBILE.has(item.href) ? ' sidebar-nav-hide-mobile' : ''
+                }`}
                 aria-current={isActive(item.href) ? 'page' : undefined}
                 onClick={handleNavClick}
               >
@@ -205,46 +219,46 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose }: SidebarPr
               <span className="sidebar-link-text">Support</span>
             </button>
           </nav>
+
+          <footer className="sidebar-footer" aria-label="Account and plan">
+            <div className="sidebar-footer-inner">
+              <div className="sidebar-user-block">
+                <div className="sidebar-user-name">Hi {userName}</div>
+                <div className="sidebar-clarity-badge">Clarity Level – {clarityLevel}</div>
+                {isPro && (
+                  <div className="sidebar-plan-card">
+                    <span className="sidebar-plan-badge">PRO</span>
+                    <div className="sidebar-plan-status">
+                      <strong>Pro Plan – Active</strong>
+                      {renewDate && <span>Renews on {renewDate}</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="sidebar-footer-actions">
+                {email && <p className="sidebar-footer-email">{email}</p>}
+                {!isPro && <UpgradeCTA variant="compact" />}
+                <button
+                  type="button"
+                  className="sidebar-logout"
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    window.location.href = '/login'
+                  }}
+                  aria-label="Log out"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={20} height={20} aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+                  </svg>
+                  <span className="sidebar-logout-text">Log out</span>
+                </button>
+              </div>
+            </div>
+          </footer>
         </div>
       </div>
 
       <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} />
-
-      <footer className="sidebar-footer" aria-label="Account and plan">
-        <div className="sidebar-footer-inner">
-          <div className="sidebar-user-block">
-            <div className="sidebar-user-name">Hi {userName}</div>
-            <div className="sidebar-clarity-badge">Clarity Level – {clarityLevel}</div>
-            {isPro && (
-              <div className="sidebar-plan-card">
-                <span className="sidebar-plan-badge">PRO</span>
-                <div className="sidebar-plan-status">
-                  <strong>Pro Plan – Active</strong>
-                  {renewDate && <span>Renews on {renewDate}</span>}
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="sidebar-footer-actions">
-            {email && <p className="sidebar-footer-email">{email}</p>}
-            {!isPro && <UpgradeCTA variant="compact" />}
-            <button
-              type="button"
-              className="sidebar-logout"
-              onClick={async () => {
-                await supabase.auth.signOut()
-                window.location.href = '/login'
-              }}
-              aria-label="Log out"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={20} height={20} aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-              </svg>
-              <span className="sidebar-logout-text">Log out</span>
-            </button>
-          </div>
-        </div>
-      </footer>
     </aside>
   )
 }

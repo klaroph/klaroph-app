@@ -24,7 +24,7 @@ export default function UpgradeSuccessPage() {
         try {
           await supabase.auth.refreshSession()
           await refresh()
-        } catch (_) {
+        } catch {
           // still redirect with fresh features from poll
         }
         router.replace('/dashboard')

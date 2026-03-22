@@ -107,7 +107,11 @@ export default function GraceBanner() {
 
   if (subscriptionStatus === 'expired' && !isPro) {
     return (
-      <div role="alert" className="grace-banner grace-banner--expired" style={expiredBannerStyle}>
+      <div
+        role="alert"
+        className="grace-banner grace-banner--expired max-lg:!hidden"
+        style={expiredBannerStyle}
+      >
         <PremiumIcon />
         <span>
           Pro features are paused. Upgrade anytime to restore unlimited access.
@@ -119,7 +123,7 @@ export default function GraceBanner() {
             style={expiredCtaStyle}
             className="grace-banner-cta"
           >
-            Upgrade to Pro
+            Explore KlaroPH Pro
           </button>
         )}
       </div>

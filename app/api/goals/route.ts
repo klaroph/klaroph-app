@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { resolveUserPlan } from '@/lib/resolveUserPlan'
 
 const GOAL_LIMIT_MESSAGE =
-  "You've reached the Free limit. Upgrade to Pro to unlock up to 20 goals."
+  "You've reached the Free limit. Explore KlaroPH Pro to unlock up to 20 goals."
 const GRACE_MESSAGE =
   'Goal creation is paused while your payment is being updated. Please update your payment method.'
 

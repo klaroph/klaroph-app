@@ -5,6 +5,11 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /*
+   * lg at 1280px: phones/tablets (incl. landscape) stay on max-lg / drawer / bottom nav until 1279px.
+   * Desktop sidebar + wide layout from 1280px up.
+   */
+  --breakpoint-lg: 80rem;
 }
 
 :root {
@@ -109,9 +114,9 @@ body > div:first-child {
 }
 
 /* ================================================
-   MOBILE-FIRST DASHBOARD SIMPLIFICATION (<= 768px)
+   MOBILE-FIRST DASHBOARD SIMPLIFICATION (<= 1024px)
    ================================================ */
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .goal-momentum-executive,
   .card.dash-card {
     width: 100%;
@@ -153,7 +158,7 @@ body > div:first-child {
     box-sizing: border-box;
   }
 
-  /* Spacing: outer padding 16px (main-content already set in layout 768 block); section spacing ≥32px via margin above */
+  /* Spacing: outer padding 16px (main-content set in layout ≤1024 block); section spacing ≥32px via margin above */
   /* Sidebar: hidden by default, opens via hamburger; main content full width when closed */
   .main-wrapper {
     width: 100%;
@@ -214,18 +219,25 @@ select:focus-visible {
   overflow: hidden;
 }
 
-.sidebar-head {
+/* Logo + nav + footer share one column; only this region scrolls; footer sticks to drawer bottom */
+.sidebar-nav-scroll {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.sidebar-nav-scroll {
-  flex: 1;
-  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Grows to fill drawer when nav is short so footer margin-top:auto pins to bottom */
+.sidebar-scroll-column {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: min-content;
+  box-sizing: border-box;
 }
 
 .sidebar-logo {
@@ -268,6 +280,7 @@ select:focus-visible {
 }
 
 .sidebar-nav {
+  flex-shrink: 0;
   padding: var(--space-4) var(--space-3);
   display: flex;
   flex-direction: column;
@@ -328,10 +341,17 @@ select:focus-visible {
 
 .sidebar-footer {
   flex-shrink: 0;
-  padding: var(--space-4);
+  margin-top: auto;
   margin-bottom: 0;
+  padding: var(--space-4);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.08);
+  /* Opaque base so nav doesn’t show through when sticky; slight depth vs main sidebar */
+  background-color: var(--color-blue);
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.18) 100%);
+  box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.22);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 
 .sidebar-footer-inner {
@@ -466,106 +486,35 @@ select:focus-visible {
   border-top: 1px solid #e5e7eb;
   padding: 1rem var(--space-5);
 }
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .dashboard-footer {
     padding: 1rem var(--space-4);
     font-size: 0.8125rem;
   }
 }
 
-/* Responsive: sidebar collapse at 1024px */
-@media (max-width: 1024px) {
-  .sidebar {
-    width: var(--sidebar-width-collapsed);
-  }
+/* Sidebar: no icon-only strip — drawer + bottom nav for all widths ≤1024px (portrait + landscape phones/tablets) */
 
-  .sidebar-logo {
-    padding: var(--space-3);
-  }
-
-  .sidebar-logo img {
-    max-height: 48px;
-  }
-
-  .sidebar-link-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .sidebar-link {
-    justify-content: center;
-    padding: var(--space-3);
-  }
-
-  .sidebar-link.active {
-    padding-left: var(--space-3);
-  }
-
-  .sidebar-nav {
-    padding: var(--space-3) var(--space-2);
-    align-items: center;
-  }
-
-  .sidebar-section-title {
-    display: none;
-  }
-
-  .sidebar-user-block {
-    display: none;
-  }
-
-  .sidebar-footer-email {
-    display: none;
-  }
-
-  .sidebar-footer-actions {
-    padding-left: 0;
-  }
-
-  .sidebar-footer {
-    padding: var(--space-2);
-  }
-
-  .sidebar-logout-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .sidebar-logout {
-    justify-content: center;
-    padding: var(--space-3);
-  }
-}
-
-/* Responsive: sidebar overlay drawer at 768px — fixed only here */
-@media (max-width: 768px) {
+/* Responsive: sidebar overlay drawer at 1024px — fixed only here */
+@media (max-width: 1279px) {
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
+    /* Let top+bottom define height (avoids 100vh + bottom overflow on mobile browsers) */
+    height: auto;
+    max-height: none;
     width: var(--sidebar-width);
     transform: translateX(-100%);
     transition: transform var(--motion-medium) var(--ease-enter);
     z-index: 50;
   }
 
+  /* Above mobile bottom nav (z-index 900) so profile/logout stay tappable */
   .sidebar.drawer-open {
     transform: translateX(0);
+    z-index: 950;
   }
 
   .sidebar-link-text {
@@ -587,6 +536,23 @@ select:focus-visible {
 
   .sidebar-link.active {
     padding-left: 13px;
+  }
+
+  /*
+   * Hide nav items duplicated by mobile bottom nav.
+   * href=… targets Next <Link> output even if a utility class is stripped by the CSS pipeline.
+   */
+  .sidebar .sidebar-nav a.sidebar-link[href="/dashboard"],
+  .sidebar .sidebar-nav a.sidebar-link[href="/dashboard/goals"],
+  .sidebar .sidebar-nav a.sidebar-link[href="/dashboard/income"],
+  .sidebar .sidebar-nav a.sidebar-link[href="/dashboard/expenses"],
+  .sidebar .sidebar-link.sidebar-nav-hide-mobile {
+    display: none !important;
+  }
+
+  /* Room above home indicator; Tailwind pb-* loses to .sidebar-footer { padding: … } shorthand */
+  .sidebar .sidebar-footer {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
   }
 
   .sidebar-nav {
@@ -631,9 +597,9 @@ select:focus-visible {
 }
 
 /* ================================================
-   MOBILE TYPOGRAPHY (<= 768px)
+   MOBILE TYPOGRAPHY (<= 1024px)
    ================================================ */
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .kpi-value {
     font-size: 22px;
     font-weight: 600;
@@ -661,9 +627,10 @@ select:focus-visible {
   z-index: 40;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .drawer-backdrop.visible {
     display: block;
+    z-index: 920;
   }
 }
 
@@ -822,7 +789,7 @@ select:focus-visible {
 }
 
 /* ================================================
-   MOBILE QUICK ACTIONS (FAB) — visible <= 768px only
+   MOBILE QUICK ACTIONS (FAB) — visible ≤1024px (hidden in dashboard when bottom nav is on)
    ================================================ */
 .mobile-fab {
   position: fixed;
@@ -853,7 +820,7 @@ select:focus-visible {
   transform: scale(0.98);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .mobile-fab {
     display: flex;
   }
@@ -882,7 +849,7 @@ select:focus-visible {
   min-width: 160px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .mobile-fab-backdrop {
     display: block;
   }
@@ -919,11 +886,413 @@ select:focus-visible {
 }
 
 /* ================================================
+   MOBILE BOTTOM NAV (dashboard shell, ≤1024px)
+   ================================================ */
+.mobile-bottom-nav,
+.mobile-bottom-nav-sheet-backdrop,
+.mobile-bottom-nav-sheet {
+  display: none;
+}
+
+@media (max-width: 1279px) {
+  .dashboard-layout {
+    --mobile-bottom-nav-row-min-h: 56px;
+    --mobile-bottom-nav-fab-size: 54px;
+    --mobile-bottom-nav-fab-overlap: 24px;
+    /* Extra bottom space so last cards (e.g. Budget) clear FAB + bar + thumb */
+    --mobile-bottom-nav-pad-bottom: max(
+      7.5rem,
+      calc(
+        var(--mobile-bottom-nav-row-min-h) + var(--mobile-bottom-nav-fab-overlap) + env(safe-area-inset-bottom, 0px) + 48px
+      )
+    );
+  }
+
+  .mobile-bottom-nav {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.97) 0%,
+      #f4f7fc 38%,
+      #e8eef8 72%,
+      #dfe8f4 100%
+    );
+    border-top: 1px solid rgba(0, 56, 168, 0.12);
+    box-shadow:
+      0 -1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 -8px 28px rgba(0, 56, 168, 0.08);
+  }
+
+  .mobile-bottom-nav-track {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* FAB: absolutely centered above the bar, not in the flex row */
+  .mobile-bottom-nav-fab {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    z-index: 3;
+    width: var(--mobile-bottom-nav-fab-size);
+    height: var(--mobile-bottom-nav-fab-size);
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font: inherit;
+    color: #fff;
+    background: linear-gradient(145deg, #0048c4 0%, var(--color-primary, #0038a8) 45%, #002d7a 100%);
+    box-shadow:
+      0 4px 16px rgba(0, 56, 168, 0.42),
+      0 2px 6px rgba(15, 23, 42, 0.12);
+    transform: translate(-50%, calc(-1 * var(--mobile-bottom-nav-fab-overlap)));
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-bottom-nav-fab:hover,
+  .mobile-bottom-nav-fab:focus-visible {
+    transform: translate(-50%, calc(-1 * var(--mobile-bottom-nav-fab-overlap) - 2px));
+    box-shadow:
+      0 8px 22px rgba(0, 56, 168, 0.48),
+      0 2px 8px rgba(15, 23, 42, 0.14);
+    outline: none;
+  }
+
+  .mobile-bottom-nav-fab:active {
+    transform: translate(-50%, calc(-1 * var(--mobile-bottom-nav-fab-overlap) + 1px));
+  }
+
+  .mobile-bottom-nav-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: var(--mobile-bottom-nav-row-min-h);
+    padding: 10px 6px 12px;
+    gap: 2px;
+  }
+
+  .mobile-bottom-nav-fab-placeholder {
+    flex: 0 0 var(--mobile-bottom-nav-fab-size);
+    width: var(--mobile-bottom-nav-fab-size);
+    min-width: var(--mobile-bottom-nav-fab-size);
+    height: 1px;
+    align-self: center;
+    pointer-events: none;
+    visibility: hidden;
+  }
+
+  .mobile-bottom-nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 2px;
+    margin: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: none;
+    text-align: center;
+    color: var(--text-muted, #64748b);
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s ease, opacity 0.15s ease;
+  }
+
+  .mobile-bottom-nav-item:hover,
+  .mobile-bottom-nav-item:focus-visible {
+    color: var(--color-primary, #0038a8);
+    outline: none;
+  }
+
+  .mobile-bottom-nav-item.active {
+    color: var(--color-primary, #0038a8);
+    opacity: 1;
+  }
+
+  .mobile-bottom-nav-item:not(.active) {
+    opacity: 0.88;
+  }
+
+  .mobile-bottom-nav-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: inherit;
+  }
+
+  .mobile-bottom-nav-svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .mobile-bottom-nav-label {
+    display: block;
+    flex-shrink: 0;
+    width: 100%;
+    max-width: 100%;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    margin: 0;
+    padding: 0;
+  }
+
+  .mobile-bottom-nav-item.active .mobile-bottom-nav-label {
+    font-weight: 700;
+  }
+
+  /* Action sheets */
+  .mobile-bottom-nav-sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 940;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: rgba(15, 23, 42, 0.45);
+    cursor: pointer;
+    animation: mobile-nav-backdrop-in 0.2s ease forwards;
+  }
+
+  @keyframes mobile-nav-backdrop-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .mobile-bottom-nav-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(var(--mobile-bottom-nav-pad-bottom) + 4px);
+    z-index: 950;
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 20px 18px 18px;
+    background: var(--surface, #fff);
+    border-radius: 16px;
+    border: 1px solid var(--border, #e2e8f0);
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+    animation: mobile-nav-sheet-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  @keyframes mobile-nav-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .mobile-bottom-nav-sheet-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary, #0f172a);
+    letter-spacing: -0.02em;
+  }
+
+  .mobile-bottom-nav-sheet-sub {
+    margin: -4px 0 4px;
+    font-size: 13px;
+    color: var(--text-muted, #64748b);
+    line-height: 1.35;
+  }
+
+  .mobile-bottom-nav-sheet-action {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border, #e2e8f0);
+    background: var(--background, #f8fafc);
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .mobile-bottom-nav-sheet-action:hover,
+  .mobile-bottom-nav-sheet-action:focus-visible {
+    background: var(--color-blue-muted, rgba(0, 56, 168, 0.08));
+    border-color: rgba(0, 56, 168, 0.25);
+    outline: none;
+  }
+
+  .mobile-bottom-nav-sheet-action-label {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary, #0f172a);
+  }
+
+  .mobile-bottom-nav-sheet-action-hint {
+    font-size: 12px;
+    color: var(--text-muted, #64748b);
+  }
+
+  .mobile-bottom-nav-sheet-action-accent .mobile-bottom-nav-sheet-action-label {
+    color: var(--color-success, #059669);
+  }
+
+  .mobile-bottom-nav-sheet-action-warn .mobile-bottom-nav-sheet-action-label {
+    color: var(--color-danger, #CE1126);
+  }
+
+  .dashboard-layout .main-wrapper .main-content {
+    padding-bottom: var(--mobile-bottom-nav-pad-bottom);
+    /* Let scaled header / layout logos paint past the content box (was clipping with overflow-x: hidden) */
+    overflow-x: visible;
+  }
+
+  .dashboard-layout .footer.footer-dashboard-mobile {
+    margin-top: 0.25rem;
+  }
+
+  .dashboard-layout .footer-dashboard-mobile .footer-inner {
+    padding: 8px 16px 6px;
+  }
+
+  .dashboard-layout .footer-dashboard-mobile {
+    padding-bottom: calc(var(--mobile-bottom-nav-pad-bottom) + 8px);
+  }
+
+  /* Dashboard mobile footer: dense stack — legal row, smaller type, less gap */
+  .dashboard-layout .footer.footer-dashboard-mobile .footer-columns {
+    gap: 8px;
+  }
+
+  .dashboard-layout .footer.footer-dashboard-mobile .footer-brand-title {
+    margin: 0 0 2px;
+    font-size: 13px;
+  }
+
+  .dashboard-layout .footer.footer-dashboard-mobile .footer-brand-tagline {
+    font-size: 10px;
+    line-height: 1.35;
+    max-width: 22rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .dashboard-layout .footer.footer-dashboard-mobile .footer-social-label {
+    margin: 0 0 4px;
+    font-size: 9px;
+  }
+
+  .dashboard-layout .footer.footer-dashboard-mobile .footer-fb-btn {
+    padding: 4px 12px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .dashboard-layout .footer.footer-dashboard-mobile .footer-col-legal {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 4px 12px;
+  }
+
+  .dashboard-layout .footer.footer-dashboard-mobile .footer-legal-link {
+    font-size: 11px;
+  }
+
+  .dashboard-layout .footer.footer-dashboard-mobile .footer-bottom-row {
+    margin-top: 6px;
+    padding-top: 6px;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  /* Header logo: scaled up visually; 40×40 box unchanged so header spacing/row height unchanged */
+  .dashboard-page .dashboard-page-header {
+    overflow: visible;
+  }
+
+  .dashboard-page-header .dashboard-header-logo-mobile,
+  .page-header .dashboard-header-logo-mobile {
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  /* Hand logo — layout box 40px; visual scale */
+  .dashboard-page-header .dashboard-header-logo-scale,
+  .page-header .dashboard-header-logo-scale {
+    transform: scale(2);
+    transform-origin: center right;
+  }
+
+  /* Center FAB replaces floating quick-add */
+  .dashboard-layout .mobile-fab,
+  .dashboard-layout .mobile-fab-backdrop,
+  .dashboard-layout .mobile-fab-menu {
+    display: none !important;
+  }
+
+  /* Bottom bar + Menu; hide redundant top hamburger */
+  .dashboard-layout .drawer-menu-btn {
+    display: none;
+  }
+}
+
+/* ================================================
    DASHBOARD CONTENT — max width, consistent rhythm
    ================================================ */
 
+/* Tablet: slightly smaller scale than phone (same inline title row) */
+@media (max-width: 1279px) and (min-width: 769px) {
+  .page-header .dashboard-header-logo-scale,
+  .dashboard-page-header .dashboard-header-logo-scale {
+    transform: scale(1.65);
+    transform-origin: center right;
+  }
+}
+
 /* ================================================
-   INCOME & EXPENSES PAGES — layout (desktop base, mobile overrides below 768px)
+   INCOME & EXPENSES PAGES — layout (desktop base, mobile overrides ≤1024px in dashboard blocks)
    ================================================ */
 
 /* Fix flex/grid vertical expansion (min-height: 0 only where needed; trend/category cards grow naturally) */
@@ -1140,7 +1509,7 @@ select:focus-visible {
   margin: 0 auto;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .income-expense-chart-wrapper {
     height: 280px;
     display: flex;
@@ -1175,7 +1544,7 @@ select:focus-visible {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .income-expense-summary-grid {
     grid-template-columns: 1fr;
     gap: var(--space-4);
@@ -1260,6 +1629,96 @@ select:focus-visible {
   padding: 23px; /* p-6 */
 }
 
+/* Loading state: approximate loaded card height to avoid grid / neighbor CLS */
+.budget-overview-loading-skeleton {
+  min-height: 560px;
+  width: 100%;
+  box-sizing: border-box;
+}
+@media (max-width: 1279px) {
+  .budget-overview-loading-skeleton {
+    min-height: 480px;
+  }
+}
+
+/* Dashboard home: budget often shows 8 category tiles — reserve extra vertical space */
+.dashboard-page .budget-overview-loading-skeleton {
+  min-height: 640px;
+}
+@media (max-width: 1279px) {
+  .dashboard-page .budget-overview-loading-skeleton {
+    min-height: 540px;
+  }
+}
+
+.budget-overview-skeleton-cols {
+  pointer-events: none;
+}
+.budget-skeleton-select {
+  display: inline-block;
+  width: 140px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--border, #e2e8f0);
+  opacity: 0.65;
+}
+.budget-skeleton-block {
+  min-height: 280px;
+  background: linear-gradient(
+    160deg,
+    var(--surface) 0%,
+    var(--color-blue-muted, #e8eef8) 45%,
+    var(--surface) 100%
+  );
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  opacity: 0.55;
+}
+@media (min-width: 1280px) {
+  .budget-skeleton-block.budget-skeleton-breakdown {
+    min-height: 320px;
+  }
+}
+
+/* Dynamic import gap-fillers (dashboard page) */
+.dashboard-expenses-trend-placeholder {
+  width: 100%;
+  min-height: 268px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-sizing: border-box;
+}
+.budget-overview-dynamic-placeholder {
+  min-height: 560px;
+}
+@media (max-width: 1279px) {
+  .budget-overview-dynamic-placeholder {
+    min-height: 480px;
+  }
+}
+.dashboard-page .budget-overview-dynamic-placeholder {
+  min-height: 640px;
+}
+@media (max-width: 1279px) {
+  .dashboard-page .budget-overview-dynamic-placeholder {
+    min-height: 540px;
+  }
+}
+
+/* Income & Expenses block: reserve space before lazy chunk + data (LCP / CLS) */
+.dashboard-income-expense-flow-placeholder {
+  width: 100%;
+  min-height: 360px;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+}
+@media (min-width: 1024px) {
+  .dashboard-income-expense-flow-placeholder {
+    min-height: 420px;
+  }
+}
+
 /* Dashboard equal-height cards: Goal Momentum + Monthly Budget Overview */
 .goal-momentum-executive-equal .goal-momentum-donut-wrap {
   width: 140px;
@@ -1314,7 +1773,8 @@ select:focus-visible {
   gap: 20px;
   align-items: stretch;
 }
-@media (min-width: 768px) {
+/* 769px: avoid overlap with max-width:768px mobile rules (768 got 2-col + 320px health = narrow strip) */
+@media (min-width: 1280px) {
   .budget-overview-two-col {
     grid-template-columns: auto 1fr;
     gap: 24px;
@@ -1339,7 +1799,7 @@ select:focus-visible {
   align-items: center;
   min-width: 0;
 }
-@media (min-width: 768px) {
+@media (min-width: 1280px) {
   .budget-health-card {
     width: 320px;
     align-items: stretch;
@@ -1431,6 +1891,10 @@ select:focus-visible {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 7.5rem;
+  text-align: right;
+  box-sizing: border-box;
 }
 .budget-health-value-over {
   color: #dc2626;
@@ -1512,7 +1976,7 @@ select:focus-visible {
   column-gap: 16px;
   min-width: 0;
 }
-@media (min-width: 768px) {
+@media (min-width: 1280px) {
   .budget-breakdown-card .budget-overview-rows {
     grid-template-columns: repeat(4, 1fr);
   }
@@ -1640,6 +2104,33 @@ select:focus-visible {
   gap: var(--space-2);
   flex-shrink: 0;
   align-items: center;
+}
+
+/*
+ * Title + hand logo share the left column; actions sit in the right column on desktop.
+ * On ≤1023px a single row squeezes the left column (min-width:0) so subtitle collapses and
+ * scaled logo paints over Export/Import. Stack vertically so title row is full width first.
+ */
+@media (max-width: 1023px) {
+  .page-header.page-header-with-actions {
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+  }
+
+  .page-header.page-header-with-actions > div:first-child {
+    width: 100%;
+    max-width: 100%;
+    flex: none;
+    min-width: 0;
+  }
+
+  .page-header.page-header-with-actions .page-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+  }
 }
 
 .premium-banner {
@@ -1893,7 +2384,7 @@ select:focus-visible {
   gap: var(--space-5);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1280px) {
   .budget-overview-two-col {
     gap: var(--space-6);
   }
@@ -1989,13 +2480,13 @@ select:focus-visible {
   min-width: 0;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1279px) {
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .kpi-grid {
     grid-template-columns: 1fr;
   }
@@ -4330,7 +4821,7 @@ html { scroll-behavior: smooth; }
   background: var(--border-muted);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .drawer-menu-btn {
     display: flex;
   }
@@ -4868,6 +5359,8 @@ html { scroll-behavior: smooth; }
 .dashboard-top-cluster {
   width: 100%;
   margin-bottom: var(--space-5);
+  /* Isolate goal + budget subtree reflows from the rest of the page */
+  contain: layout style;
 }
 
 /* Top row: Left 25% = intelligence module, Right 75% = Budget; content-led height */
@@ -4914,20 +5407,90 @@ html { scroll-behavior: smooth; }
   font-size: var(--text-small);
 }
 
+/* Income / Expenses — match dashboard home header rhythm (title, subtitle, spacing) */
+.income-page .page-header.dashboard-page-header,
+.expenses-page .page-header.dashboard-page-header {
+  margin-bottom: var(--space-3);
+}
+
+.income-page .page-header.dashboard-page-header h2,
+.expenses-page .page-header.dashboard-page-header h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-h2);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+@media (max-width: 1279px) {
+  .income-page .page-header.dashboard-page-header h2,
+  .expenses-page .page-header.dashboard-page-header h2 {
+    margin-bottom: 0;
+  }
+}
+
+.income-page .page-header.dashboard-page-header p,
+.expenses-page .page-header.dashboard-page-header p {
+  font-size: var(--text-small);
+  color: var(--text-helper);
+}
+
+/* Toolbar under title block on small screens: tidy grid, no overlap with scaled logo */
+@media (max-width: 1023px) {
+  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions,
+  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-items: stretch;
+    margin-top: 2px;
+  }
+
+  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions > *,
+  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions > * {
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions .btn-secondary,
+  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions .btn-secondary {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions .premium-btn-disabled,
+  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions .premium-btn-disabled {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+}
+
+@media (min-width: 1024px) {
+  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions,
+  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+}
+
 /* Dashboard header actions — desktop only (hidden on mobile; FAB used there) */
 .dashboard-header-actions-desktop {
   display: flex;
   gap: var(--space-2);
   align-items: center;
 }
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .dashboard-header-actions-desktop {
     display: none;
   }
 }
 
 /* Add Income / Add Expense / Add Goal buttons — hidden on mobile (use FAB instead) */
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .header-add-btn-desktop-only {
     display: none !important;
   }
@@ -4954,9 +5517,26 @@ html { scroll-behavior: smooth; }
 .dashboard-page .goal-momentum-executive-encourage {
   font-size: 11px;
   margin-bottom: var(--space-2) !important;
+  /* Stable block for longest encouragement line (reduces CLS when copy swaps) */
+  min-height: 2.75em;
+  line-height: 1.4;
+}
+.dashboard-page .goal-momentum-executive-body {
+  min-height: 140px;
+  align-items: center;
 }
 .dashboard-page .goal-momentum-executive-value {
   font-size: var(--text-body);
+  min-width: 10.5rem;
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  box-sizing: border-box;
+}
+@media (max-width: 1279px) {
+  .dashboard-page .goal-momentum-executive-value {
+    text-align: center;
+  }
 }
 .dashboard-page .goal-momentum-donut-wrap {
   width: 120px;
@@ -5026,7 +5606,7 @@ html { scroll-behavior: smooth; }
 .dashboard-page .budget-overview-two-col {
   gap: 20px;
 }
-@media (min-width: 768px) {
+@media (min-width: 1280px) {
   .dashboard-page .budget-overview-two-col {
     gap: 24px;
   }
@@ -5062,7 +5642,7 @@ html { scroll-behavior: smooth; }
   gap: 8px;
   line-height: normal;
 }
-@media (min-width: 768px) {
+@media (min-width: 1280px) {
   .dashboard-top-cluster .goal-momentum-executive .dash-card-header,
   .dashboard-top-cluster .expenses-trend-chart-header,
   .dashboard-top-cluster .budget-overview-header {
@@ -5133,15 +5713,402 @@ html { scroll-behavior: smooth; }
   max-height: 200px;
 }
 
+/* Dashboard compact layout (≤1024px): portrait + landscape phones/tablets; desktop unchanged (lg+) */
+@media (max-width: 1279px) {
+  .dashboard-page .page-header.dashboard-page-header,
+  .dashboard-page .page-header {
+    margin-bottom: 0;
+  }
+
+  .dashboard-page .page-header h2 {
+    margin-bottom: 0;
+  }
+
+  .dashboard-page .page-header p {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .dashboard-page .free-plan-banner {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  /* Section rhythm: parent .dashboard-page uses gap-6 only — no stacked mb */
+  .dashboard-page .dashboard-top-cluster {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  /* Summary card: tighter padding to save vertical space */
+  .dashboard-page .card.dash-card.dash-card-no-border,
+  .dashboard-page .dash-card.dash-card-no-border {
+    margin-top: 0;
+    margin-bottom: 0;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .dashboard-page .budget-overview-card {
+    margin-top: 0;
+    margin-bottom: 0;
+    padding: var(--space-3) var(--space-3) var(--space-4);
+  }
+
+  .dashboard-page .budget-overview-header {
+    margin-bottom: var(--space-2);
+    gap: var(--space-2);
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-page .budget-overview-title {
+    width: 100%;
+    text-align: left;
+    font-size: var(--text-h3);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .dashboard-page .budget-overview-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-page .budget-section-title {
+    text-align: left;
+    font-size: var(--text-h3);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .dashboard-page .budget-overview-two-col {
+    gap: var(--space-3);
+  }
+
+  .dashboard-page .budget-health-card,
+  .dashboard-page .budget-breakdown-card {
+    padding: var(--space-3);
+  }
+
+  .dashboard-page .budget-health-donut-ring {
+    width: 132px;
+    height: 132px;
+  }
+
+  .dashboard-page .budget-health-donut-ring .budget-health-donut-wrap {
+    width: 104px;
+    height: 104px;
+  }
+
+  .dashboard-page .budget-health-used-label {
+    margin: 0 0 6px;
+  }
+
+  .dashboard-page .goal-momentum-executive {
+    margin-top: 0;
+    margin-bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .dashboard-page .dashboard-col-left {
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+    min-width: 0;
+  }
+
+  .dashboard-page .dashboard-left-module {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Budget Health ↔ Top Spending (gap also tightened above) */
+
+  /* Avoid gap-6 + global .card.dash-card margin-top doubling section space */
+  .dashboard-page .card.dash-card {
+    margin-top: 0;
+  }
+
+  .dashboard-page .dash-card-header {
+    margin-bottom: var(--space-2);
+    padding-bottom: 0;
+    justify-content: space-between;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* Mobile dashboard: unified title size + left-aligned headers */
+  .dashboard-page .dash-card-title,
+  .dashboard-page .dashboard-card-title {
+    font-size: var(--text-h3);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  /* Income & Expenses: summary first; hide breakdown tables on dashboard mobile */
+  .dashboard-page .income-expense-flow--dashboard-page .flow-three-col {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-col-income,
+  .dashboard-page .income-expense-flow--dashboard-page .flow-col-expense {
+    display: none !important;
+  }
+
+  /* Three metrics in one horizontal row inside snapshot column */
+  .dashboard-page .income-expense-flow--dashboard-page .flow-col.flow-col-snapshot {
+    overflow: visible;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-col-snapshot {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 4px;
+    padding: 4px 4px 6px;
+    overflow: visible;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-snapshot-card {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: center;
+    padding: 6px 4px;
+    gap: 4px;
+    overflow: visible;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-snapshot-card > div {
+    min-width: 0;
+    width: 100%;
+    overflow: visible;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-snapshot-card svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-snapshot-label {
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    line-height: 1.2;
+    margin-bottom: 0;
+    color: var(--text-muted, #64748b);
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-snapshot-value {
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: visible;
+    max-width: none;
+    text-overflow: clip;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-header-and-filters {
+    margin-bottom: 0.375rem;
+    gap: 4px 6px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-header-and-filters .dash-card-title {
+    width: 100%;
+    text-align: left;
+    font-size: var(--text-h3);
+    font-weight: 600;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-filter-row {
+    width: 100%;
+    margin-bottom: 0;
+    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  /* One row: This Month | Last Month | Custom Range */
+  .dashboard-page .income-expense-flow--dashboard-page .flow-filter-buttons {
+    justify-content: stretch;
+    flex-wrap: nowrap;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-filter-buttons .flow-filter-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 7px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-range-label {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+    flex-basis: 100%;
+  }
+
+  .dashboard-page .income-expense-flow--dashboard-page .flow-custom-range {
+    width: 100%;
+    flex-basis: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* Budget “Top N” list: show first 3 rows only (visual; data unchanged) */
+  .dashboard-page .budget-overview-card .budget-overview-rows > .budget-category-item:nth-child(n + 4) {
+    display: none !important;
+  }
+
+  /* Top Spending: single full-width column (override dashboard 2-col grid on small screens) */
+  .dashboard-page .budget-overview-rows {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    column-gap: 0 !important;
+    row-gap: var(--space-3) !important;
+  }
+
+  .dashboard-page .budget-breakdown-card {
+    padding: var(--space-3);
+  }
+
+  .dashboard-page .budget-breakdown-card .budget-section-title {
+    margin-bottom: var(--space-3);
+  }
+
+  .dashboard-page .budget-breakdown-card .budget-category-item {
+    gap: var(--space-3);
+    width: 100%;
+    padding-bottom: var(--space-3);
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+  }
+
+  .dashboard-page .budget-breakdown-card .budget-category-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .dashboard-page .budget-breakdown-card .budget-category-name {
+    width: 100%;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .dashboard-page .budget-breakdown-card .budget-category-amount {
+    width: 100%;
+    font-weight: 600;
+    color: var(--text-primary, #0f172a);
+  }
+
+  /* Top Spending: label + amount on one row (desktop uses global .budget-category-insight-row) */
+  .dashboard-page .budget-breakdown-card .budget-category-insight-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    width: 100%;
+    min-width: 0;
+    margin-top: 2px;
+  }
+
+  .dashboard-page .budget-breakdown-card .budget-category-insight-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 500;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dashboard-page .budget-breakdown-card .budget-category-insight-value {
+    flex: 0 0 auto;
+    text-align: right;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+  }
+
+  .dashboard-page .budget-breakdown-card .budget-overview-bar {
+    width: 100%;
+    margin-top: var(--space-2);
+  }
+}
+
 .dashboard-col-budget {
   min-width: 0;
   align-self: start;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1279px) {
   .dashboard-top-row {
     grid-template-columns: 1fr;
     gap: var(--space-5);
+  }
+}
+
+/* Dashboard: Budget before Goal Momentum for ≤1024px (desktop column order unchanged ≥1025px) */
+@media (max-width: 1279px) {
+  .dashboard-page .dashboard-top-row {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  /* Global .dashboard-col-budget uses align-self:start for desktop grid — in column flex that
+     shrinks width to content; stretch so Monthly Budget matches Income & Expenses width */
+  .dashboard-page .dashboard-col-budget {
+    order: 1;
+    align-self: stretch;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-page .dashboard-col-left {
+    order: 2;
+  }
+
+  .dashboard-page .budget-overview-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .dashboard-page .budget-overview-two-col {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-page .budget-health-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 }
 
@@ -5281,9 +6248,12 @@ html { scroll-behavior: smooth; }
   font-weight: 700;
   color: var(--text-primary);
   text-align: center;
+  /* Reserve ~2 lines so copy changes (data load) do not shift layout (CLS) */
+  min-height: 2.75em;
+  line-height: 1.35;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .goal-momentum-executive-body {
     flex-direction: column;
     align-items: center;
@@ -5335,7 +6305,7 @@ html { scroll-behavior: smooth; }
   min-width: 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .goals-grid-focus {
     gap: var(--space-5);
   }
@@ -5381,7 +6351,7 @@ html { scroll-behavior: smooth; }
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .goals-grid {
     gap: var(--space-5);
   }
@@ -5719,7 +6689,7 @@ html { scroll-behavior: smooth; }
   color: var(--color-primary);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .goal-momentum-hero {
     padding: var(--space-5);
     margin-bottom: var(--space-5);
@@ -5957,6 +6927,19 @@ html { scroll-behavior: smooth; }
   margin: 0;
 }
 
+@media (max-width: 1279px) {
+  .goals-page .goals-page-cards-wrap .dash-card-header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .goals-page .goals-page-add-goal-btn,
+  .goals-page .goals-page-add-disabled {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* ================================================
    INCOME / EXPENSE FLOW
    ================================================ */
@@ -6017,6 +7000,17 @@ html { scroll-behavior: smooth; }
   font-size: 14px;
 }
 
+/* Dashboard home: approximate loaded flow height so "Loading…" → grid does not jump (CLS) */
+.income-expense-flow--dashboard-page .flow-loading {
+  min-height: 260px;
+  box-sizing: border-box;
+}
+@media (max-width: 1279px) {
+  .income-expense-flow--dashboard-page .flow-loading {
+    min-height: 480px;
+  }
+}
+
 .income-expense-flow {
   min-width: 0;
 }
@@ -6029,13 +7023,7 @@ html { scroll-behavior: smooth; }
   min-width: 0;
 }
 
-@media (max-width: 1024px) {
-  .flow-three-col {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
+@media (max-width: 1279px) {
   .flow-three-col {
     grid-template-columns: 1fr;
   }
@@ -6195,6 +7183,24 @@ html { scroll-behavior: smooth; }
   background: var(--color-blue);
   border-color: var(--color-blue);
   color: var(--text-inverse);
+}
+
+/*
+ * Dashboard mobile cleanup — placed AFTER .card-outline-link / .flow-filter-btn so overrides win.
+ * Tailwind max-md:hidden loses to unlayered .card-outline-link { display: inline-flex }.
+ */
+@media (max-width: 1279px) {
+  .dashboard-page .dash-card-header .card-outline-link,
+  .dashboard-page .budget-overview-header .budget-overview-controls .card-outline-link,
+  .dashboard-page .goal-momentum-executive .dash-card-header .card-outline-link,
+  .dashboard-page .expenses-trend-chart-header .card-outline-link {
+    display: none !important;
+  }
+
+  /* IncomeExpenseFlow on dashboard: buttons with data-mobile-dashboard-filter="keep" only */
+  .dashboard-page .income-expense-flow--dashboard-page .flow-filter-buttons > button.flow-filter-btn:not([data-mobile-dashboard-filter='keep']) {
+    display: none !important;
+  }
 }
 
 .flow-custom-range {
@@ -6737,7 +7743,7 @@ html { scroll-behavior: smooth; }
 .salary-calc-table-compact td {
   padding: 8px 12px;
 }
-@media (max-width: 1024px) {
+@media (max-width: 1279px) {
   .tools-public-content,
   .tools-public-content-salary {
     grid-template-columns: 1fr;
@@ -6770,7 +7776,7 @@ html { scroll-behavior: smooth; }
   top: 96px;
   min-width: 0;
 }
-@media (max-width: 1024px) {
+@media (max-width: 1279px) {
   .salary-tool-layout {
     grid-template-columns: 1fr;
     gap: 40px;
@@ -6943,7 +7949,7 @@ html { scroll-behavior: smooth; }
   margin-top: var(--space-3);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1279px) {
   .tools-pricing-col { position: static; }
   .tools-pricing-col-free .landing-plan-card,
   .tools-pricing-col-pro .landing-plan-card {
@@ -6960,3 +7966,4 @@ html { scroll-behavior: smooth; }
     font-size: 14px;
   }
 }
+

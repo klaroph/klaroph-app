@@ -10,14 +10,14 @@ const lockIcon = (
 )
 
 type UpgradeCTAProps = {
-  /** Optional label; default "Upgrade to Pro" */
+  /** Optional label; default "Explore KlaroPH Pro" */
   label?: string
   /** Compact style for inline/banner use */
   variant?: 'default' | 'compact'
   className?: string
 }
 
-export default function UpgradeCTA({ label = 'Upgrade to Pro', variant = 'default', className = '' }: UpgradeCTAProps) {
+export default function UpgradeCTA({ label = 'Explore KlaroPH Pro', variant = 'default', className = '' }: UpgradeCTAProps) {
   const trigger = useUpgradeTriggerOptional()
   const openModal = trigger?.openUpgradeModal
 

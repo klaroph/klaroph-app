@@ -90,7 +90,7 @@ export default function ExpensesTrendChartCard({ refreshTrigger = 0 }: { refresh
         <h2 id="expenses-trend-chart-heading" className="dashboard-card-title font-semibold m-0 text-[var(--text-primary)]">
           6-Month Expenses Trend
         </h2>
-        <Link href="/dashboard/expenses" className="card-outline-link dashboard-card-link text-xs">
+        <Link href="/dashboard/expenses" className="card-outline-link dashboard-card-link text-xs max-lg:hidden">
           Expenses Page →
         </Link>
       </div>

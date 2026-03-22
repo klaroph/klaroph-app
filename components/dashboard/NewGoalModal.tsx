@@ -131,7 +131,7 @@ export default function NewGoalModal({ isOpen, onClose, onGoalCreated, initialGo
       setLoading(false)
       if (!res.ok) {
         if (res.status === 403 && data?.upgrade_required) {
-          setError("You've reached your Free plan limit (2/2 goals). Upgrade to Pro to create up to 20 goals.")
+          setError("You've reached your Free plan limit (2/2 goals). Explore KlaroPH Pro to create up to 20 goals.")
         } else {
           setError((data?.error as string) ?? (res.status === 403 ? 'Goal limit reached.' : 'Could not create goal.'))
         }

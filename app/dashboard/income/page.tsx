@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabaseClient'
 import { INCOME_SOURCES } from '../../../lib/incomeSources'
 import IncomeAllocationModal from '../../../components/dashboard/IncomeAllocationModal'
@@ -19,6 +18,7 @@ import {
 } from '@/lib/chart-types'
 import FinancialChart, { isProChartType, type ChartTypeTrend, type ChartTypeCategory } from '@/components/charts/FinancialChart'
 import PremiumBadge from '@/components/ui/PremiumBadge'
+import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
 import UpgradeCTA from '@/components/ui/UpgradeCTA'
 import LockIcon from '@/components/ui/LockIcon'
 import { useSubscription } from '@/contexts/SubscriptionContext'
@@ -144,7 +144,6 @@ const CATEGORY_TYPE_LABELS: Record<ChartTypeCategory, string> = {
 }
 
 export default function IncomePage() {
-  const router = useRouter()
   const [modalOpen, setModalOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<IncomeRecordForEdit | null>(null)
@@ -239,7 +238,7 @@ export default function IncomePage() {
         .lte('date', range.end)
         .order('date', { ascending: false })
       if (sourceFilter) query = query.eq('income_source', sourceFilter)
-      const { data, error } = await query
+      const { data } = await query
       setRecords((data as IncomeRecord[]) || [])
       setLoading(false)
     }
@@ -320,12 +319,17 @@ export default function IncomePage() {
 
   return (
     <div className="income-page premium-page">
-      <div className="page-header page-header-with-actions">
-        <div>
-          <h2>Income</h2>
-          <p>Track your income over time. Every peso logged moves you closer to clarity.</p>
+      <div className="page-header page-header-with-actions dashboard-page-header max-lg:order-0 max-lg:items-start max-lg:gap-0 max-lg:mb-0 lg:gap-3">
+        <div className="min-w-0 flex-1 max-lg:w-full">
+          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
+            <h2 className="max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0">Income</h2>
+            <DashboardMobileHeaderLogo />
+          </div>
+          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
+            Track your income over time. Every peso logged moves you closer to clarity.
+          </p>
         </div>
-        <div className="page-header-actions">
+        <div className="page-header-actions income-expenses-page-header-actions">
           {isPro ? (
             <button
               type="button"
@@ -558,7 +562,7 @@ export default function IncomePage() {
                       flexWrap: 'wrap',
                     }}
                   >
-                    <span>Upgrade to Pro to unlock advanced chart types and deeper insights.</span>
+                    <span>Explore KlaroPH Pro to unlock advanced chart types and deeper insights.</span>
                     <UpgradeCTA variant="compact" />
                   </div>
                 )}
@@ -636,7 +640,7 @@ export default function IncomePage() {
                             flexWrap: 'wrap',
                           }}
                         >
-                          <span>Upgrade to Pro to unlock advanced chart types and deeper insights.</span>
+                          <span>Explore KlaroPH Pro to unlock advanced chart types and deeper insights.</span>
                           <UpgradeCTA variant="compact" />
                         </div>
                       )}

@@ -246,7 +246,7 @@ export default function UpgradeModal({ isOpen, onClose, message, onOpenPaymentMo
             opacity: loading ? 0.7 : 1,
           }}
         >
-          {loading ? 'Redirecting to payment...' : 'Upgrade to Pro'}
+          {loading ? 'Redirecting to payment...' : 'Explore KlaroPH Pro'}
         </button>
         <button
           type="button"

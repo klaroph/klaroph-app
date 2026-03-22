@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabaseClient'
 import { EXPENSE_CATEGORIES } from '../../../lib/expenseCategories'
 import AddExpenseModal from '../../../components/dashboard/AddExpenseModal'
@@ -22,6 +21,7 @@ import {
 } from '@/lib/chart-types'
 import FinancialChart, { isProChartType, type ChartTypeTrend, type ChartTypeCategory } from '@/components/charts/FinancialChart'
 import PremiumBadge from '@/components/ui/PremiumBadge'
+import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
 import UpgradeCTA from '@/components/ui/UpgradeCTA'
 import LockIcon from '@/components/ui/LockIcon'
 import { useSubscription } from '@/contexts/SubscriptionContext'
@@ -161,7 +161,6 @@ const CATEGORY_TYPE_LABELS: Record<ChartTypeCategory, string> = {
 }
 
 export default function ExpensesPage() {
-  const router = useRouter()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<ExpenseRecord | null>(null)
   const [rows, setRows] = useState<ExpenseRow[]>([])
@@ -273,7 +272,7 @@ export default function ExpensesPage() {
         .order('date', { ascending: false })
       if (typeFilter) query = query.eq('type', typeFilter)
       if (categoryFilter) query = query.eq('category', categoryFilter)
-      const { data, error } = await query
+      const { data } = await query
       setRows((data as ExpenseRow[]) || [])
       setLoading(false)
     }
@@ -364,12 +363,17 @@ export default function ExpensesPage() {
 
   return (
     <div className="expenses-page premium-page">
-      <div className="page-header page-header-with-actions">
-        <div>
-          <h2>Expenses</h2>
-          <p>See where your money goes. Awareness is the first step to control.</p>
+      <div className="page-header page-header-with-actions dashboard-page-header max-lg:order-0 max-lg:items-start max-lg:gap-0 max-lg:mb-0 lg:gap-3">
+        <div className="min-w-0 flex-1 max-lg:w-full">
+          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
+            <h2 className="max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0">Expenses</h2>
+            <DashboardMobileHeaderLogo />
+          </div>
+          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
+            See where your money goes. Awareness is the first step to control.
+          </p>
         </div>
-        <div className="page-header-actions">
+        <div className="page-header-actions income-expenses-page-header-actions">
           {isPro ? (
             <button
               type="button"
@@ -635,7 +639,7 @@ export default function ExpensesPage() {
                       flexWrap: 'wrap',
                     }}
                   >
-                    <span>Upgrade to Pro to unlock advanced chart types and deeper insights.</span>
+                    <span>Explore KlaroPH Pro to unlock advanced chart types and deeper insights.</span>
                     <UpgradeCTA variant="compact" />
                   </div>
                 )}
@@ -713,7 +717,7 @@ export default function ExpensesPage() {
                             flexWrap: 'wrap',
                           }}
                         >
-                          <span>Upgrade to Pro to unlock advanced chart types and deeper insights.</span>
+                          <span>Explore KlaroPH Pro to unlock advanced chart types and deeper insights.</span>
                           <UpgradeCTA variant="compact" />
                         </div>
                       )}

@@ -134,7 +134,14 @@ export default function FinancialChart({
   }
 
   if (!mounted) {
-    return null
+    /* Reserve layout so Chart.js client mount does not shift surrounding content (CLS). */
+    return (
+      <div
+        className="financial-chart-mount-placeholder"
+        style={{ width: '100%', minWidth: 0, height, minHeight: height }}
+        aria-hidden
+      />
+    )
   }
 
   const containerStyle: React.CSSProperties = {
@@ -152,7 +159,7 @@ export default function FinancialChart({
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{title}</div>
         )}
         <div style={{ filter: 'blur(4px)', pointerEvents: 'none', height: '100%', width: '100%', minWidth: 0 }}>
-          <FinancialChartInner type={type} config={gatedConfig} chartContext={chartContext} isMobile={isMobile} />
+          <FinancialChartInner config={gatedConfig} chartContext={chartContext} isMobile={isMobile} />
         </div>
         <div
           style={{
@@ -165,7 +172,7 @@ export default function FinancialChart({
           }}
         >
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-primary)' }}>
-            Upgrade to Pro to unlock this chart
+            Explore KlaroPH Pro to unlock this chart
           </span>
         </div>
       </div>
@@ -177,13 +184,12 @@ export default function FinancialChart({
       {title && (
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{title}</div>
       )}
-      <FinancialChartInner type={effectiveType} config={config} chartContext={chartContext} isMobile={isMobile} />
+      <FinancialChartInner config={config} chartContext={chartContext} isMobile={isMobile} />
     </div>
   )
 }
 
 type InnerProps = {
-  type: FinancialChartType
   config: BuiltChartConfig
   chartContext: 'trend' | 'category'
   isMobile: boolean
@@ -266,7 +272,7 @@ const categoryTooltipPlugin = {
 /** Ref type for any Chart.js instance (used for unmount destroy). */
 type ChartInstanceRef = React.RefObject<{ destroy: () => void } | null>
 
-function FinancialChartInner({ type, config, chartContext, isMobile }: InnerProps) {
+function FinancialChartInner({ config, chartContext, isMobile }: InnerProps) {
   const chartRef = useRef<{ destroy: () => void } | null>(null) as ChartInstanceRef
 
   useEffect(() => {
