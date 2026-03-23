@@ -14,6 +14,37 @@ const PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1'
  */
 export const PAYMONGO_MIN_AMOUNT_CENTAVOS = 2000
 
+/** User-facing copy when discounted total is below PayMongo minimum (tester ₱5 base vs production env typo). */
+export function paymongoBelowMinimumMessage(
+  totalCentavos: number,
+  isTesterPricing: boolean,
+  variant: 'qrph' | 'checkout_session'
+): string {
+  const minPeso = (PAYMONGO_MIN_AMOUNT_CENTAVOS / 100).toFixed(2)
+  const totalPeso = (totalCentavos / 100).toFixed(2)
+  if (isTesterPricing) {
+    const tail =
+      variant === 'qrph'
+        ? ' Remove the promo for QR, or use card/GCash checkout, or verify with a non-tester account.'
+        : ' Remove the promo, or use a non-tester account to validate production pricing.'
+    return (
+      `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}). ` +
+      `Your account uses test pricing (₱5); a large promo on that base cannot meet the gateway minimum.${tail}`
+    )
+  }
+  if (variant === 'qrph') {
+    return (
+      `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}) for QR payments. ` +
+      `If the plan price should match the app (e.g. ₱1430/year), set CLARITY_PREMIUM_ANNUAL_CENTAVOS to centavos (143000), not pesos (1430). ` +
+      `Otherwise reduce the promo or use card/GCash checkout.`
+    )
+  }
+  return (
+    `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}). ` +
+    `If the plan price should match the app, set CLARITY_PREMIUM_*_CENTAVOS in centavos (e.g. 143000 for ₱1430/year), not pesos.`
+  )
+}
+
 function getSecretKey(): string {
   const raw = process.env.PAYMONGO_SECRET_KEY
   const key = typeof raw === 'string' ? raw.trim() : ''

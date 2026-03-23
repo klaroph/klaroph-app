@@ -4,6 +4,7 @@ import {
   createCheckoutSession,
   PayMongoError,
   PAYMONGO_MIN_AMOUNT_CENTAVOS,
+  paymongoBelowMinimumMessage,
 } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -85,11 +86,13 @@ export async function POST(request: Request) {
       )
     }
     if (amount < PAYMONGO_MIN_AMOUNT_CENTAVOS) {
-      const minPeso = (PAYMONGO_MIN_AMOUNT_CENTAVOS / 100).toFixed(2)
-      const totalPeso = (amount / 100).toFixed(2)
       return NextResponse.json(
         {
-          error: `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}). If the plan price should match the app, set CLARITY_PREMIUM_*_CENTAVOS in centavos (e.g. 143000 for ₱1430/year), not pesos.`,
+          error: paymongoBelowMinimumMessage(
+            amount,
+            pricing.isTesterPricing,
+            'checkout_session'
+          ),
         },
         { status: 400 }
       )

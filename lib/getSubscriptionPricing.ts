@@ -1,5 +1,8 @@
 /**
  * Server-only: subscription pricing in centavos (PHP).
+ * Retail (verified): ₱149/mo → CLARITY_PREMIUM_MONTHLY_CENTAVOS=14900; ₱1430/yr → CLARITY_PREMIUM_ANNUAL_CENTAVOS=143000.
+ * NEXT_PUBLIC_*_PESOS stays 149 / 1430 for UI only.
+ *
  * Amounts are determined by the authenticated user's profile.user_type from the DB.
  * Never trust frontend or request body for user_type — always fetch server-side.
  */
@@ -48,6 +51,8 @@ const PRODUCTION_ANNUAL_CENTAVOS = normalizeCentavosVsPesosTypo(
 export type SubscriptionPricing = {
   monthlyCentavos: number
   annualCentavos: number
+  /** True when profile.user_type is tester (₱5 / 500 centavos); promos can push totals below PayMongo minimum. */
+  isTesterPricing: boolean
 }
 
 /**
@@ -77,6 +82,7 @@ export async function getSubscriptionPricing(
     return {
       monthlyCentavos: PRODUCTION_MONTHLY_CENTAVOS,
       annualCentavos: PRODUCTION_ANNUAL_CENTAVOS,
+      isTesterPricing: false,
     }
   }
 
@@ -91,6 +97,7 @@ export async function getSubscriptionPricing(
     return {
       monthlyCentavos: TESTER_CENTAVOS,
       annualCentavos: TESTER_CENTAVOS,
+      isTesterPricing: true,
     }
   }
 
@@ -105,5 +112,6 @@ export async function getSubscriptionPricing(
   return {
     monthlyCentavos: PRODUCTION_MONTHLY_CENTAVOS,
     annualCentavos: PRODUCTION_ANNUAL_CENTAVOS,
+    isTesterPricing: false,
   }
 }

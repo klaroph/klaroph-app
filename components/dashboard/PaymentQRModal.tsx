@@ -2,11 +2,26 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Modal from '../ui/Modal'
-import { readKlaroPromoCode } from '@/lib/klaroPromoStorage'
+import { readKlaroPromo, readKlaroPromoCode } from '@/lib/klaroPromoStorage'
 
 const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
 const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
 const POLL_INTERVAL_MS = 3500
+
+type PromoVoucher = { type: 'percentage' | 'fixed'; value: number }
+
+/** Matches UpgradeModal / server checkout (pesos; final rounded for display). */
+function computeFinalPesos(original: number, promo: PromoVoucher | null) {
+  if (!promo) return { original, final: original, showDiscount: false }
+  if (promo.type === 'percentage') {
+    const pct = Math.min(100, Math.max(0, promo.value))
+    const final = Math.round(original * (1 - pct / 100))
+    return { original, final, showDiscount: final < original }
+  }
+  const off = Math.min(original, Math.max(0, promo.value))
+  const final = Math.round(original - off)
+  return { original, final, showDiscount: final < original }
+}
 
 type PaymentQRModalProps = {
   isOpen: boolean
@@ -120,6 +135,14 @@ export default function PaymentQRModal({
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
+  const listPeso = (n: number) => `₱${Math.round(n).toLocaleString('en-PH')}`
+  const basePeso = planType === 'annual' ? ANNUAL_PESOS : MONTHLY_PESOS
+  const promoForDisplay = readKlaroPromo()?.promo ?? null
+  const { final: finalPeso, showDiscount: showPromoDiscount } = computeFinalPesos(
+    basePeso,
+    promoForDisplay
+  )
+
   const title =
     viewState === 'success'
       ? 'Payment received'
@@ -166,7 +189,25 @@ export default function PaymentQRModal({
         {viewState === 'qr' && (
           <>
             <p style={{ margin: '0 0 20px', fontSize: 22, fontWeight: 700, color: 'var(--color-primary)' }}>
-              ₱{planType === 'annual' ? ANNUAL_PESOS : MONTHLY_PESOS}{' '}
+              {showPromoDiscount ? (
+                <>
+                  <span
+                    style={{
+                      textDecoration: 'line-through',
+                      opacity: 0.55,
+                      fontWeight: 600,
+                      marginRight: 10,
+                      color: 'var(--text-secondary)',
+                    }}
+                    aria-hidden
+                  >
+                    {listPeso(basePeso)}
+                  </span>
+                  <span>{listPeso(finalPeso)}</span>
+                </>
+              ) : (
+                <span>{listPeso(basePeso)}</span>
+              )}{' '}
               <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
                 / {planType === 'annual' ? 'year' : 'month'}
               </span>
