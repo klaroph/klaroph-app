@@ -274,7 +274,7 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
               : dashboardDrawerLayer}
             <div
               className="main-wrapper"
-              aria-hidden={drawerOpen}
+              inert={drawerOpen ? true : undefined}
             >
               <GraceBanner />
               <button
