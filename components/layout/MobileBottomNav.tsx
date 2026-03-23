@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 type MobileBottomNavProps = {
   onOpenMenu: () => void
@@ -60,6 +60,13 @@ export default function MobileBottomNav({ onOpenMenu, onAddIncome, onAddExpense 
   const router = useRouter()
   const [txOpen, setTxOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  /** Dedupe touchstart + synthetic click on iOS. */
+  const menuButtonTouchConsumedRef = useRef(false)
+  /** Latest callback so touch/click handlers stay stable even if parent re-renders. */
+  const onOpenMenuRef = useRef(onOpenMenu)
+  useEffect(() => {
+    onOpenMenuRef.current = onOpenMenu
+  }, [onOpenMenu])
 
   const closeSheets = useCallback(() => {
     setTxOpen(false)
@@ -96,6 +103,23 @@ export default function MobileBottomNav({ onOpenMenu, onAddIncome, onAddExpense 
     closeSheets()
     onAddExpense()
   }
+
+  const handleMenuButtonClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    if (menuButtonTouchConsumedRef.current) {
+      menuButtonTouchConsumedRef.current = false
+      return
+    }
+    closeSheets()
+    onOpenMenuRef.current()
+  }, [closeSheets])
+
+  const handleMenuButtonTouchStart = useCallback((e: React.TouchEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    menuButtonTouchConsumedRef.current = true
+    closeSheets()
+    onOpenMenuRef.current()
+  }, [closeSheets])
 
   return (
     <>
@@ -159,10 +183,8 @@ export default function MobileBottomNav({ onOpenMenu, onAddIncome, onAddExpense 
             <button
               type="button"
               className="mobile-bottom-nav-item mobile-bottom-nav-item--menu"
-              onClick={() => {
-                closeSheets()
-                onOpenMenu()
-              }}
+              onClick={handleMenuButtonClick}
+              onTouchStart={handleMenuButtonTouchStart}
               aria-label="Open full menu"
             >
               <span className="mobile-bottom-nav-icon" aria-hidden>

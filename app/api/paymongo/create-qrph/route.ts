@@ -10,6 +10,8 @@ import {
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
+import { applyPromoToCentavos } from '@/lib/checkoutPromo'
+import { parsePromoCodeFromBody, resolveVoucherForCheckout } from '@/lib/voucherForCheckout'
 
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
 
@@ -82,8 +84,20 @@ export async function POST(request: Request) {
     }
 
     // New QRPH session: create intent + method + attach (pricing from DB profile.user_type only)
+    const promoCodeParam = parsePromoCodeFromBody(body?.promoCode)
+    const resolved = await resolveVoucherForCheckout(promoCodeParam)
+    const promo = resolved?.promo ?? null
+    const appliedPromo = resolved?.applied ?? null
+
     const pricing = await getSubscriptionPricing(user.id)
-    const amountCentavos = plan_type === 'annual' ? pricing.annualCentavos : pricing.monthlyCentavos
+    const baseCentavos = plan_type === 'annual' ? pricing.annualCentavos : pricing.monthlyCentavos
+    const amountCentavos = applyPromoToCentavos(baseCentavos, promo)
+    if (amountCentavos <= 0) {
+      return NextResponse.json(
+        { error: 'Payment amount must be greater than zero.' },
+        { status: 400 }
+      )
+    }
     const intent = await createPaymentIntent({
       amount: amountCentavos,
       currency: 'PHP',
@@ -95,6 +109,7 @@ export async function POST(request: Request) {
         user_id: String(user.id),
         plan: 'pro',
         plan_type,
+        promoCode: promoCodeParam ?? '',
       },
     })
 
@@ -118,6 +133,7 @@ export async function POST(request: Request) {
       payment_intent_id: intent.data.id,
       image_url: imageUrl,
       expires_at_epoch: expiresAtEpoch,
+      ...(appliedPromo ? { appliedPromo } : {}),
     })
   } catch (err) {
     if (err instanceof PayMongoError) {

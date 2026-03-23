@@ -16,6 +16,7 @@ import {
   PRO_PLAN_TOOLS,
   PLAN_SECTION_TOOLS_LABEL,
 } from '../../lib/planFeatures'
+import { LandingPromoCodeCapture } from './LandingPromoCodeCapture'
 
 const HowKlaroPHWorksModal = dynamic(
   () => import('../../components/onboarding/HowKlaroPHWorksModal'),
@@ -195,6 +196,7 @@ export default function LandingPageClient() {
 
   return (
     <div className="landing-page">
+      <LandingPromoCodeCapture />
       <a href="#main-content" className="landing-skip-link">Skip to main content</a>
       <nav className="landing-nav">
         <Link href="/" className="landing-nav-brand" aria-label="KlaroPH home">

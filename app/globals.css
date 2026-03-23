@@ -196,6 +196,25 @@ body {
   margin: 0;
 }
 
+/* Dashboard drawer open: lock viewport scroll without relying on body alone (see .dashboard-layout--drawer-open) */
+@media (max-width: 1279px) {
+  html.drawer-scroll-lock {
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
+  /* Contain scroll on the shell; fixed sidebar / bottom nav remain outside this subtree */
+  .dashboard-layout.dashboard-layout--drawer-open {
+    overscroll-behavior: none;
+  }
+
+  .dashboard-layout.dashboard-layout--drawer-open .main-wrapper {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -217,6 +236,34 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* After client portal mount: main reserves width; sidebar uses portal class (not DOM placement) */
+@media (min-width: 1280px) {
+  .dashboard-layout.dashboard-layout--drawer-portal-mounted .main-wrapper {
+    margin-left: var(--sidebar-width);
+  }
+
+  .sidebar.sidebar-layout-portal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    max-height: 100vh;
+    width: var(--sidebar-width);
+    align-self: stretch;
+    z-index: 50;
+    transform: none;
+    will-change: auto;
+    -webkit-backface-visibility: visible;
+    backface-visibility: visible;
+  }
+
+  .sidebar.sidebar-layout-portal.drawer-open {
+    transform: none;
+    z-index: 50;
+  }
 }
 
 /* Logo + nav + footer share one column; only this region scrolls; footer sticks to drawer bottom */
@@ -506,15 +553,19 @@ select:focus-visible {
     height: auto;
     max-height: none;
     width: var(--sidebar-width);
-    transform: translateX(-100%);
+    /* GPU layer + explicit Z for reliable paint on iOS Safari */
+    transform: translate3d(-100%, 0, 0);
+    will-change: transform;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
     transition: transform var(--motion-medium) var(--ease-enter);
     z-index: 50;
   }
 
-  /* Above mobile bottom nav (z-index 900) so profile/logout stay tappable */
+  /* Above drawer backdrop (1000) and bottom nav (950) */
   .sidebar.drawer-open {
-    transform: translateX(0);
-    z-index: 950;
+    transform: translate3d(0, 0, 0);
+    z-index: 1100;
   }
 
   .sidebar-link-text {
@@ -618,19 +669,34 @@ select:focus-visible {
   }
 }
 
-/* Drawer backdrop when open on mobile */
+/* Drawer backdrop when open on mobile (<button> for reliable taps on iOS Safari) */
 .drawer-backdrop {
   display: none;
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
   background: rgba(0, 0, 0, 0.4);
   z-index: 40;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
 }
 
 @media (max-width: 1279px) {
   .drawer-backdrop.visible {
     display: block;
-    z-index: 920;
+    /* z-[100]+ scale: above bottom nav (900) and FAB layers; below open sidebar */
+    z-index: 1000;
   }
 }
 
@@ -914,7 +980,8 @@ select:focus-visible {
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 900;
+    /* Above page content / sticky headers; below drawer overlay (1000+) */
+    z-index: 950;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: linear-gradient(
       180deg,
@@ -1013,13 +1080,21 @@ select:focus-visible {
     border: none;
     background: transparent;
     cursor: pointer;
+    -webkit-touch-callout: none;
     font-family: inherit;
     text-decoration: none;
     text-align: center;
     color: var(--text-muted, #64748b);
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
     transition: color 0.15s ease, opacity 0.15s ease;
+  }
+
+  /* Keep Menu tappable above row/FAB edge cases on narrow Safari viewports */
+  .mobile-bottom-nav-item--menu {
+    position: relative;
+    z-index: 4;
   }
 
   .mobile-bottom-nav-item:hover,
@@ -1078,7 +1153,7 @@ select:focus-visible {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 940;
+    z-index: 1150;
     border: none;
     padding: 0;
     margin: 0;
@@ -1100,7 +1175,7 @@ select:focus-visible {
     left: 12px;
     right: 12px;
     bottom: calc(var(--mobile-bottom-nav-pad-bottom) + 4px);
-    z-index: 950;
+    z-index: 1160;
     max-width: 400px;
     margin: 0 auto;
     padding: 20px 18px 18px;
@@ -2836,6 +2911,39 @@ html { scroll-behavior: smooth; }
   min-height: 100%;
   overflow-x: hidden;
   background: var(--background);
+}
+
+/* Landing: promo saved from ?code= (LandingPromoCodeCapture) */
+.promo-banner {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 9998;
+  max-width: min(420px, calc(100vw - 24px));
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  animation: promo-banner-in 0.4s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes promo-banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 /* Legal pages: Privacy & Terms */
@@ -4814,8 +4922,8 @@ html { scroll-behavior: smooth; }
 .drawer-menu-btn {
   display: none;
   position: fixed;
-  top: var(--space-3);
-  left: var(--space-3);
+  top: max(var(--space-3), env(safe-area-inset-top, 0px));
+  left: max(var(--space-3), env(safe-area-inset-left, 0px));
   z-index: 45;
   width: 44px;
   height: 44px;
@@ -4827,10 +4935,13 @@ html { scroll-behavior: smooth; }
   background: var(--surface);
   color: var(--text-primary);
   cursor: pointer;
+  -webkit-touch-callout: none;
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-md);
   transition: background-color var(--motion-fast) var(--ease-enter);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .drawer-menu-btn:hover {
@@ -4840,6 +4951,8 @@ html { scroll-behavior: smooth; }
 @media (max-width: 1279px) {
   .drawer-menu-btn {
     display: flex;
+    /* z-50+: above sticky content; below drawer backdrop when open */
+    z-index: 980;
   }
 }
 

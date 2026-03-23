@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Modal from '../ui/Modal'
+import { readKlaroPromoCode } from '@/lib/klaroPromoStorage'
 
 const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
 const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
@@ -41,7 +42,7 @@ export default function PaymentQRModal({
     async (intentId?: string) => {
       const body = intentId
         ? { payment_intent_id: intentId }
-        : { plan_type: planType }
+        : { plan_type: planType, promoCode: readKlaroPromoCode() }
       const res = await fetch('/api/paymongo/create-qrph', {
         method: 'POST',
         credentials: 'include',

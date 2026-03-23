@@ -13,6 +13,7 @@ import {
   retrievePaymentIntent,
 } from '@/lib/paymongo'
 import { sendPremiumConfirmationIfNew } from '@/lib/premiumConfirmationEmail'
+import { tryIncrementVoucherUsedCountFromMetadata } from '@/lib/voucherWebhookIncrement'
 
 type WebhookEvent = {
   data: {
@@ -272,6 +273,8 @@ async function handleCheckoutPaid(event: WebhookEvent) {
 
   console.log('[Webhook] Subscription insert/update result: success user_id=', userId, 'plan=pro plan_type=', planType, 'period_end=', periodEnd.toISOString())
 
+  await tryIncrementVoucherUsedCountFromMetadata(metadata)
+
   try {
     await sendPremiumConfirmationIfNew(event.data.id, userId, planType)
   } catch {
@@ -360,6 +363,8 @@ async function handlePaymentPaid(event: WebhookEvent) {
   }
 
   console.log('[Webhook] payment.paid subscription success user_id=', userId, 'plan=pro plan_type=', planType)
+
+  await tryIncrementVoucherUsedCountFromMetadata(metadata)
 
   try {
     await sendPremiumConfirmationIfNew(event.data.id, userId, planType)

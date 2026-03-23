@@ -127,9 +127,11 @@ const TOOLS_ITEMS: Array<{ label: string; href: string; icon: React.ReactNode }>
 type SidebarProps = {
   drawerOpen?: boolean
   onDrawerClose?: () => void
+  /** True when sidebar is rendered under document.body (portal); desktop fixed column + main margin use CSS */
+  portalLayout?: boolean
 }
 
-export default function Sidebar({ drawerOpen = false, onDrawerClose }: SidebarProps) {
+export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayout = false }: SidebarProps) {
   const pathname = usePathname()
   const [email, setEmail] = useState<string | null>(null)
   const [supportOpen, setSupportOpen] = useState(false)
@@ -161,7 +163,7 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose }: SidebarPr
 
   return (
     <aside
-      className={`sidebar${drawerOpen ? ' drawer-open' : ''}`}
+      className={`sidebar${drawerOpen ? ' drawer-open' : ''}${portalLayout ? ' sidebar-layout-portal' : ''}`}
       aria-label="Main navigation"
     >
       {/*

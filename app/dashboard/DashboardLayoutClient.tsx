@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Sidebar from '../../components/layout/Sidebar'
 import MobileBottomNav from '../../components/layout/MobileBottomNav'
 import HowKlaroPHWorksModal, { hasSeenOnboarding } from '../../components/onboarding/HowKlaroPHWorksModal'
@@ -19,6 +20,9 @@ import { useSubscription } from '@/contexts/SubscriptionContext'
 import { dispatchDashboardRefresh, dispatchDashboardTransactionsRefresh, dispatchDashboardGoalsRefresh } from '@/lib/dashboardRefresh'
 import type { ProfileWithComputed } from '@/types/profile'
 
+/** Ignore backdrop close briefly after open (iOS Safari can deliver a ghost click on the new layer). */
+const DRAWER_OPEN_GUARD_MS = 400
+
 const DashboardActionsContext = createContext<{
   openAddIncome: () => void
   openAddExpense: () => void
@@ -29,6 +33,30 @@ export function useDashboardActions() {
   return ctx ?? { openAddIncome: () => {}, openAddExpense: () => {} }
 }
 
+/** Opens upgrade modal once when `?code=` is present; does not reopen after user closes. */
+function UpgradeUrlAutoOpen() {
+  const searchParams = useSearchParams()
+  const { openUpgradeModal, isUpgradeModalOpen } = useUpgradeTrigger()
+  const { isPro } = useSubscription()
+  const hasOpenedFromUrl = useRef(false)
+
+  useEffect(() => {
+    if (hasOpenedFromUrl.current) return
+    const urlCode = searchParams.get('code')?.trim() ?? ''
+    if (!urlCode) return
+    if (isPro) {
+      hasOpenedFromUrl.current = true
+      return
+    }
+    hasOpenedFromUrl.current = true
+    if (!isUpgradeModalOpen) {
+      openUpgradeModal()
+    }
+  }, [searchParams, isUpgradeModalOpen, isPro, openUpgradeModal])
+
+  return null
+}
+
 function UpgradeModalGate() {
   const { isUpgradeModalOpen, upgradeModalMessage, closeUpgradeModal } = useUpgradeTrigger()
   const { refresh: refreshSubscription, isPro } = useSubscription()
@@ -36,6 +64,9 @@ function UpgradeModalGate() {
   const [paymentPlanType, setPaymentPlanType] = useState<'monthly' | 'annual'>('monthly')
   return (
     <>
+      <Suspense fallback={null}>
+        <UpgradeUrlAutoOpen />
+      </Suspense>
       <UpgradeModal
         isOpen={isUpgradeModalOpen}
         onClose={closeUpgradeModal}
@@ -66,6 +97,14 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
   const [fabGoalOpen, setFabGoalOpen] = useState(false)
   const [fabIncomeOpen, setFabIncomeOpen] = useState(false)
   const [fabExpenseOpen, setFabExpenseOpen] = useState(false)
+  const drawerOpenedAtRef = useRef(0)
+  /** Dedupe touchstart + synthetic click on iOS (toggle would fire twice). */
+  const drawerMenuButtonTouchConsumedRef = useRef(false)
+  /** After mount: portal sidebar+backdrop to body; enables desktop main margin without double offset while sidebar is in-flow. */
+  const [drawerPortalReady, setDrawerPortalReady] = useState(false)
+  useLayoutEffect(() => {
+    setDrawerPortalReady(true)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -126,7 +165,71 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
     setShowOnboarding(false)
   }
 
-  const closeDrawer = () => setDrawerOpen(false)
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+
+  const openDrawer = useCallback(() => {
+    drawerOpenedAtRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    setDrawerOpen(true)
+  }, [])
+
+  const runToggleDrawerFromButton = useCallback(() => {
+    setDrawerOpen((wasOpen) => {
+      if (!wasOpen) {
+        drawerOpenedAtRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      }
+      return !wasOpen
+    })
+  }, [])
+
+  const onDrawerMenuButtonClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    if (drawerMenuButtonTouchConsumedRef.current) {
+      drawerMenuButtonTouchConsumedRef.current = false
+      return
+    }
+    runToggleDrawerFromButton()
+  }, [runToggleDrawerFromButton])
+
+  const onDrawerMenuButtonTouchStart = useCallback((e: React.TouchEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    drawerMenuButtonTouchConsumedRef.current = true
+    runToggleDrawerFromButton()
+  }, [runToggleDrawerFromButton])
+
+  const handleBackdropClose = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    if (now - drawerOpenedAtRef.current < DRAWER_OPEN_GUARD_MS) {
+      e.preventDefault()
+      return
+    }
+    closeDrawer()
+  }, [closeDrawer])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    if (drawerOpen) root.classList.add('drawer-scroll-lock')
+    else root.classList.remove('drawer-scroll-lock')
+    return () => root.classList.remove('drawer-scroll-lock')
+  }, [drawerOpen])
+
+  useEffect(() => {
+    if (!drawerOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawerOpen])
+
+  /** Force layout pass on Safari after drawer opens (paint/compositing reliability). */
+  useEffect(() => {
+    if (!drawerOpen || typeof document === 'undefined') return
+    requestAnimationFrame(() => {
+      void document.body.offsetHeight
+    })
+  }, [drawerOpen])
 
   if (!onboardingChecked) {
     return (
@@ -141,16 +244,34 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
     openAddExpense: () => setFabExpenseOpen(true),
   }
 
+  const dashboardDrawerLayer = (
+    <>
+      <Sidebar
+        drawerOpen={drawerOpen}
+        onDrawerClose={closeDrawer}
+        portalLayout={drawerPortalReady}
+      />
+      <button
+        type="button"
+        className={`drawer-backdrop ${drawerOpen ? 'visible' : ''}`}
+        onClick={handleBackdropClose}
+        aria-label="Close menu"
+      />
+    </>
+  )
+
   return (
-    <div className="dashboard-layout" style={{ display: 'flex', minHeight: '100%' }}>
+    <div
+      className={`dashboard-layout${drawerOpen ? ' dashboard-layout--drawer-open' : ''}${drawerPortalReady ? ' dashboard-layout--drawer-portal-mounted' : ''}`}
+      style={{ display: 'flex', minHeight: '100%' }}
+    >
       <SubscriptionProvider>
           <UpgradeTriggerProvider>
             <DashboardProfileProvider profile={profile}>
             <DashboardActionsContext.Provider value={dashboardActions}>
-            <Sidebar
-              drawerOpen={drawerOpen}
-              onDrawerClose={closeDrawer}
-            />
+            {drawerPortalReady && typeof document !== 'undefined'
+              ? createPortal(dashboardDrawerLayer, document.body)
+              : dashboardDrawerLayer}
             <div
               className="main-wrapper"
               aria-hidden={drawerOpen}
@@ -159,7 +280,8 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
               <button
                 type="button"
                 className="drawer-menu-btn"
-                onClick={() => setDrawerOpen((open) => !open)}
+                onClick={onDrawerMenuButtonClick}
+                onTouchStart={onDrawerMenuButtonTouchStart}
                 aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={drawerOpen}
               >
@@ -167,21 +289,13 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                 </svg>
               </button>
-              <div
-                className={`drawer-backdrop ${drawerOpen ? 'visible' : ''}`}
-                onClick={closeDrawer}
-                onKeyDown={(e) => e.key === 'Escape' && closeDrawer()}
-                role="button"
-                tabIndex={-1}
-                aria-label="Close menu"
-              />
               <main className="main-content">
                 {children}
               </main>
               <Footer variant="default" className="footer-dashboard-mobile" />
             </div>
             <MobileBottomNav
-              onOpenMenu={() => setDrawerOpen(true)}
+              onOpenMenu={openDrawer}
               onAddIncome={() => setFabIncomeOpen(true)}
               onAddExpense={() => setFabExpenseOpen(true)}
             />
