@@ -18,6 +18,7 @@ import { UpgradeTriggerProvider, useUpgradeTrigger } from '@/contexts/UpgradeTri
 import { DashboardProfileProvider } from '@/contexts/DashboardProfileContext'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { dispatchDashboardRefresh, dispatchDashboardTransactionsRefresh, dispatchDashboardGoalsRefresh } from '@/lib/dashboardRefresh'
+import type { KlaroPromoVoucher } from '@/lib/klaroPromoStorage'
 import type { ProfileWithComputed } from '@/types/profile'
 
 /** Ignore backdrop close briefly after open (iOS Safari can deliver a ghost click on the new layer). */
@@ -62,6 +63,9 @@ function UpgradeModalGate() {
   const { refresh: refreshSubscription, isPro } = useSubscription()
   const [paymentQROpen, setPaymentQROpen] = useState(false)
   const [paymentPlanType, setPaymentPlanType] = useState<'monthly' | 'annual'>('monthly')
+  const [paymentPromo, setPaymentPromo] = useState<KlaroPromoVoucher | null | undefined>(
+    undefined
+  )
   return (
     <>
       <Suspense fallback={null}>
@@ -72,17 +76,22 @@ function UpgradeModalGate() {
         onClose={closeUpgradeModal}
         message={upgradeModalMessage ?? undefined}
         onUpgrade={() => {}}
-        onOpenPaymentModal={(planType) => {
+        onOpenPaymentModal={(planType, promo) => {
           setPaymentPlanType(planType ?? 'monthly')
+          setPaymentPromo(promo ?? null)
           setPaymentQROpen(true)
         }}
       />
       <PaymentQRModal
         isOpen={paymentQROpen}
-        onClose={() => setPaymentQROpen(false)}
+        onClose={() => {
+          setPaymentQROpen(false)
+          setPaymentPromo(undefined)
+        }}
         refreshSubscription={refreshSubscription}
         isPro={isPro}
         planType={paymentPlanType}
+        promoOverride={paymentPromo}
       />
     </>
   )

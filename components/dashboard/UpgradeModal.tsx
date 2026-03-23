@@ -8,18 +8,21 @@ import {
   PLAN_SECTION_TOOLS_LABEL,
   PRO_PLAN_TOOLS,
 } from '@/lib/planFeatures'
-import { clearKlaroPromo, readKlaroPromo, writeKlaroPromo } from '@/lib/klaroPromoStorage'
+import {
+  clearKlaroPromo,
+  readKlaroPromo,
+  writeKlaroPromo,
+  type KlaroPromoVoucher,
+} from '@/lib/klaroPromoStorage'
 
 const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
 const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
-
-type PromoVoucher = { type: 'percentage' | 'fixed'; value: number }
 
 function formatPeso(n: number) {
   return `₱${Math.round(n).toLocaleString('en-PH')}`
 }
 
-function computePricing(original: number, promo: PromoVoucher | null) {
+function computePricing(original: number, promo: KlaroPromoVoucher | null) {
   if (!promo) {
     return { original, final: original, discountLabel: null as string | null }
   }
@@ -40,7 +43,7 @@ type UpgradeModalProps = {
   /** Optional context message (e.g. import quota exhausted). */
   message?: string
   /** When provided, both Monthly and Annual use QRPH modal; called with selected planType. */
-  onOpenPaymentModal?: (planType: 'monthly' | 'annual') => void
+  onOpenPaymentModal?: (planType: 'monthly' | 'annual', promo: KlaroPromoVoucher | null) => void
 }
 
 /** Table rows: strongest Pro differentiators first, then shared, then tools. Same wording as landing. */
@@ -161,7 +164,7 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
   /** Normalized code after successful redeem; sent to checkout APIs (not trusted for amount). */
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null)
   const [isApplying, setIsApplying] = useState(false)
-  const [promo, setPromo] = useState<PromoVoucher | null>(null)
+  const [promo, setPromo] = useState<KlaroPromoVoucher | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [urlApplyFailed, setUrlApplyFailed] = useState(false)
   const hasAutoApplied = useRef(false)
@@ -304,7 +307,7 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
     }
 
     if (onOpenPaymentModal) {
-      onOpenPaymentModal(planType)
+      onOpenPaymentModal(planType, promo)
       onClose()
       return
     }

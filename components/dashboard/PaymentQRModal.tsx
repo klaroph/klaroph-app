@@ -2,16 +2,18 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Modal from '../ui/Modal'
-import { readKlaroPromo, readKlaroPromoCode } from '@/lib/klaroPromoStorage'
+import {
+  readKlaroPromo,
+  readKlaroPromoCode,
+  type KlaroPromoVoucher,
+} from '@/lib/klaroPromoStorage'
 
 const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
 const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
 const POLL_INTERVAL_MS = 3500
 
-type PromoVoucher = { type: 'percentage' | 'fixed'; value: number }
-
 /** Matches UpgradeModal / server checkout (pesos; final rounded for display). */
-function computeFinalPesos(original: number, promo: PromoVoucher | null) {
+function computeFinalPesos(original: number, promo: KlaroPromoVoucher | null) {
   if (!promo) return { original, final: original, showDiscount: false }
   if (promo.type === 'percentage') {
     const pct = Math.min(100, Math.max(0, promo.value))
@@ -33,6 +35,11 @@ type PaymentQRModalProps = {
   isPro: boolean
   /** Plan type for payment intent (amount + metadata). Default monthly. */
   planType?: 'monthly' | 'annual'
+  /**
+   * When set (including null), used for strikethrough/discount display — same as Upgrade at click time.
+   * When undefined, falls back to readKlaroPromo() (e.g. regenerate QR).
+   */
+  promoOverride?: KlaroPromoVoucher | null
 }
 
 type ViewState = 'loading' | 'qr' | 'expired' | 'success' | 'error'
@@ -44,6 +51,7 @@ export default function PaymentQRModal({
   refreshSubscription,
   isPro,
   planType = 'monthly',
+  promoOverride,
 }: PaymentQRModalProps) {
   const [viewState, setViewState] = useState<ViewState>('loading')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -137,7 +145,8 @@ export default function PaymentQRModal({
 
   const listPeso = (n: number) => `₱${Math.round(n).toLocaleString('en-PH')}`
   const basePeso = planType === 'annual' ? ANNUAL_PESOS : MONTHLY_PESOS
-  const promoForDisplay = readKlaroPromo()?.promo ?? null
+  const promoForDisplay =
+    promoOverride !== undefined ? promoOverride : readKlaroPromo()?.promo ?? null
   const { final: finalPeso, showDiscount: showPromoDiscount } = computeFinalPesos(
     basePeso,
     promoForDisplay

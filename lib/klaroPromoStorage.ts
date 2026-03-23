@@ -4,10 +4,12 @@
 
 export const KLARO_PROMO_KEY = 'klaroPromo'
 
+export type KlaroPromoVoucher = { type: 'percentage' | 'fixed'; value: number }
+
 export type KlaroPromoBundle = {
   promoCode: string
   /** Null when code was saved pre-login / pre-redeem; set after successful redeem. */
-  promo: { type: 'percentage' | 'fixed'; value: number } | null
+  promo: KlaroPromoVoucher | null
 }
 
 export function readKlaroPromo(): KlaroPromoBundle | null {
