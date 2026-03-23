@@ -30,6 +30,11 @@ export function applyPromoToCentavos(
     finalCentavos = Math.max(baseCentavos - discountCentavos, 0)
   }
 
+  // Whole pesos only (nearest peso in centavos). Matches UpgradeModal / PaymentQRModal and scanner-facing amounts.
+  if (finalCentavos > 0) {
+    finalCentavos = Math.round(finalCentavos / 100) * 100
+  }
+
   console.log('[CheckoutPromo]', context, {
     baseCentavos,
     basePesoApprox: (baseCentavos / 100).toFixed(2),

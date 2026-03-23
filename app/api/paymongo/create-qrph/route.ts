@@ -113,7 +113,8 @@ export async function POST(request: Request) {
           error: paymongoBelowMinimumMessage(
             amountCentavos,
             pricing.isTesterPricing,
-            'qrph'
+            'qrph',
+            { baseCentavos }
           ),
         },
         { status: 400 }

@@ -14,11 +14,15 @@ const PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1'
  */
 export const PAYMONGO_MIN_AMOUNT_CENTAVOS = 2000
 
-/** User-facing copy when discounted total is below PayMongo minimum (tester ₱5 base vs production env typo). */
+/** Pre-discount base (centavos) below this suggests CLARITY_* env may be pesos by mistake, not “promo too strong”. */
+const LIKELY_ENV_TYPO_MAX_BASE_CENTAVOS = 10_000 // ₱100.00
+
+/** User-facing copy when discounted total is below PayMongo minimum (tester ₱5 vs env typo vs strong promo). */
 export function paymongoBelowMinimumMessage(
   totalCentavos: number,
   isTesterPricing: boolean,
-  variant: 'qrph' | 'checkout_session'
+  variant: 'qrph' | 'checkout_session',
+  options?: { baseCentavos: number }
 ): string {
   const minPeso = (PAYMONGO_MIN_AMOUNT_CENTAVOS / 100).toFixed(2)
   const totalPeso = (totalCentavos / 100).toFixed(2)
@@ -32,16 +36,35 @@ export function paymongoBelowMinimumMessage(
       `Your account uses test pricing (₱5); a large promo on that base cannot meet the gateway minimum.${tail}`
     )
   }
-  if (variant === 'qrph') {
+
+  const base = options?.baseCentavos
+  const likelyEnvTypo =
+    base !== undefined &&
+    base > 0 &&
+    base < LIKELY_ENV_TYPO_MAX_BASE_CENTAVOS
+
+  if (likelyEnvTypo) {
+    if (variant === 'qrph') {
+      return (
+        `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}) for QR payments. ` +
+        `If the plan price should match the app (e.g. ₱149/month or ₱1430/year), set CLARITY_PREMIUM_MONTHLY_CENTAVOS to 14900 and CLARITY_PREMIUM_ANNUAL_CENTAVOS to 143000 (centavos), not the pesos display (149 / 1430). ` +
+        `Otherwise reduce the promo or use card/GCash checkout.`
+      )
+    }
     return (
-      `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}) for QR payments. ` +
-      `If the plan price should match the app (e.g. ₱1430/year), set CLARITY_PREMIUM_ANNUAL_CENTAVOS to centavos (143000), not pesos (1430). ` +
-      `Otherwise reduce the promo or use card/GCash checkout.`
+      `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}). ` +
+      `If the plan price should match the app, set CLARITY_PREMIUM_*_CENTAVOS in centavos (14900 for ₱149/mo, 143000 for ₱1430/yr), not pesos.`
     )
   }
+
+  const tail =
+    variant === 'qrph'
+      ? ' for QR payments'
+      : ''
   return (
-    `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}). ` +
-    `If the plan price should match the app, set CLARITY_PREMIUM_*_CENTAVOS in centavos (e.g. 143000 for ₱1430/year), not pesos.`
+    `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso})${tail}. ` +
+    `PayMongo requires at least ₱${minPeso} for this flow — your promo brings the total below that. ` +
+    `Remove or reduce the promo for QR, or use card/GCash checkout.`
   )
 }
 

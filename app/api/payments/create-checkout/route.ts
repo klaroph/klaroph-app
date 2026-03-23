@@ -91,7 +91,8 @@ export async function POST(request: Request) {
           error: paymongoBelowMinimumMessage(
             amount,
             pricing.isTesterPricing,
-            'checkout_session'
+            'checkout_session',
+            { baseCentavos }
           ),
         },
         { status: 400 }
