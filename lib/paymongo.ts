@@ -8,6 +8,12 @@
 
 const PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1'
 
+/**
+ * PayMongo PHP amounts are integer centavos (₱149 = 14900).
+ * QR PH / payment intents reject very small totals (commonly min ₱20 = 2000 centavos; some errors mention "100").
+ */
+export const PAYMONGO_MIN_AMOUNT_CENTAVOS = 2000
+
 function getSecretKey(): string {
   const raw = process.env.PAYMONGO_SECRET_KEY
   const key = typeof raw === 'string' ? raw.trim() : ''

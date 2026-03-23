@@ -6,6 +6,7 @@ import {
   attachPaymentMethodToIntent,
   retrievePaymentIntent,
   PayMongoError,
+  PAYMONGO_MIN_AMOUNT_CENTAVOS,
 } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -102,6 +103,16 @@ export async function POST(request: Request) {
     if (amountCentavos <= 0) {
       return NextResponse.json(
         { error: 'Payment amount must be greater than zero.' },
+        { status: 400 }
+      )
+    }
+    if (amountCentavos < PAYMONGO_MIN_AMOUNT_CENTAVOS) {
+      const minPeso = (PAYMONGO_MIN_AMOUNT_CENTAVOS / 100).toFixed(2)
+      const totalPeso = (amountCentavos / 100).toFixed(2)
+      return NextResponse.json(
+        {
+          error: `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}) for QR payments. If the plan price should match the app (e.g. ₱1430/year), set CLARITY_PREMIUM_ANNUAL_CENTAVOS to centavos (143000), not pesos (1430). Otherwise reduce the promo or use card/GCash checkout.`,
+        },
         { status: 400 }
       )
     }

@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
-import { createCheckoutSession, PayMongoError } from '@/lib/paymongo'
+import {
+  createCheckoutSession,
+  PayMongoError,
+  PAYMONGO_MIN_AMOUNT_CENTAVOS,
+} from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
@@ -77,6 +81,16 @@ export async function POST(request: Request) {
     if (amount <= 0) {
       return NextResponse.json(
         { error: 'Checkout amount must be greater than zero.' },
+        { status: 400 }
+      )
+    }
+    if (amount < PAYMONGO_MIN_AMOUNT_CENTAVOS) {
+      const minPeso = (PAYMONGO_MIN_AMOUNT_CENTAVOS / 100).toFixed(2)
+      const totalPeso = (amount / 100).toFixed(2)
+      return NextResponse.json(
+        {
+          error: `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}). If the plan price should match the app, set CLARITY_PREMIUM_*_CENTAVOS in centavos (e.g. 143000 for ₱1430/year), not pesos.`,
+        },
         { status: 400 }
       )
     }

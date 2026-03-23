@@ -8,12 +8,42 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const TESTER_CENTAVOS = 500 // ₱5 for internal testers
 
-const PRODUCTION_MONTHLY_CENTAVOS = Number(
-  process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS
-) || 14900
-const PRODUCTION_ANNUAL_CENTAVOS = Number(
-  process.env.CLARITY_PREMIUM_ANNUAL_CENTAVOS
-) || 143000
+/**
+ * If CLARITY_*_CENTAVOS is accidentally set to the same number as the public *pesos* display
+ * (e.g. 1430 for ₱1430/year), treat it as pesos and convert to centavos (×100).
+ * Otherwise ₱1430/year becomes 1430 centavos (₱14.30) and promos yield unusable PayMongo amounts.
+ */
+function normalizeCentavosVsPesosTypo(
+  centavos: number,
+  publicPesosHint: number
+): number {
+  if (
+    centavos > 0 &&
+    centavos === publicPesosHint &&
+    centavos < 50_000 &&
+    publicPesosHint >= 10
+  ) {
+    console.warn(
+      '[getSubscriptionPricing] CLARITY_*_CENTAVOS matches NEXT_PUBLIC_*_PESOS; multiplying by 100 (centavos).'
+    )
+    return centavos * 100
+  }
+  return centavos
+}
+
+const HINT_MONTHLY_PESOS =
+  Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
+const HINT_ANNUAL_PESOS =
+  Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
+
+const PRODUCTION_MONTHLY_CENTAVOS = normalizeCentavosVsPesosTypo(
+  Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900,
+  HINT_MONTHLY_PESOS
+)
+const PRODUCTION_ANNUAL_CENTAVOS = normalizeCentavosVsPesosTypo(
+  Number(process.env.CLARITY_PREMIUM_ANNUAL_CENTAVOS) || 143000,
+  HINT_ANNUAL_PESOS
+)
 
 export type SubscriptionPricing = {
   monthlyCentavos: number
