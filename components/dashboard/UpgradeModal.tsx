@@ -187,7 +187,7 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
       setUrlApplyFailed(false)
       setIsApplying(true)
       try {
-        const res = await fetch('/api/vouchers/redeem', {
+        const res = await fetch('/api/vouchers/validate', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
