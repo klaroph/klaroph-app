@@ -65,7 +65,14 @@ export async function POST(request: Request) {
     const pricing = await getSubscriptionPricing(user.id)
     const isAnnual = plan_type === 'annual'
     const baseCentavos = isAnnual ? pricing.annualCentavos : pricing.monthlyCentavos
-    const amount = applyPromoToCentavos(baseCentavos, promo)
+    console.log('[CheckoutPromo] payments/create-checkout route', {
+      plan_type,
+      baseCentavos,
+      baseCentavosSource: isAnnual ? 'annualCentavos' : 'monthlyCentavos',
+      monthlyCentavos: pricing.monthlyCentavos,
+      annualCentavos: pricing.annualCentavos,
+    })
+    const amount = applyPromoToCentavos(baseCentavos, promo, 'payments/create-checkout')
 
     if (amount <= 0) {
       return NextResponse.json(

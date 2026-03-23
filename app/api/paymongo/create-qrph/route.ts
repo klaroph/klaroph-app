@@ -91,7 +91,14 @@ export async function POST(request: Request) {
 
     const pricing = await getSubscriptionPricing(user.id)
     const baseCentavos = plan_type === 'annual' ? pricing.annualCentavos : pricing.monthlyCentavos
-    const amountCentavos = applyPromoToCentavos(baseCentavos, promo)
+    console.log('[CheckoutPromo] paymongo/create-qrph route', {
+      plan_type,
+      baseCentavos,
+      baseCentavosSource: plan_type === 'annual' ? 'annualCentavos' : 'monthlyCentavos',
+      monthlyCentavos: pricing.monthlyCentavos,
+      annualCentavos: pricing.annualCentavos,
+    })
+    const amountCentavos = applyPromoToCentavos(baseCentavos, promo, 'paymongo/create-qrph')
     if (amountCentavos <= 0) {
       return NextResponse.json(
         { error: 'Payment amount must be greater than zero.' },
