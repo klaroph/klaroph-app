@@ -41,7 +41,7 @@ export default function LoanCalculator() {
         </p>
       </div>
 
-      <div style={{ maxWidth: 480, margin: '0 auto 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ maxWidth: 480, margin: '0 0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
           <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Loan Type</label>
           <select

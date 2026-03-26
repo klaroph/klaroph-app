@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
 import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
@@ -249,35 +250,25 @@ export default function LandingPageClient() {
               <p className="landing-hero-pwa-helper">Fast mobile access. No download required.</p>
             </div>
             <div className="landing-hero-right">
-              <div className="landing-dashboard-mock" role="img" aria-label="Dashboard preview: monthly overview with income, expenses, and goal progress">
-                <div className="landing-mock-header">Monthly Overview – March</div>
-                <div className="landing-mock-summary-cards">
-                  <div className="landing-mock-summary-card">
-                    <span className="landing-mock-card-label">Income</span>
-                    <span className="landing-mock-card-value landing-mock-value-income">₱52,340</span>
-                  </div>
-                  <div className="landing-mock-summary-card">
-                    <span className="landing-mock-card-label">Expenses</span>
-                    <span className="landing-mock-card-value landing-mock-value-expense">₱38,200</span>
-                  </div>
-                  <div className="landing-mock-summary-card">
-                    <span className="landing-mock-card-label">Net Savings</span>
-                    <span className="landing-mock-card-value landing-mock-value-savings">₱14,140</span>
-                  </div>
-                </div>
-                <div className="landing-mock-chart">
-                  <div className="landing-mock-chart-bar" style={{ height: '45%' }} />
-                  <div className="landing-mock-chart-bar" style={{ height: '70%' }} />
-                  <div className="landing-mock-chart-bar" style={{ height: '55%' }} />
-                  <div className="landing-mock-chart-bar landing-mock-chart-bar-tall" style={{ height: '90%' }} />
-                </div>
-                <div className="landing-mock-goal">
-                  <div className="landing-mock-goal-label">Emergency Fund</div>
-                  <div className="landing-mock-progress-track">
-                    <div className="landing-mock-progress-fill" style={{ width: '65%' }} />
-                  </div>
-                  <div className="landing-mock-goal-text">₱65,000 / ₱100,000</div>
-                </div>
+              <div className="landing-hero-mock-stack">
+                <Image
+                  src="/web.png"
+                  alt="KlaroPH web dashboard showing financial overview"
+                  width={1501}
+                  height={1007}
+                  sizes="(max-width: 768px) 340px, (max-width: 900px) 580px, 760px"
+                  className="landing-hero-mock-image landing-hero-mock-web"
+                  priority
+                />
+                <Image
+                  src="/mobile.png"
+                  alt="KlaroPH mobile app showing financial tracking"
+                  width={1366}
+                  height={768}
+                  sizes="(max-width: 768px) 340px, (max-width: 900px) 174px, 798px"
+                  className="landing-hero-mock-image landing-hero-mock-mobile"
+                  priority
+                />
               </div>
             </div>
           </div>
