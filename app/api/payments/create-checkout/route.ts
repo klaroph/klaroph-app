@@ -9,7 +9,7 @@ import {
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
-import { applyPromoToCentavos } from '@/lib/checkoutPromo'
+import { resolveCheckoutAmountCentavos } from '@/lib/checkoutPromo'
 import { parsePromoCodeFromBody, resolveVoucherForCheckout } from '@/lib/voucherForCheckout'
 
 export type PlanTypeCheckout = 'monthly' | 'annual'
@@ -36,7 +36,10 @@ export async function POST(request: Request) {
         .single()
       planName = (plan as { name?: string } | null)?.name ?? null
       console.log('[Checkout Guard] planName (from plans)=', planName)
-      if (planName === 'pro' && sub.currentPeriodEnd && sub.currentPeriodEnd > new Date()) {
+      if (
+        planName === 'pro' &&
+        (sub.isLifetime || (sub.currentPeriodEnd != null && sub.currentPeriodEnd > new Date()))
+      ) {
         console.log('[Checkout Guard] decision=block')
         return NextResponse.json(
           { error: 'User already has active subscription.' },
@@ -77,7 +80,12 @@ export async function POST(request: Request) {
       monthlyCentavos: pricing.monthlyCentavos,
       annualCentavos: pricing.annualCentavos,
     })
-    const amount = applyPromoToCentavos(baseCentavos, promo, 'payments/create-checkout')
+    const amount = resolveCheckoutAmountCentavos(
+      baseCentavos,
+      promo,
+      appliedPromo?.code ?? null,
+      'payments/create-checkout'
+    )
 
     if (amount <= 0) {
       return NextResponse.json(
@@ -99,7 +107,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const planNameLabel = isAnnual ? 'Clarity Pro — Annual (Save 20%)' : 'Clarity Pro — Monthly'
+    const planNameLabel = isAnnual ? 'Clarity Pro — Annual' : 'Clarity Pro — Monthly'
     const description = isAnnual
       ? 'KlaroPH Pro: 12 months, 20 goals, unlimited history, import/export, advance charts and analytics.'
       : 'KlaroPH Pro: 20 goals, unlimited history, import/export, advance charts and analytics.'

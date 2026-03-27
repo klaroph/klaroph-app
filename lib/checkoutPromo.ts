@@ -5,9 +5,11 @@
  */
 
 export type CheckoutPromo = { type: 'percentage' | 'fixed'; value: number }
+export const FOUNDER_PROMO_CODE = 'FNDRUSER1299'
+export const FOUNDER_FINAL_CENTAVOS = 129900
 
 /**
- * @param baseCentavos - price from getSubscriptionPricing (e.g. 14900 = ₱149.00)
+ * @param baseCentavos - price from getSubscriptionPricing (e.g. 9900 = ₱99.00)
  * @param promo - from client; fixed.value is pesos off
  * @param context - label for server logs (which route called)
  */
@@ -48,7 +50,7 @@ export function applyPromoToCentavos(
 
   if (baseCentavos > 0 && baseCentavos < 100) {
     console.warn(
-      '[CheckoutPromo] baseCentavos < 100 — expected integer centavos (e.g. 14900 for ₱149). Check getSubscriptionPricing.',
+      '[CheckoutPromo] baseCentavos < 100 — expected integer centavos (e.g. 9900 for ₱99). Check getSubscriptionPricing.',
       { context, baseCentavos }
     )
   }
@@ -60,4 +62,28 @@ export function applyPromoToCentavos(
   }
 
   return finalCentavos
+}
+
+/**
+ * Single server source for checkout final amount.
+ * Founder promo is a fixed final price, not a discount-on-base.
+ */
+export function resolveCheckoutAmountCentavos(
+  baseCentavos: number,
+  promo: CheckoutPromo | null,
+  appliedPromoCode: string | null,
+  context: string
+): number {
+  const normalizedCode = (appliedPromoCode ?? '').trim().toUpperCase()
+  if (normalizedCode === FOUNDER_PROMO_CODE) {
+    console.log('[CheckoutPromo]', context, {
+      mode: 'founder_final_price',
+      appliedPromoCode: normalizedCode,
+      baseCentavos,
+      finalCentavos: FOUNDER_FINAL_CENTAVOS,
+      finalPesoApprox: (FOUNDER_FINAL_CENTAVOS / 100).toFixed(2),
+    })
+    return FOUNDER_FINAL_CENTAVOS
+  }
+  return applyPromoToCentavos(baseCentavos, promo, context)
 }

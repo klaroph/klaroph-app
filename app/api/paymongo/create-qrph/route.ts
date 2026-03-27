@@ -12,7 +12,7 @@ import {
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
-import { applyPromoToCentavos } from '@/lib/checkoutPromo'
+import { resolveCheckoutAmountCentavos } from '@/lib/checkoutPromo'
 import { parsePromoCodeFromBody, resolveVoucherForCheckout } from '@/lib/voucherForCheckout'
 
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
@@ -36,7 +36,10 @@ export async function POST(request: Request) {
         .eq('id', sub.planId)
         .single()
       const planName = (plan as { name?: string } | null)?.name ?? null
-      if (planName === 'pro' && sub.currentPeriodEnd && sub.currentPeriodEnd > new Date()) {
+      if (
+        planName === 'pro' &&
+        (sub.isLifetime || (sub.currentPeriodEnd != null && sub.currentPeriodEnd > new Date()))
+      ) {
         return NextResponse.json(
           { error: 'User already has active subscription.' },
           { status: 400 }
@@ -100,7 +103,12 @@ export async function POST(request: Request) {
       monthlyCentavos: pricing.monthlyCentavos,
       annualCentavos: pricing.annualCentavos,
     })
-    const amountCentavos = applyPromoToCentavos(baseCentavos, promo, 'paymongo/create-qrph')
+    const amountCentavos = resolveCheckoutAmountCentavos(
+      baseCentavos,
+      promo,
+      appliedPromo?.code ?? null,
+      'paymongo/create-qrph'
+    )
     if (amountCentavos <= 0) {
       return NextResponse.json(
         { error: 'Payment amount must be greater than zero.' },

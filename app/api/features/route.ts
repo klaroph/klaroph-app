@@ -12,6 +12,7 @@ function toFeaturesResponse(
   plan: Awaited<ReturnType<typeof resolveUserPlanFromSubscription>>,
   subscriptionStatus: string,
   currentPeriodEnd: string | null,
+  isLifetime: boolean,
   planLabel: string,
   userCreatedAt: string | null | undefined,
   importCount: number
@@ -32,6 +33,7 @@ function toFeaturesResponse(
     is_grace: plan.is_grace,
     can_create_goals: plan.can_create_goals,
     isPro: plan.plan_name === 'pro',
+    isLifetime,
     subscriptionStatus,
     currentPeriodEnd,
     plan: planLabel,
@@ -57,6 +59,7 @@ function freeFallback(): UserFeaturesWithSubscription {
     },
     'none',
     null,
+    false,
     'free',
     null,
     0
@@ -84,6 +87,7 @@ export async function GET() {
             ? 'expired'
             : 'none'
     const currentPeriodEnd = sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null
+    const isLifetime = sub.isLifetime === true
 
     const planLabel = plan.plan_name === 'pro' ? 'pro' : 'free'
     const userCreatedAt = (user as { created_at?: string }).created_at ?? null
@@ -98,7 +102,8 @@ export async function GET() {
     const features = toFeaturesResponse(
       plan,
       subscriptionStatus,
-      currentPeriodEnd,
+      isLifetime ? null : currentPeriodEnd,
+      isLifetime,
       planLabel,
       effectiveCreatedAt,
       importCount

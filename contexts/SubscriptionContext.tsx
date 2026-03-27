@@ -14,6 +14,7 @@ import type { UserFeaturesWithSubscription } from '@/types/features'
 type SubscriptionContextValue = {
   features: UserFeaturesWithSubscription | null
   isPro: boolean
+  isLifetime: boolean
   is_grace: boolean
   subscriptionStatus: string
   currentPeriodEnd: string | null
@@ -49,6 +50,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const value: SubscriptionContextValue = {
     features,
     isPro: features?.isPro ?? false,
+    isLifetime: features?.isLifetime ?? false,
     is_grace: features?.is_grace ?? false,
     subscriptionStatus: features?.subscriptionStatus ?? 'none',
     currentPeriodEnd: features?.currentPeriodEnd ?? null,

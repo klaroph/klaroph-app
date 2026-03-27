@@ -1,7 +1,7 @@
 /**
  * Server-only: subscription pricing in centavos (PHP).
- * Retail (verified): ₱149/mo → CLARITY_PREMIUM_MONTHLY_CENTAVOS=14900; ₱1430/yr → CLARITY_PREMIUM_ANNUAL_CENTAVOS=143000.
- * NEXT_PUBLIC_*_PESOS stays 149 / 1430 for UI only.
+ * Retail (verified): ₱99/mo → CLARITY_PREMIUM_MONTHLY_CENTAVOS=9900; ₱999/yr → CLARITY_PREMIUM_ANNUAL_CENTAVOS=99900.
+ * NEXT_PUBLIC_*_PESOS stays 99 / 999 for UI only.
  *
  * Amounts are determined by the authenticated user's profile.user_type from the DB.
  * Never trust frontend or request body for user_type — always fetch server-side.
@@ -13,8 +13,8 @@ const TESTER_CENTAVOS = 500 // ₱5 for internal testers
 
 /**
  * If CLARITY_*_CENTAVOS is accidentally set to the same number as the public *pesos* display
- * (e.g. 1430 for ₱1430/year), treat it as pesos and convert to centavos (×100).
- * Otherwise ₱1430/year becomes 1430 centavos (₱14.30) and promos yield unusable PayMongo amounts.
+ * (e.g. 999 for ₱999/year), treat it as pesos and convert to centavos (×100).
+ * Otherwise ₱999/year becomes 999 centavos (₱9.99) and promos yield unusable PayMongo amounts.
  */
 function normalizeCentavosVsPesosTypo(
   centavos: number,
@@ -35,16 +35,16 @@ function normalizeCentavosVsPesosTypo(
 }
 
 const HINT_MONTHLY_PESOS =
-  Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
+  Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 99
 const HINT_ANNUAL_PESOS =
-  Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
+  Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 999
 
 const PRODUCTION_MONTHLY_CENTAVOS = normalizeCentavosVsPesosTypo(
-  Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 14900,
+  Number(process.env.CLARITY_PREMIUM_MONTHLY_CENTAVOS) || 9900,
   HINT_MONTHLY_PESOS
 )
 const PRODUCTION_ANNUAL_CENTAVOS = normalizeCentavosVsPesosTypo(
-  Number(process.env.CLARITY_PREMIUM_ANNUAL_CENTAVOS) || 143000,
+  Number(process.env.CLARITY_PREMIUM_ANNUAL_CENTAVOS) || 99900,
   HINT_ANNUAL_PESOS
 )
 

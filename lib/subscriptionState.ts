@@ -8,6 +8,7 @@ export type NormalizedSubscription = {
   currentPeriodEnd: Date | null
   graceUntil: Date | null
   autoRenew: boolean
+  isLifetime: boolean
 }
 
 const NONE_SUBSCRIPTION: NormalizedSubscription = {
@@ -16,6 +17,7 @@ const NONE_SUBSCRIPTION: NormalizedSubscription = {
   currentPeriodEnd: null,
   graceUntil: null,
   autoRenew: false,
+  isLifetime: false,
 }
 
 export async function resolveSubscriptionState(userId: string): Promise<NormalizedSubscription> {
@@ -26,7 +28,7 @@ export async function resolveSubscriptionState(userId: string): Promise<Normaliz
 
     const { data, error } = await supabaseAdmin
       .from('subscriptions')
-      .select('status, plan_id, current_period_end, grace_period_until, auto_renew')
+      .select('status, plan_id, current_period_end, grace_period_until, auto_renew, is_lifetime')
       .eq('user_id', userId)
       .order('current_period_end', { ascending: false })
       .limit(1)
@@ -46,11 +48,14 @@ export async function resolveSubscriptionState(userId: string): Promise<Normaliz
       (data as { grace_period_until?: string | null }).grace_period_until
     const graceUntil =
       rawGracePeriodUntil != null ? new Date(rawGracePeriodUntil) : null
+    const isLifetime = Boolean((data as { is_lifetime?: boolean | null }).is_lifetime)
 
     let state: SubscriptionState = 'NONE'
 
     if (!status) {
       state = 'NONE'
+    } else if (status === 'active' && isLifetime) {
+      state = 'ACTIVE'
     } else if (status === 'active' && currentPeriodEnd && currentPeriodEnd > now) {
       state = 'ACTIVE'
     } else if (status === 'past_due' && graceUntil && now < graceUntil) {
@@ -73,6 +78,7 @@ export async function resolveSubscriptionState(userId: string): Promise<Normaliz
       currentPeriodEnd,
       graceUntil,
       autoRenew: Boolean((data as { auto_renew?: boolean | null }).auto_renew),
+      isLifetime,
     }
   } catch {
     return NONE_SUBSCRIPTION

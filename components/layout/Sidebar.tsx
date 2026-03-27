@@ -136,7 +136,7 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
   const [email, setEmail] = useState<string | null>(null)
   const [supportOpen, setSupportOpen] = useState(false)
   const profile = useDashboardProfile()
-  const { isPro, currentPeriodEnd } = useSubscription()
+  const { isPro, isLifetime, currentPeriodEnd } = useSubscription()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -232,7 +232,11 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
                     <span className="sidebar-plan-badge">PRO</span>
                     <div className="sidebar-plan-status">
                       <strong>Pro Plan – Active</strong>
-                      {renewDate && <span>Renews on {renewDate}</span>}
+                      {isLifetime ? (
+                        <span>Lifetime Access</span>
+                      ) : (
+                        renewDate && <span>Renews on {renewDate}</span>
+                      )}
                     </div>
                   </div>
                 )}

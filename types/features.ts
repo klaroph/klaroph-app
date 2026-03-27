@@ -18,6 +18,7 @@ export interface UserFeatures {
 /** Extended features + subscription state (one source for premium UI). */
 export interface UserFeaturesWithSubscription extends UserFeatures {
   isPro: boolean
+  isLifetime: boolean
   subscriptionStatus: string
   currentPeriodEnd: string | null
   plan: string

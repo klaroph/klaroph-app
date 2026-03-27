@@ -14,6 +14,7 @@ import {
 } from '@/lib/paymongo'
 import { sendPremiumConfirmationIfNew } from '@/lib/premiumConfirmationEmail'
 import { tryIncrementVoucherUsedCountFromMetadata } from '@/lib/voucherWebhookIncrement'
+import { FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
 
 type WebhookEvent = {
   data: {
@@ -225,6 +226,8 @@ async function handleCheckoutPaid(event: WebhookEvent) {
   }
 
   const planType = (metadata.plan_type === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual'
+  const promoCode = String(metadata.promoCode ?? metadata.promo_code ?? '').trim().toUpperCase()
+  const isFounderLifetime = promoCode === FOUNDER_PROMO_CODE
   console.log('[Webhook] Subscription insert attempt user_id=', userId, 'plan_type=', planType)
 
   // Assign single premium plan (pro) only.
@@ -261,7 +264,8 @@ async function handleCheckoutPaid(event: WebhookEvent) {
         current_period_end: periodEnd.toISOString(),
         grace_period_until: null,
         grace_period_used: false,
-        auto_renew: true,
+        auto_renew: !isFounderLifetime,
+        is_lifetime: isFounderLifetime,
       },
       { onConflict: 'user_id' }
     )
@@ -317,6 +321,8 @@ async function handlePaymentPaid(event: WebhookEvent) {
   }
 
   const planType = (metadata.plan_type === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual'
+  const promoCode = String(metadata.promoCode ?? metadata.promo_code ?? '').trim().toUpperCase()
+  const isFounderLifetime = promoCode === FOUNDER_PROMO_CODE
   console.log('[Webhook] payment.paid (QRPH) subscription insert user_id=', userId, 'plan_type=', planType)
 
   const { data: premiumPlan } = await supabaseAdmin
@@ -352,7 +358,8 @@ async function handlePaymentPaid(event: WebhookEvent) {
         current_period_end: periodEnd.toISOString(),
         grace_period_until: null,
         grace_period_used: false,
-        auto_renew: true,
+        auto_renew: !isFounderLifetime,
+        is_lifetime: isFounderLifetime,
       },
       { onConflict: 'user_id' }
     )

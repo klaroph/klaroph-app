@@ -7,22 +7,36 @@ import {
   readKlaroPromoCode,
   type KlaroPromoVoucher,
 } from '@/lib/klaroPromoStorage'
+import { FOUNDER_FINAL_CENTAVOS, FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
 
-const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
-const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
+const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 99
+const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 999
 const POLL_INTERVAL_MS = 3500
 
 /** Matches UpgradeModal / server checkout (pesos; final rounded for display). */
-function computeFinalPesos(original: number, promo: KlaroPromoVoucher | null) {
-  if (!promo) return { original, final: original, showDiscount: false }
+function computeFinalPesos(
+  original: number,
+  promo: KlaroPromoVoucher | null,
+  promoCode: string | null
+) {
+  const normalizedCode = (promoCode ?? '').trim().toUpperCase()
+  if (normalizedCode === FOUNDER_PROMO_CODE) {
+    return {
+      original,
+      final: Math.round(FOUNDER_FINAL_CENTAVOS / 100),
+      showDiscount: false,
+      isFounderLifetime: true,
+    }
+  }
+  if (!promo) return { original, final: original, showDiscount: false, isFounderLifetime: false }
   if (promo.type === 'percentage') {
     const pct = Math.min(100, Math.max(0, promo.value))
     const final = Math.round(original * (1 - pct / 100))
-    return { original, final, showDiscount: final < original }
+    return { original, final, showDiscount: final < original, isFounderLifetime: false }
   }
   const off = Math.min(original, Math.max(0, promo.value))
   const final = Math.round(original - off)
-  return { original, final, showDiscount: final < original }
+  return { original, final, showDiscount: final < original, isFounderLifetime: false }
 }
 
 type PaymentQRModalProps = {
@@ -147,9 +161,11 @@ export default function PaymentQRModal({
   const basePeso = planType === 'annual' ? ANNUAL_PESOS : MONTHLY_PESOS
   const promoForDisplay =
     promoOverride !== undefined ? promoOverride : readKlaroPromo()?.promo ?? null
-  const { final: finalPeso, showDiscount: showPromoDiscount } = computeFinalPesos(
+  const promoCodeForDisplay = readKlaroPromoCode()
+  const { final: finalPeso, showDiscount: showPromoDiscount, isFounderLifetime } = computeFinalPesos(
     basePeso,
-    promoForDisplay
+    promoForDisplay,
+    promoCodeForDisplay
   )
 
   const title =
@@ -198,7 +214,9 @@ export default function PaymentQRModal({
         {viewState === 'qr' && (
           <>
             <p style={{ margin: '0 0 20px', fontSize: 22, fontWeight: 700, color: 'var(--color-primary)' }}>
-              {showPromoDiscount ? (
+              {isFounderLifetime ? (
+                <span>PHP {Math.round(finalPeso).toLocaleString('en-PH')} Lifetime Access</span>
+              ) : showPromoDiscount ? (
                 <>
                   <span
                     style={{
@@ -217,9 +235,11 @@ export default function PaymentQRModal({
               ) : (
                 <span>{listPeso(basePeso)}</span>
               )}{' '}
-              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                / {planType === 'annual' ? 'year' : 'month'}
-              </span>
+              {!isFounderLifetime && (
+                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                  / {planType === 'annual' ? 'year' : 'month'}
+                </span>
+              )}
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               {imageUrl && (

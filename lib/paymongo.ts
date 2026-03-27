@@ -9,7 +9,7 @@
 const PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1'
 
 /**
- * PayMongo PHP amounts are integer centavos (₱149 = 14900).
+ * PayMongo PHP amounts are integer centavos (₱99 = 9900).
  * QR PH / payment intents reject very small totals (commonly min ₱20 = 2000 centavos; some errors mention "100").
  */
 export const PAYMONGO_MIN_AMOUNT_CENTAVOS = 2000
@@ -47,13 +47,13 @@ export function paymongoBelowMinimumMessage(
     if (variant === 'qrph') {
       return (
         `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}) for QR payments. ` +
-        `If the plan price should match the app (e.g. ₱149/month or ₱1430/year), set CLARITY_PREMIUM_MONTHLY_CENTAVOS to 14900 and CLARITY_PREMIUM_ANNUAL_CENTAVOS to 143000 (centavos), not the pesos display (149 / 1430). ` +
+        `If the plan price should match the app (e.g. ₱99/month or ₱999/year), set CLARITY_PREMIUM_MONTHLY_CENTAVOS to 9900 and CLARITY_PREMIUM_ANNUAL_CENTAVOS to 99900 (centavos), not the pesos display (99 / 999). ` +
         `Otherwise reduce the promo or use card/GCash checkout.`
       )
     }
     return (
       `The discounted total (₱${totalPeso}) is below PayMongo's minimum (₱${minPeso}). ` +
-      `If the plan price should match the app, set CLARITY_PREMIUM_*_CENTAVOS in centavos (14900 for ₱149/mo, 143000 for ₱1430/yr), not pesos.`
+      `If the plan price should match the app, set CLARITY_PREMIUM_*_CENTAVOS in centavos (9900 for ₱99/mo, 99900 for ₱999/yr), not pesos.`
     )
   }
 
@@ -132,7 +132,7 @@ export class PayMongoError extends Error {
 // ---------------------------------------------------------------------------
 
 export type CheckoutLineItem = {
-  amount: number   // in centavos (₱149 = 14900)
+  amount: number   // in centavos (₱99 = 9900)
   currency: 'PHP'
   name: string
   quantity: number

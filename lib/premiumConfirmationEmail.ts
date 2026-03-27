@@ -74,6 +74,7 @@ function buildPremiumConfirmationHtml(
               ${validityLine}
               <p style="margin:0 0 20px;">Thank you for supporting KlaroPH.</p>
               <p style="margin:0; font-size: 14px; color: #6b7280; line-height: 1.5;">— KlaroPH<br />Clearer money habits start here.<br />klaroph.com</p>
+              <p style="margin:14px 0 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">Fair use note: KlaroPH Pro is intended for personal, legitimate use. We apply safeguards against abuse and fraudulent activity to protect users and platform reliability.</p>
             </td>
           </tr>
         </table>

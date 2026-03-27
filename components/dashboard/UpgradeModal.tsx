@@ -14,26 +14,56 @@ import {
   writeKlaroPromo,
   type KlaroPromoVoucher,
 } from '@/lib/klaroPromoStorage'
+import { FOUNDER_FINAL_CENTAVOS, FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
 
-const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 149
-const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 1430
+const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 99
+const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 999
 
 function formatPeso(n: number) {
   return `₱${Math.round(n).toLocaleString('en-PH')}`
 }
 
-function computePricing(original: number, promo: KlaroPromoVoucher | null) {
+function formatExpiryDate(planType: 'monthly' | 'annual') {
+  const d = new Date()
+  if (planType === 'annual') {
+    d.setFullYear(d.getFullYear() + 1)
+  } else {
+    d.setMonth(d.getMonth() + 1)
+  }
+  return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+function computePricing(
+  original: number,
+  promo: KlaroPromoVoucher | null,
+  promoCode: string | null
+) {
+  const normalizedCode = (promoCode ?? '').trim().toUpperCase()
+  if (normalizedCode === FOUNDER_PROMO_CODE) {
+    const final = Math.round(FOUNDER_FINAL_CENTAVOS / 100)
+    return {
+      original,
+      final,
+      discountLabel: null as string | null,
+      specialLabel: 'Founder price',
+    }
+  }
   if (!promo) {
-    return { original, final: original, discountLabel: null as string | null }
+    return {
+      original,
+      final: original,
+      discountLabel: null as string | null,
+      specialLabel: null as string | null,
+    }
   }
   if (promo.type === 'percentage') {
     const pct = Math.min(100, Math.max(0, promo.value))
     const final = original * (1 - pct / 100)
-    return { original, final, discountLabel: `-${pct}%` }
+    return { original, final, discountLabel: `-${pct}%`, specialLabel: null as string | null }
   }
   const off = Math.min(original, Math.max(0, promo.value))
   const final = original - off
-  return { original, final, discountLabel: `-${formatPeso(off)}` }
+  return { original, final, discountLabel: `-${formatPeso(off)}`, specialLabel: null as string | null }
 }
 
 type UpgradeModalProps = {
@@ -293,7 +323,15 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
   }, [isOpen, searchParams, applyPromoWithCode])
 
   const originalPrice = planType === 'monthly' ? MONTHLY_PESOS : ANNUAL_PESOS
-  const { final: finalPrice, discountLabel } = computePricing(originalPrice, promo)
+  const { final: finalPrice, discountLabel, specialLabel } = computePricing(
+    originalPrice,
+    promo,
+    appliedPromoCode
+  )
+  const isFounderLifetime = appliedPromoCode?.toUpperCase() === FOUNDER_PROMO_CODE
+  const expiryText = isFounderLifetime
+    ? 'No expiry (Lifetime Access)'
+    : formatExpiryDate(planType)
 
   const handleApplyPromo = () => {
     void applyPromoWithCode(promoInput, { fromUrl: false })
@@ -399,9 +437,12 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
           <input type="radio" name="plan" checked={planType === 'annual'} onChange={() => setPlanType('annual')} style={{ marginRight: 8 }} />
           <strong>Annual</strong>
           <div style={{ fontSize: 14, marginTop: 4 }}>₱{ANNUAL_PESOS} / year</div>
-          <div style={{ fontSize: 12, color: 'var(--color-primary)', fontWeight: 600, marginTop: 2 }}>Save 20%</div>
+          <div style={{ fontSize: 12, color: 'var(--color-primary)', fontWeight: 600, marginTop: 2 }}>Best annual price</div>
         </label>
       </div>
+      <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-secondary)' }}>
+        Expiry: <strong style={{ color: 'var(--text-primary)' }}>{expiryText}</strong>
+      </p>
 
       <div style={{ marginBottom: 20 }}>
         <p style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -447,7 +488,9 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
         </div>
         {promo && (
           <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--color-primary)', fontWeight: 600 }}>
-            {promo.type === 'percentage'
+            {appliedPromoCode?.toUpperCase() === FOUNDER_PROMO_CODE
+              ? `🎉 Founder promo applied! Final price is ${formatPeso(FOUNDER_FINAL_CENTAVOS / 100)}`
+              : promo.type === 'percentage'
               ? `🎉 Promo applied! You got ${promo.value}% off`
               : `🎉 Promo applied! You got ${formatPeso(promo.value)} off`}
           </p>
@@ -474,14 +517,24 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
             lineHeight: 1.6,
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Original Price:</span>
-            <span style={{ fontWeight: 600 }}>{formatPeso(originalPrice)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 4 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Discount:</span>
-            <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{discountLabel}</span>
-          </div>
+          {!isFounderLifetime && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Original Price:</span>
+              <span style={{ fontWeight: 600 }}>{formatPeso(originalPrice)}</span>
+            </div>
+          )}
+          {discountLabel && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 4 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Discount:</span>
+              <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{discountLabel}</span>
+            </div>
+          )}
+          {specialLabel && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 4 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Offer:</span>
+              <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{specialLabel}</span>
+            </div>
+          )}
           <div
             style={{
               display: 'flex',
