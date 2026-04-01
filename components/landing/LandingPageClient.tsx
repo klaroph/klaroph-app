@@ -18,6 +18,7 @@ import {
   PLAN_SECTION_TOOLS_LABEL,
 } from '../../lib/planFeatures'
 import { LandingPromoCodeCapture } from './LandingPromoCodeCapture'
+import PasswordInput from '@/components/auth/PasswordInput'
 
 const HowKlaroPHWorksModal = dynamic(
   () => import('../../components/onboarding/HowKlaroPHWorksModal'),
@@ -450,14 +451,12 @@ export default function LandingPageClient() {
                     Forgot password?
                   </button>
                 </div>
-                <input
+                <PasswordInput
                   id="login-password"
-                  type="password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="login-input"
                   autoComplete="current-password"
                 />
               </div>

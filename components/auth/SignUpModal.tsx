@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { supabasePublic } from '@/lib/supabasePublicClient'
+import PasswordInput from '@/components/auth/PasswordInput'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -180,14 +181,12 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
         </div>
         <div className="signup-field">
           <label htmlFor="signup-password">Password</label>
-          <input
+          <PasswordInput
             id="signup-password"
-            type="password"
             value={password}
             onChange={(e) => { setPassword(e.target.value); setPasswordError(null); setSubmitError(null) }}
             onBlur={validatePassword}
             placeholder="••••••••"
-            className="login-input"
             autoComplete="new-password"
             aria-invalid={!!passwordError}
             aria-describedby={passwordError ? 'signup-password-err' : undefined}
@@ -198,14 +197,12 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
         </div>
         <div className="signup-field">
           <label htmlFor="signup-confirm">Confirm Password</label>
-          <input
+          <PasswordInput
             id="signup-confirm"
-            type="password"
             value={confirmPassword}
             onChange={(e) => { setConfirmPassword(e.target.value); setConfirmError(null); setSubmitError(null) }}
             onBlur={validateConfirm}
             placeholder="••••••••"
-            className="login-input"
             autoComplete="new-password"
             aria-invalid={!!confirmError}
             aria-describedby={confirmError ? 'signup-confirm-err' : undefined}

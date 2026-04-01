@@ -5,8 +5,8 @@
  */
 
 import { Resend } from 'resend'
+import { getResendFrom } from '@/lib/resendFrom'
 
-const FROM = 'KlaroPH <hello@klaroph.com>'
 const SUBJECT = 'Welcome to KlaroPH — your money, made clearer'
 
 function escapeHtml(s: string): string {
@@ -76,7 +76,7 @@ export async function sendWelcomeEmail(
   try {
     const resend = new Resend(apiKey)
     const { data, error } = await resend.emails.send({
-      from: FROM,
+      from: getResendFrom(),
       to: [to],
       subject: SUBJECT,
       html,

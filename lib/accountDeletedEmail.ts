@@ -4,8 +4,8 @@
  */
 
 import { Resend } from 'resend'
+import { getResendFrom } from '@/lib/resendFrom'
 
-const FROM = 'KlaroPH <hello@klaroph.com>'
 const SUBJECT = 'Your KlaroPH account has been deleted'
 
 function buildAccountDeletedHtml(logoUrl: string, baseUrl: string): string {
@@ -63,7 +63,7 @@ export async function sendAccountDeletedEmail(to: string): Promise<boolean> {
   try {
     const resend = new Resend(apiKey)
     const { data, error } = await resend.emails.send({
-      from: FROM,
+      from: getResendFrom(),
       to: [to],
       subject: SUBJECT,
       html,

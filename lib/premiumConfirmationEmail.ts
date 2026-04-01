@@ -6,8 +6,8 @@
 
 import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getResendFrom } from '@/lib/resendFrom'
 
-const FROM = 'KlaroPH <hello@klaroph.com>'
 const SUBJECT = 'Your KlaroPH Pro is now active'
 
 function escapeHtml(s: string): string {
@@ -104,7 +104,7 @@ async function sendPremiumConfirmationEmail(
   try {
     const resend = new Resend(apiKey)
     const { data, error } = await resend.emails.send({
-      from: FROM,
+      from: getResendFrom(),
       to: [to],
       subject: SUBJECT,
       html,
