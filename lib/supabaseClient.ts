@@ -1,5 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
-import { parse, serialize, type SerializeOptions } from 'cookie'
+import { parse, serialize, type CookieSerializeOptions } from 'cookie'
 import { authSessionIsPersistent } from '@/lib/authSessionScope'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -21,20 +21,20 @@ function browserCookiesGetAll(): { name: string; value: string }[] {
   return Object.keys(parsed).map((name) => ({ name, value: parsed[name] ?? '' }))
 }
 
-function mergeCookieOptions(options: SerializeOptions | undefined): SerializeOptions {
+function mergeCookieOptions(options: CookieSerializeOptions | undefined): CookieSerializeOptions {
   return { path: '/', sameSite: 'lax', ...options }
 }
 
 function finalizeCookieOptions(
-  merged: SerializeOptions,
+  merged: CookieSerializeOptions,
   persistent: boolean,
   clearing: boolean
-): SerializeOptions {
+): CookieSerializeOptions {
   if (clearing) {
     return { ...merged, maxAge: 0 }
   }
   if (!persistent) {
-    const next: SerializeOptions = { ...merged }
+    const next: CookieSerializeOptions = { ...merged }
     delete next.maxAge
     delete next.expires
     return next
@@ -43,7 +43,7 @@ function finalizeCookieOptions(
 }
 
 function browserCookiesSetAll(
-  cookiesToSet: { name: string; value: string; options: SerializeOptions }[]
+  cookiesToSet: { name: string; value: string; options: CookieSerializeOptions }[]
 ): void {
   if (typeof document === 'undefined') return
   const persistent = authSessionIsPersistent()
