@@ -3646,6 +3646,10 @@ html { scroll-behavior: smooth; }
 }
 .login-terms-link:hover { color: var(--color-primary-hover); }
 
+.login-remember-label {
+  margin-top: 4px;
+}
+
 /* Google consent modal – fullscreen backdrop + centered card */
 .consent-backdrop {
   position: fixed;

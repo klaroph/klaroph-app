@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
+import { signOutWithFullCleanup } from '@/lib/supabaseAuthSignOut'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { useDashboardProfile } from '@/contexts/DashboardProfileContext'
 import KlaroPHHandLogo from '../ui/KlaroPHHandLogo'
@@ -248,7 +249,7 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
                   type="button"
                   className="sidebar-logout"
                   onClick={async () => {
-                    await supabase.auth.signOut()
+                    await signOutWithFullCleanup()
                     window.location.href = '/login'
                   }}
                   aria-label="Log out"

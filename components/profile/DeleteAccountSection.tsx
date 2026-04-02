@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { signOutWithFullCleanup } from '@/lib/supabaseAuthSignOut'
 import Modal from '@/components/ui/Modal'
 
 const WARNING =
@@ -57,7 +58,7 @@ export default function DeleteAccountSection() {
         setLoading(false)
         return
       }
-      await supabase.auth.signOut()
+      await signOutWithFullCleanup()
       router.replace('/')
       return
     } catch {

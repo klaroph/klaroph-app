@@ -7,6 +7,11 @@ import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabaseClient'
+import {
+  persistRememberMePreference,
+  readRememberMePreference,
+  setAuthSessionScopeForLogin,
+} from '@/lib/authSessionScope'
 import KlaroPHHandLogo from '../../components/ui/KlaroPHHandLogo'
 import Footer from '../../components/Footer'
 import PlanFeaturePremiumIcon from '../../components/ui/PlanFeaturePremiumIcon'
@@ -104,6 +109,7 @@ export default function LandingPageClient() {
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
   const [hasInstallPrompt, setHasInstallPrompt] = useState(false)
   const [showPwaInNav, setShowPwaInNav] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const deferredPromptRef = useRef<(Event & { prompt: () => Promise<{ outcome: string }> }) | null>(null)
 
   // Capture beforeinstallprompt globally on mount so it's ready before any modal interaction
@@ -130,6 +136,11 @@ export default function LandingPageClient() {
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
   }, [hasInstallPrompt])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setRememberMe(readRememberMePreference())
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -168,6 +179,8 @@ export default function LandingPageClient() {
     setError(null)
     setSuccess(null)
     setLoading(true)
+    persistRememberMePreference(rememberMe)
+    setAuthSessionScopeForLogin(rememberMe)
     const { error: err } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (err) { setError(err.message); return }
@@ -179,6 +192,7 @@ export default function LandingPageClient() {
     if (!baseUrl) {
       throw new Error('NEXT_PUBLIC_APP_URL is required for OAuth redirect safety.')
     }
+    setAuthSessionScopeForLogin(true)
     supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${baseUrl}/auth/callback` },
@@ -459,6 +473,16 @@ export default function LandingPageClient() {
                   required
                   autoComplete="current-password"
                 />
+                <label className="login-terms-label login-remember-label" htmlFor="login-remember-me">
+                  <input
+                    id="login-remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="login-terms-checkbox"
+                  />
+                  <span>Remember me on this device</span>
+                </label>
               </div>
               {error && (
                 <p role="alert" style={{ margin: 0, fontSize: 14, color: 'var(--color-error)', padding: 12, borderRadius: 'var(--radius-sm)', background: 'var(--color-error-bg)' }}>
