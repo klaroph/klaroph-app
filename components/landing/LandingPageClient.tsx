@@ -44,8 +44,9 @@ const ForgotPasswordModal = dynamic(
   { ssr: false }
 )
 
-const HERO_HEADLINE = 'Take Control of Your Money with Financial Clarity.'
-const HERO_SUBHEADLINE = 'Track expenses, manage budgets, and reach financial goals in one simple dashboard.'
+const HERO_EYEBROW = 'Financial clarity for Filipinos'
+const HERO_SUBHEADLINE =
+  'Track expenses, plan ahead, and see the full picture—in one calm dashboard built around how Filipinos earn and spend.'
 const EMOTIONAL_TAGLINE = 'Finally understand where your money goes.'
 
 const FEATURES = [
@@ -252,7 +253,11 @@ export default function LandingPageClient() {
         <section className="landing-hero landing-hero-saas">
           <div className="landing-hero-inner">
             <div className="landing-hero-left">
-              <h1 className="landing-hero-headline">{HERO_HEADLINE}</h1>
+              <p className="landing-hero-eyebrow">{HERO_EYEBROW}</p>
+              <h1 className="landing-hero-headline" id="landing-hero-heading">
+                <span className="landing-hero-headline-line1">Clarity for your</span>
+                <span className="landing-hero-headline-line2">budget.</span>
+              </h1>
               <p className="landing-hero-subheadline">{HERO_SUBHEADLINE}</p>
               <div className="landing-hero-ctas">
                 <button type="button" className="landing-cta-btn landing-cta-primary" onClick={scrollToGetStarted}>
