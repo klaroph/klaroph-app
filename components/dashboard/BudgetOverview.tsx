@@ -8,6 +8,10 @@ import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
 import { toLocalDateString } from '@/lib/format'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 import LockIcon from '@/components/ui/LockIcon'
+import {
+  budgetHealthLabel,
+  resolveBudgetHealth,
+} from '@/lib/monthMoneySummary'
 
 type EffectiveItem = { category: string; amount: number; note?: string | null }
 
@@ -39,16 +43,6 @@ function formatPeso(n: number) {
 function getCurrentMonthFirst(): string {
   const d = new Date()
   return toLocalDateString(new Date(d.getFullYear(), d.getMonth(), 1))
-}
-
-function getCurrentMonthRange() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), 1)
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return {
-    start: toLocalDateString(start),
-    end: toLocalDateString(end),
-  }
 }
 
 function getMonthRange(monthFirst: string): { start: string; end: string } {
@@ -381,13 +375,25 @@ export default function BudgetOverview({
     : summary.totalBudget > 0
       ? Math.round((summary.totalSpent / summary.totalBudget) * 100)
       : 0
+  const healthStatus = showBudgetPlaceholderBody
+    ? 'no_plan' as const
+    : resolveBudgetHealth({
+        planned: summary.totalBudget,
+        spent: summary.totalSpent,
+        monthProgress: getMonthProgress(selectedMonth),
+      })
+  /** Plain status (On Track / Watch / Over / No Plan); donut still shows % used. */
   const healthLabel = showBudgetPlaceholderBody
-    ? 'No Budget Set'
+    ? 'No Plan'
     : summary.totalBudget > 0
-      ? `${usedPctLabel}% Used`
+      ? budgetHealthLabel(healthStatus)
       : summary.totalSpent > 0
         ? 'Unplanned Spending'
-        : 'No Budget Set'
+        : 'No Plan'
+  const healthSubLabel =
+    !showBudgetPlaceholderBody && summary.totalBudget > 0
+      ? `${usedPctLabel}% used`
+      : null
   const displayBudgets = showBudgetPlaceholderBody
     ? []
     : maxCategories != null
@@ -482,7 +488,7 @@ export default function BudgetOverview({
                   </div>
                 </div>
               </div>
-              <p className="budget-health-used-label">No Budget Set</p>
+              <p className="budget-health-used-label">No Plan</p>
               <div className="budget-health-numbers">
                 <div className="budget-health-row">
                   <span className="budget-health-label">Spent</span>
@@ -557,6 +563,9 @@ export default function BudgetOverview({
                 </div>
               </div>
               <p className="budget-health-used-label">{healthLabel}</p>
+              {healthSubLabel != null && (
+                <p className="budget-health-used-sublabel">{healthSubLabel}</p>
+              )}
               <div className="budget-health-numbers">
                 <div className="budget-health-row">
                   <span className="budget-health-label">Spent</span>

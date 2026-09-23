@@ -6,6 +6,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
 import LockIcon from '@/components/ui/LockIcon'
 import { toLocalDateString } from '@/lib/format'
+import { computeMonthMoneySummary } from '@/lib/monthMoneySummary'
 
 type FilterKey =
   | 'this_week'
@@ -19,7 +20,12 @@ type FilterKey =
   | 'all_time'
   | 'custom'
 
-type IncomeRow = { total_amount: number; date: string; income_source: string | null }
+type IncomeRow = {
+  id: string
+  total_amount: number
+  date: string
+  income_source: string | null
+}
 type ExpenseRow = { category: string; type: string; amount: number; date: string }
 
 /** Returns { start, end } for the month whose first day is monthFirst (YYYY-MM-01). */
@@ -173,6 +179,24 @@ function NetIcon() {
     </svg>
   )
 }
+/** Goal set-aside / savings allocation */
+function SetAsideIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3v18" />
+      <path d="M5 8h10a4 4 0 0 1 0 8H5" />
+      <path d="M5 12h14" />
+    </svg>
+  )
+}
+function MoneyLeftIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v10M9 10h4.5a1.5 1.5 0 0 1 0 3H9" />
+    </svg>
+  )
+}
 
 function getCurrentMonthFirst(): string {
   const d = new Date()
@@ -206,6 +230,10 @@ export default function IncomeExpenseFlow({
   const [overridePeriod, setOverridePeriod] = useState<FilterKey | null>(null)
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([])
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([])
+  /** Allocations for income dated in the selected calendar month (0 for non-month ranges). */
+  const [allocatedTotal, setAllocatedTotal] = useState(0)
+  /** Sum of effective budget for calendar-month view (for plan-vs-disposable note only). */
+  const [plannedTotal, setPlannedTotal] = useState(0)
   /** Snapshot (Income / Expenses / Net) renders immediately from rows; breakdown tables wait for fetch */
   const [breakdownLoading, setBreakdownLoading] = useState(true)
   const { isPro } = useSubscription()
@@ -221,6 +249,21 @@ export default function IncomeExpenseFlow({
     return getDateRange(effectivePeriod, customStart, customEnd)
   }, [monthFirstProp, overridePeriod, period, customStart, customEnd])
 
+  const effectivePeriod = (monthFirstProp && overridePeriod !== null) ? overridePeriod : period
+
+  /** True only when the active range is a full calendar month (Money left semantics). */
+  const isCalendarMonthView = useMemo(() => {
+    if (monthFirstProp && overridePeriod === null) return true
+    return effectivePeriod === 'current_month' || effectivePeriod === 'previous_month'
+  }, [monthFirstProp, overridePeriod, effectivePeriod])
+
+  const monthFirstForBudget = useMemo(() => {
+    if (monthFirstProp && overridePeriod === null) return monthFirstProp
+    if (effectivePeriod === 'current_month') return getCurrentMonthFirst()
+    if (effectivePeriod === 'previous_month') return getPreviousMonthFirst()
+    return null
+  }, [monthFirstProp, overridePeriod, effectivePeriod])
+
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -230,6 +273,8 @@ export default function IncomeExpenseFlow({
         if (!cancelled) {
           setIncomeRows([])
           setExpenseRows([])
+          setAllocatedTotal(0)
+          setPlannedTotal(0)
           setBreakdownLoading(false)
         }
         return
@@ -238,7 +283,7 @@ export default function IncomeExpenseFlow({
       const [incRes, expRes] = await Promise.all([
         supabase
           .from('income_records')
-          .select('total_amount, date, income_source')
+          .select('id, total_amount, date, income_source')
           .gte('date', range.start)
           .lte('date', range.end)
           .order('date', { ascending: false }),
@@ -251,21 +296,70 @@ export default function IncomeExpenseFlow({
       ])
 
       if (cancelled) return
-      setIncomeRows((incRes.data as IncomeRow[]) || [])
+      const incomes = (incRes.data as IncomeRow[]) || []
+      setIncomeRows(incomes)
       setExpenseRows((expRes.data as ExpenseRow[]) || [])
-      setBreakdownLoading(false)
+
+      if (isCalendarMonthView && incomes.length > 0) {
+        const ids = incomes.map((r) => r.id).filter(Boolean)
+        const { data: allocData } = await supabase
+          .from('income_allocations')
+          .select('amount, income_record_id')
+          .in('income_record_id', ids)
+        if (cancelled) return
+        const sum = (allocData ?? []).reduce(
+          (s, row) => s + Number((row as { amount: number }).amount),
+          0
+        )
+        setAllocatedTotal(sum)
+      } else {
+        setAllocatedTotal(0)
+      }
+
+      if (isCalendarMonthView && monthFirstForBudget) {
+        try {
+          const res = await fetch(
+            `/api/budget-effective?month=${monthFirstForBudget}`,
+            { credentials: 'include' }
+          )
+          const data = res.ok ? await res.json() : []
+          if (cancelled) return
+          const planned = Array.isArray(data)
+            ? data.reduce(
+                (s: number, row: { amount?: number }) => s + Number(row.amount ?? 0),
+                0
+              )
+            : 0
+          setPlannedTotal(planned)
+        } catch {
+          if (!cancelled) setPlannedTotal(0)
+        }
+      } else if (!cancelled) {
+        setPlannedTotal(0)
+      }
+
+      if (!cancelled) setBreakdownLoading(false)
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [range.start, range.end, refreshTrigger])
+  }, [range.start, range.end, refreshTrigger, isCalendarMonthView, monthFirstForBudget])
 
   const totalIncome = incomeRows.reduce((s, r) => s + Number(r.total_amount), 0)
   const totalExpenses = expenseRows.reduce((s, r) => s + Number(r.amount), 0)
   const netFlow = totalIncome - totalExpenses
 
-  const effectivePeriod = (monthFirstProp && overridePeriod !== null) ? overridePeriod : period
+  const monthSummary = useMemo(() => {
+    if (!isCalendarMonthView) return null
+    return computeMonthMoneySummary({
+      income: totalIncome,
+      allocated: allocatedTotal,
+      spent: totalExpenses,
+      planned: plannedTotal,
+    })
+  }, [isCalendarMonthView, totalIncome, allocatedTotal, totalExpenses, plannedTotal])
+
   const breakdownMode = useMemo(() => getBreakdownMode(effectivePeriod), [effectivePeriod])
 
   type DateRow = { dateFormatted: string; source: string; amount: number }
@@ -399,7 +493,7 @@ export default function IncomeExpenseFlow({
       </div>
 
       <div className="flow-three-col">
-        {/* Column 1: Snapshot — always mounted (placeholders ₱0 until fetch; then stale totals until new fetch completes) */}
+        {/* Column 1: Snapshot — calendar month: Income / Set aside / Money left; other ranges: Income / Expenses / Net Flow */}
         <div className="flow-col flow-col-snapshot">
           <div className="flow-snapshot-card flow-snapshot-income">
             <IncomeIcon />
@@ -409,30 +503,70 @@ export default function IncomeExpenseFlow({
                 <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalIncome)}</span>
                 <span className="hidden lg:inline tabular-nums">₱{totalIncome.toLocaleString()}</span>
               </div>
+              {isCalendarMonthView && totalIncome === 0 && (
+                <div className="flow-snapshot-hint">Add income to see money left</div>
+              )}
             </div>
           </div>
-          <div className="flow-snapshot-card flow-snapshot-expense">
-            <ExpenseIcon />
-            <div>
-              <div className="flow-snapshot-label">Expenses</div>
-              <div className="flow-snapshot-value">
-                <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalExpenses)}</span>
-                <span className="hidden lg:inline tabular-nums">₱{totalExpenses.toLocaleString()}</span>
+          {isCalendarMonthView && monthSummary ? (
+            <>
+              <div className="flow-snapshot-card flow-snapshot-set-aside">
+                <SetAsideIcon />
+                <div>
+                  <div className="flow-snapshot-label">Set aside</div>
+                  <div className="flow-snapshot-value">
+                    <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(monthSummary.allocated)}</span>
+                    <span className="hidden lg:inline tabular-nums">₱{monthSummary.allocated.toLocaleString()}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div className={`flow-snapshot-card flow-snapshot-net ${netFlow >= 0 ? 'positive' : 'negative'}`}>
-            <NetIcon />
-            <div>
-              <div className="flow-snapshot-label">Net Flow</div>
-              <div className="flow-snapshot-value">
-                <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(netFlow)}</span>
-                <span className="hidden lg:inline tabular-nums">
-                  {netFlow < 0 ? '−' : ''}₱{Math.abs(netFlow).toLocaleString()}
-                </span>
+              <div
+                className={`flow-snapshot-card flow-snapshot-money-left ${monthSummary.moneyLeft >= 0 ? 'positive' : 'negative'}`}
+                title="Money remaining from this month's income after goal set-asides and actual expenses. Not your bank balance."
+              >
+                <MoneyLeftIcon />
+                <div>
+                  <div className="flow-snapshot-label">Money left</div>
+                  <div className="flow-snapshot-value">
+                    <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(monthSummary.moneyLeft)}</span>
+                    <span className="hidden lg:inline tabular-nums">
+                      {monthSummary.moneyLeft < 0 ? '−' : ''}₱{Math.abs(monthSummary.moneyLeft).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </>
+          ) : (
+            <>
+              <div className="flow-snapshot-card flow-snapshot-expense">
+                <ExpenseIcon />
+                <div>
+                  <div className="flow-snapshot-label">Expenses</div>
+                  <div className="flow-snapshot-value">
+                    <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(totalExpenses)}</span>
+                    <span className="hidden lg:inline tabular-nums">₱{totalExpenses.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+              <div className={`flow-snapshot-card flow-snapshot-net ${netFlow >= 0 ? 'positive' : 'negative'}`}>
+                <NetIcon />
+                <div>
+                  <div className="flow-snapshot-label">Net Flow</div>
+                  <div className="flow-snapshot-value">
+                    <span className="lg:hidden tabular-nums">{formatPesoAbbrevDisplay(netFlow)}</span>
+                    <span className="hidden lg:inline tabular-nums">
+                      {netFlow < 0 ? '−' : ''}₱{Math.abs(netFlow).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+          {isCalendarMonthView && monthSummary?.planExceedsDisposable && monthSummary.planned > 0 && (
+            <p className="flow-plan-disposable-note" role="status">
+              Your spending plan is higher than the income you&apos;ve set aside after goals.
+            </p>
+          )}
         </div>
 
         {/* Column 2: Income breakdown — hydrates after first paint */}
