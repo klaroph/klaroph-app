@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { authorizeFounderDashboardRequest } from '@/lib/founderDashboardAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,8 +8,8 @@ export const dynamic = 'force-dynamic'
  * GET /api/founder-dashboard
  *
  * Returns all founder metrics in one response (single RPC call).
- * Uses service_role; do not expose to client. Protect via middleware or
- * FOUNDER_DASHBOARD_SECRET (Bearer token) for production.
+ * Uses service_role; do not expose to client.
+ * Requires FOUNDER_DASHBOARD_SECRET as a Bearer token.
  *
  * Response shape matches get_founder_metrics() in DB:
  * total_users, new_users_today, dau, wau, mau, total_expenses,
@@ -17,13 +18,12 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(request: Request) {
   try {
-    const secret = process.env.FOUNDER_DASHBOARD_SECRET
-    if (secret) {
-      const auth = request.headers.get('authorization')
-      const token = auth?.startsWith('Bearer ') ? auth.slice(7) : ''
-      if (token !== secret) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+    const authz = authorizeFounderDashboardRequest(
+      request.headers.get('authorization'),
+      process.env.FOUNDER_DASHBOARD_SECRET
+    )
+    if (!authz.ok) {
+      return NextResponse.json({ error: authz.error }, { status: authz.status })
     }
 
     const { data, error } = await supabaseAdmin.rpc('get_founder_metrics')

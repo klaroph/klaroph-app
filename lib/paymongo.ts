@@ -477,8 +477,8 @@ export function verifyWebhookSignature(
  */
 export function isTimestampFresh(
   timestamp: number,
-  toleranceSeconds = 300
+  toleranceSeconds = 300,
+  nowSeconds = Math.floor(Date.now() / 1000)
 ): boolean {
-  const now = Math.floor(Date.now() / 1000)
-  return Math.abs(now - timestamp) <= toleranceSeconds
+  return Math.abs(nowSeconds - timestamp) <= toleranceSeconds
 }

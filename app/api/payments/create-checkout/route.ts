@@ -7,6 +7,7 @@ import {
   paymongoBelowMinimumMessage,
 } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
+import { shouldBlockNewProPurchase } from '@/lib/subscriptionStateCore'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
 import { resolveCheckoutAmountCentavos } from '@/lib/checkoutPromo'
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
     const sub = await resolveSubscriptionState(user.id)
     console.log('[Checkout Guard] sub.state=', sub.state, '| sub.planId=', sub.planId, '| currentPeriodEnd=', sub.currentPeriodEnd?.toISOString() ?? null)
     let planName: string | null = null
-    if (sub.state === 'ACTIVE' && sub.planId) {
+    if ((sub.state === 'ACTIVE' || sub.state === 'GRACE') && sub.planId) {
       const { data: plan } = await supabaseAdmin
         .from('plans')
         .select('name')
@@ -36,16 +37,13 @@ export async function POST(request: Request) {
         .single()
       planName = (plan as { name?: string } | null)?.name ?? null
       console.log('[Checkout Guard] planName (from plans)=', planName)
-      if (
-        planName === 'pro' &&
-        (sub.isLifetime || (sub.currentPeriodEnd != null && sub.currentPeriodEnd > new Date()))
-      ) {
-        console.log('[Checkout Guard] decision=block')
-        return NextResponse.json(
-          { error: 'User already has active subscription.' },
-          { status: 400 }
-        )
-      }
+    }
+    if (shouldBlockNewProPurchase(sub, planName)) {
+      console.log('[Checkout Guard] decision=block')
+      return NextResponse.json(
+        { error: 'User already has active subscription.' },
+        { status: 400 }
+      )
     }
 
     const body = await request.json().catch(() => ({}))

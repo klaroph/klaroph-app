@@ -10,6 +10,7 @@ import {
   paymongoBelowMinimumMessage,
 } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
+import { shouldBlockNewProPurchase } from '@/lib/subscriptionStateCore'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
 import { resolveCheckoutAmountCentavos } from '@/lib/checkoutPromo'
@@ -29,22 +30,20 @@ export async function POST(request: Request) {
     }
 
     const sub = await resolveSubscriptionState(user.id)
-    if (sub.state === 'ACTIVE' && sub.planId) {
+    let planName: string | null = null
+    if ((sub.state === 'ACTIVE' || sub.state === 'GRACE') && sub.planId) {
       const { data: plan } = await supabaseAdmin
         .from('plans')
         .select('name')
         .eq('id', sub.planId)
         .single()
-      const planName = (plan as { name?: string } | null)?.name ?? null
-      if (
-        planName === 'pro' &&
-        (sub.isLifetime || (sub.currentPeriodEnd != null && sub.currentPeriodEnd > new Date()))
-      ) {
-        return NextResponse.json(
-          { error: 'User already has active subscription.' },
-          { status: 400 }
-        )
-      }
+      planName = (plan as { name?: string } | null)?.name ?? null
+    }
+    if (shouldBlockNewProPurchase(sub, planName)) {
+      return NextResponse.json(
+        { error: 'User already has active subscription.' },
+        { status: 400 }
+      )
     }
 
     const body = await request.json().catch(() => ({}))

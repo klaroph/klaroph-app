@@ -6,12 +6,9 @@
  */
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import {
-  verifyWebhookSignature,
-  isTimestampFresh,
-  retrieveCheckoutSession,
-  retrievePaymentIntent,
-} from '@/lib/paymongo'
+import { retrieveCheckoutSession, retrievePaymentIntent } from '@/lib/paymongo'
+import { authorizePaymongoWebhook } from '@/lib/paymongoWebhookSecurity'
+import { runClaimedWebhookHandler } from '@/lib/paymentEventIdempotency'
 import { sendPremiumConfirmationIfNew } from '@/lib/premiumConfirmationEmail'
 import { tryIncrementVoucherUsedCountFromMetadata } from '@/lib/voucherWebhookIncrement'
 import { FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
@@ -36,16 +33,6 @@ type WebhookEvent = {
 }
 
 export async function POST(request: Request) {
-  const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET
-  if (!webhookSecret) {
-    console.error('[Webhook] PAYMONGO_WEBHOOK_SECRET is not set')
-    return NextResponse.json(
-      { error: 'Webhook not configured' },
-      { status: 500 }
-    )
-  }
-  console.log('[Webhook] secret fingerprint = len:' + webhookSecret.length + ' first:' + webhookSecret.slice(0, 4) + ' last:' + webhookSecret.slice(-4))
-
   let rawBody: string
   try {
     rawBody = await request.text()
@@ -53,43 +40,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
-  // -----------------------------------------------------------------------
-  // 1. Verify signature
-  // -----------------------------------------------------------------------
-  const sigHeader = request.headers.get('paymongo-signature') ?? ''
-  // Diagnostic (remove after debugging): raw body length + header prefix for Vercel logs
-  console.log('[Webhook] diagnostic rawBody.length=', rawBody.length, 'sigHeaderPrefix=', sigHeader.slice(0, 50))
-  if (!sigHeader) {
-    console.warn('[Webhook] Missing Paymongo-Signature header')
-    return NextResponse.json(
-      { error: 'Missing signature' },
-      { status: 401 }
-    )
-  }
-
-  const { valid, timestamp } = verifyWebhookSignature(
+  const auth = authorizePaymongoWebhook({
+    webhookSecret: process.env.PAYMONGO_WEBHOOK_SECRET,
     rawBody,
-    sigHeader,
-    webhookSecret
-  )
-
-  if (!valid) {
-    console.warn('[Webhook] Invalid signature — decision=401', 'timestamp=', timestamp, 'rawBody.length=', rawBody.length)
-    console.warn('[Webhook] TEMPORARY: signature mismatch — continuing processing (no 401)')
-    // TEMPORARY: do not return 401; continue to process webhook for debugging business flow.
+    signatureHeader: request.headers.get('paymongo-signature') ?? '',
+  })
+  if (!auth.ok) {
+    if (auth.status === 500) {
+      console.error('[Webhook] PAYMONGO_WEBHOOK_SECRET is not set')
+    } else {
+      console.warn('[Webhook] Rejected', auth.error)
+    }
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
 
-  if (!isTimestampFresh(timestamp)) {
-    console.warn('[Webhook] Stale timestamp:', timestamp)
-    return NextResponse.json(
-      { error: 'Stale webhook' },
-      { status: 401 }
-    )
-  }
-
-  // -----------------------------------------------------------------------
-  // 2. Parse event
-  // -----------------------------------------------------------------------
   let event: WebhookEvent
   try {
     event = JSON.parse(rawBody) as WebhookEvent
@@ -97,89 +61,73 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const eventId = event.data.id
-  const eventType = event.data.attributes.type
-
-  // -----------------------------------------------------------------------
-  // 3. Idempotency: skip if already successfully processed (row exists).
-  // -----------------------------------------------------------------------
-  const { data: existing } = await supabaseAdmin
-    .from('payment_events')
-    .select('event_id')
-    .eq('event_id', eventId)
-    .maybeSingle()
-
-  if (existing) {
-    console.log('[Webhook] Idempotent skip event_id=', eventId, 'type=', eventType)
-    return NextResponse.json({ status: 'already_processed' })
+  const eventId = event.data?.id
+  const eventType = event.data?.attributes?.type
+  if (!eventId || !eventType) {
+    return NextResponse.json({ error: 'Invalid event' }, { status: 400 })
   }
 
   console.log('[Webhook] Processing event_id=', eventId, 'type=', eventType)
-  // Temporary audit: confirm event type and payload shape
-  const attrs = event?.data?.attributes
-  console.log('[Webhook] event.data.attributes.type=', attrs?.type, 'data.type=', (attrs?.data as { type?: string })?.type)
 
-  // -----------------------------------------------------------------------
-  // 4. Route to handler. Insert payment_events only after success so failed
-  //    events are not marked processed and PayMongo retries can run handler again.
-  // -----------------------------------------------------------------------
   try {
-    switch (eventType) {
-      case 'checkout_session.payment.paid':
-        await handleCheckoutPaid(event)
-        break
+    const result = await runClaimedWebhookHandler({
+      claim: async () => {
+        const { error: insertError } = await supabaseAdmin.from('payment_events').insert({
+          event_id: eventId,
+          event_type: eventType,
+          payload: event,
+        })
+        if (!insertError) return 'claimed'
+        if (insertError.code === '23505') return 'duplicate'
+        throw new Error(insertError.message)
+      },
+      release: async () => {
+        await supabaseAdmin.from('payment_events').delete().eq('event_id', eventId)
+      },
+      handle: async () => {
+        switch (eventType) {
+          case 'checkout_session.payment.paid':
+            await handleCheckoutPaid(event)
+            break
 
-      case 'subscription.activated':
-        await handleSubscriptionActivated(event)
-        break
+          case 'subscription.activated':
+            await handleSubscriptionActivated(event)
+            break
 
-      case 'subscription.updated':
-        await handleSubscriptionUpdated(event)
-        break
+          case 'subscription.updated':
+            await handleSubscriptionUpdated(event)
+            break
 
-      case 'subscription.past_due':
-      case 'subscription.unpaid':
-        await handleSubscriptionProblem(event)
-        break
+          case 'subscription.past_due':
+          case 'subscription.unpaid':
+            await handleSubscriptionProblem(event)
+            break
 
-      case 'subscription.invoice.paid':
-        await handleInvoicePaid(event)
-        break
+          case 'subscription.invoice.paid':
+            await handleInvoicePaid(event)
+            break
 
-      case 'subscription.invoice.payment_failed':
-        await handleInvoiceFailed(event)
-        break
+          case 'subscription.invoice.payment_failed':
+            await handleInvoiceFailed(event)
+            break
 
-      case 'payment.paid':
-        await handlePaymentPaid(event)
-        break
+          case 'payment.paid':
+            await handlePaymentPaid(event)
+            break
 
-      case 'payment.failed':
-        console.warn('[Webhook] payment.failed event_id=', eventId)
-        break
+          case 'payment.failed':
+            console.warn('[Webhook] payment.failed event_id=', eventId)
+            break
 
-      default:
-        console.log('[Webhook] Unhandled event type=', eventType, 'event_id=', eventId)
-    }
-
-    // Mark event as processed only after successful handler completion.
-    const { error: insertError } = await supabaseAdmin.from('payment_events').insert({
-      event_id: eventId,
-      event_type: eventType,
-      payload: event,
+          default:
+            console.log('[Webhook] Unhandled event type=', eventType, 'event_id=', eventId)
+        }
+      },
     })
 
-    if (insertError) {
-      if (insertError.code === '23505') {
-        // Race: another request processed and inserted first; we still succeeded.
-        console.log('[Webhook] payment_events insert race (already present) event_id=', eventId)
-      } else {
-        console.error('[Webhook] payment_events insert failed after handler success:', insertError.code, insertError.message)
-        return NextResponse.json(
-          { error: 'Processing failed' },
-          { status: 500 }
-        )
-      }
+    if (result.outcome === 'already_processed') {
+      console.log('[Webhook] Idempotent skip event_id=', eventId, 'type=', eventType)
+      return NextResponse.json({ status: 'already_processed' })
     }
 
     return NextResponse.json({ status: 'ok' })
