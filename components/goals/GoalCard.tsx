@@ -2,6 +2,7 @@
 
 import { getIconKeyForGoalName } from '@/lib/goalPresets'
 import { formatCurrency } from '@/lib/format'
+import type { GoalRunwayCopy } from '@/lib/goalRunway'
 import type { GoalForActions } from './GoalList'
 
 const ICON_SIZE = 20
@@ -50,6 +51,8 @@ type GoalCardProps = {
   targetAmount: number
   allocatedAmount: number
   targetDate?: string | null
+  /** Deterministic runway estimate copy (optional). */
+  runwayCopy?: GoalRunwayCopy | null
   goal?: GoalForActions
   onEdit?: (goal: GoalForActions) => void
   onDelete?: (goal: GoalForActions) => void
@@ -60,6 +63,7 @@ export default function GoalCard({
   targetAmount,
   allocatedAmount,
   targetDate,
+  runwayCopy,
   goal,
   onEdit,
   onDelete,
@@ -135,6 +139,14 @@ export default function GoalCard({
             </div>
           )}
         </div>
+        {runwayCopy && (
+          <div className="goal-card-runway" aria-label="Estimated timeline">
+            <p className="goal-card-runway-primary">{runwayCopy.primary}</p>
+            {runwayCopy.secondary && (
+              <p className="goal-card-runway-secondary">{runwayCopy.secondary}</p>
+            )}
+          </div>
+        )}
       </div>
     </article>
   )

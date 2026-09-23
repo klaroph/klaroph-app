@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
+import {
+  computeGoalRunway,
+  formatGoalRunwayCopy,
+  type GoalAllocationEvent,
+  type GoalRunwayCopy,
+} from '@/lib/goalRunway'
 import GoalsEmptyState from './GoalsEmptyState'
 import GoalCard from './GoalCard'
 
@@ -11,9 +17,10 @@ type Goal = {
   target_amount: number
 }
 
-type AllocationRow = {
+type AllocationJoinRow = {
   goal_id: string
   amount: number
+  income_records: { date: string } | { date: string }[] | null
 }
 
 export type GoalForActions = {
@@ -37,9 +44,19 @@ type GoalListProps = {
   onDataLoaded?: (summary: GoalSummary) => void
 }
 
+function incomeDateFromJoin(
+  incomeRecords: AllocationJoinRow['income_records']
+): string | null {
+  if (!incomeRecords) return null
+  const row = Array.isArray(incomeRecords) ? incomeRecords[0] : incomeRecords
+  const date = row?.date
+  return typeof date === 'string' && date.trim() ? date.trim() : null
+}
+
 export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoaded }: GoalListProps) {
   const [goals, setGoals] = useState<Goal[]>([])
   const [allocationsByGoal, setAllocationsByGoal] = useState<Record<string, number>>({})
+  const [runwayByGoal, setRunwayByGoal] = useState<Record<string, GoalRunwayCopy | null>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,6 +70,7 @@ export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoade
       if (!user) {
         setGoals([])
         setAllocationsByGoal({})
+        setRunwayByGoal({})
         setError('Not authenticated.')
         setLoading(false)
         return
@@ -66,6 +84,7 @@ export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoade
       if (goalsError) {
         setGoals([])
         setAllocationsByGoal({})
+        setRunwayByGoal({})
         setError(goalsError.message)
         setLoading(false)
         return
@@ -77,6 +96,7 @@ export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoade
 
       if (goalsList.length === 0) {
         setAllocationsByGoal({})
+        setRunwayByGoal({})
         onDataLoaded?.({
           totalSaved: 0,
           totalTarget: 0,
@@ -91,7 +111,7 @@ export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoade
       const goalIds = goalsList.map((g) => g.id)
       const { data: allocData, error: allocError } = await supabase
         .from('income_allocations')
-        .select('goal_id, amount')
+        .select('goal_id, amount, income_records(date)')
         .in('goal_id', goalIds)
 
       if (!getIsMounted()) return
@@ -101,13 +121,35 @@ export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoade
         return
       }
 
-      const rows = (allocData || []) as AllocationRow[]
+      const rows = (allocData || []) as AllocationJoinRow[]
       const byGoal: Record<string, number> = {}
+      const eventsByGoal: Record<string, GoalAllocationEvent[]> = {}
+
       for (const row of rows) {
-        byGoal[row.goal_id] = (byGoal[row.goal_id] ?? 0) + Number(row.amount)
+        const amt = Number(row.amount)
+        byGoal[row.goal_id] = (byGoal[row.goal_id] ?? 0) + amt
+        const incomeDate = incomeDateFromJoin(row.income_records)
+        if (incomeDate) {
+          if (!eventsByGoal[row.goal_id]) eventsByGoal[row.goal_id] = []
+          eventsByGoal[row.goal_id].push({ amount: amt, incomeDate })
+        }
       }
+
+      const runwayMap: Record<string, GoalRunwayCopy | null> = {}
+      for (const g of goalsList) {
+        const target = Number(g.target_amount) || 0
+        const saved = byGoal[g.id] ?? 0
+        const runway = computeGoalRunway({
+          target,
+          saved,
+          events: eventsByGoal[g.id] ?? [],
+        })
+        runwayMap[g.id] = formatGoalRunwayCopy(runway)
+      }
+
       if (!getIsMounted()) return
       setAllocationsByGoal(byGoal)
+      setRunwayByGoal(runwayMap)
 
       const totalSaved = goalsList.reduce((sum, g) => sum + (byGoal[g.id] ?? 0), 0)
       const totalTarget = goalsList.reduce((sum, g) => sum + (Number(g.target_amount) || 0), 0)
@@ -135,6 +177,7 @@ export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoade
       if (!getIsMounted()) return
       setGoals([])
       setAllocationsByGoal({})
+      setRunwayByGoal({})
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setLoading(false)
     }
@@ -180,6 +223,7 @@ export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoade
             name={goal.name}
             targetAmount={target}
             allocatedAmount={allocated}
+            runwayCopy={runwayByGoal[goal.id] ?? null}
             goal={goalForActions}
             onEdit={onEdit}
             onDelete={onDelete}
