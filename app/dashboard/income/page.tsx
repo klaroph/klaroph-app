@@ -33,6 +33,7 @@ import {
   dispatchDashboardGoalsRefresh,
 } from '@/lib/dashboardRefresh'
 import { toLocalDateString, parseLocalDateString } from '@/lib/format'
+import { useDashboardProfile } from '@/contexts/DashboardProfileContext'
 
 type IncomeRecord = {
   id: string
@@ -144,6 +145,7 @@ const CATEGORY_TYPE_LABELS: Record<ChartTypeCategory, string> = {
 }
 
 export default function IncomePage() {
+  const profileData = useDashboardProfile()
   const [modalOpen, setModalOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<IncomeRecordForEdit | null>(null)
@@ -775,6 +777,8 @@ export default function IncomePage() {
           if (opts?.allocationsChanged) dispatchDashboardGoalsRefresh()
         }}
         initialRecord={editingRecord}
+        suggestedAmount={editingRecord ? null : (profileData?.profile?.monthly_income ?? null)}
+        suggestedSavingsPercent={editingRecord ? null : (profileData?.profile?.savings_percent ?? null)}
       />
     </div>
   )

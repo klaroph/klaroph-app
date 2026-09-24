@@ -2,9 +2,63 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { ProfileWithComputed } from '@/types/profile'
+import { monthlyIncomeToRange } from '@/lib/incomeRange'
 
 const PROFILE_SELECT =
-  'id, full_name, onboarding_completed, nickname, avatar_url, monthly_income_range, primary_goal_category, financial_stage, savings_confidence, risk_comfort, motivation_type, dream_statement, streak_days, clarity_level, badges_json, updated_at'
+  'id, full_name, onboarding_completed, nickname, avatar_url, monthly_income, monthly_income_range, income_frequency, savings_percent, primary_goal_category, financial_stage, savings_confidence, risk_comfort, motivation_type, dream_statement, streak_days, clarity_level, badges_json, updated_at'
+
+function mapProfileRow(profile: Record<string, unknown> | null, fallbackId: string, fallbackName: string | null) {
+  if (!profile) {
+    return {
+      id: fallbackId,
+      full_name: fallbackName,
+      onboarding_completed: false,
+      nickname: null,
+      avatar_url: null,
+      monthly_income: null,
+      monthly_income_range: null,
+      income_frequency: null,
+      savings_percent: null,
+      primary_goal_category: null,
+      financial_stage: null,
+      savings_confidence: null,
+      risk_comfort: null,
+      motivation_type: null,
+      dream_statement: null,
+      streak_days: 0,
+      clarity_level: 1,
+      badges_json: [],
+      updated_at: null,
+    }
+  }
+  return {
+    id: profile.id as string,
+    full_name: (profile.full_name as string | null) ?? null,
+    onboarding_completed: Boolean(profile.onboarding_completed),
+    nickname: (profile.nickname as string | null) ?? null,
+    avatar_url: (profile.avatar_url as string | null) ?? null,
+    monthly_income:
+      profile.monthly_income != null && !Number.isNaN(Number(profile.monthly_income))
+        ? Number(profile.monthly_income)
+        : null,
+    monthly_income_range: (profile.monthly_income_range as string | null) ?? null,
+    income_frequency: (profile.income_frequency as string | null) ?? null,
+    savings_percent:
+      profile.savings_percent != null && !Number.isNaN(Number(profile.savings_percent))
+        ? Number(profile.savings_percent)
+        : null,
+    primary_goal_category: (profile.primary_goal_category as string | null) ?? null,
+    financial_stage: (profile.financial_stage as string | null) ?? null,
+    savings_confidence: (profile.savings_confidence as number | null) ?? null,
+    risk_comfort: (profile.risk_comfort as string | null) ?? null,
+    motivation_type: (profile.motivation_type as string | null) ?? null,
+    dream_statement: (profile.dream_statement as string | null) ?? null,
+    streak_days: (profile.streak_days as number) ?? 0,
+    clarity_level: (profile.clarity_level as number) ?? 1,
+    badges_json: profile.badges_json ?? [],
+    updated_at: (profile.updated_at as string | null) ?? null,
+  }
+}
 
 export async function GET() {
   try {
@@ -73,50 +127,17 @@ export async function GET() {
       )
     }
 
-    const profile = resolvedProfileRow ?? null
+    const mapped = mapProfileRow(
+      resolvedProfileRow as Record<string, unknown> | null,
+      user.id,
+      user.user_metadata?.full_name ?? user.email ?? null
+    )
 
     const payload: ProfileWithComputed = {
-      profile: profile
-        ? {
-            id: profile.id,
-            full_name: profile.full_name ?? null,
-            onboarding_completed: Boolean(profile.onboarding_completed),
-            nickname: profile.nickname ?? null,
-            avatar_url: profile.avatar_url ?? null,
-            monthly_income_range: profile.monthly_income_range ?? null,
-            primary_goal_category: profile.primary_goal_category ?? null,
-            financial_stage: profile.financial_stage ?? null,
-            savings_confidence: profile.savings_confidence ?? null,
-            risk_comfort: profile.risk_comfort ?? null,
-            motivation_type: profile.motivation_type ?? null,
-            dream_statement: profile.dream_statement ?? null,
-            streak_days: profile.streak_days ?? 0,
-            clarity_level: clarity_level,
-            badges_json: profile.badges_json ?? [],
-            updated_at: profile.updated_at ?? null,
-          }
-        : {
-            id: user.id,
-            full_name: user.user_metadata?.full_name ?? null,
-            onboarding_completed: false,
-            nickname: null,
-            avatar_url: null,
-            monthly_income_range: null,
-            primary_goal_category: null,
-            financial_stage: null,
-            savings_confidence: null,
-            risk_comfort: null,
-            motivation_type: null,
-            dream_statement: null,
-            streak_days: 0,
-            clarity_level: 1,
-            badges_json: [],
-            updated_at: null,
-          },
+      profile: { ...mapped, clarity_level },
       profile_completion_percentage,
       clarity_level,
     }
-    payload.profile.clarity_level = clarity_level
 
     return NextResponse.json(payload)
   } catch (e) {
@@ -142,7 +163,10 @@ export async function PATCH(request: Request) {
     const allowed = [
       'nickname',
       'avatar_url',
+      'monthly_income',
       'monthly_income_range',
+      'income_frequency',
+      'savings_percent',
       'primary_goal_category',
       'financial_stage',
       'savings_confidence',
@@ -152,15 +176,30 @@ export async function PATCH(request: Request) {
     ] as const
     const updates: Record<string, unknown> = {}
     for (const key of allowed) {
-      if (key in body) {
-        const v = body[key]
-        if (key === 'savings_confidence') {
+      if (!(key in body)) continue
+      const v = body[key]
+      if (key === 'savings_confidence') {
+        const n = Number(v)
+        if (!Number.isNaN(n) && n >= 1 && n <= 5) updates[key] = n
+      } else if (key === 'monthly_income' || key === 'savings_percent') {
+        if (v === null || v === '') {
+          updates[key] = null
+        } else {
           const n = Number(v)
-          if (!Number.isNaN(n) && n >= 1 && n <= 5) updates[key] = n
-        } else if (typeof v === 'string' || v === null) {
-          updates[key] = v
+          if (!Number.isNaN(n) && n >= 0) {
+            if (key === 'savings_percent' && n > 100) continue
+            updates[key] = n
+          }
         }
+      } else if (typeof v === 'string' || v === null) {
+        updates[key] = v
       }
+    }
+
+    // Keep range in sync when numeric income is the source of truth.
+    if ('monthly_income' in updates && !('monthly_income_range' in updates)) {
+      const derived = monthlyIncomeToRange(updates.monthly_income as number | null)
+      if (derived) updates.monthly_income_range = derived
     }
 
     if (Object.keys(updates).length === 0) {
@@ -185,9 +224,10 @@ export async function PATCH(request: Request) {
 
     const profile_completion_percentage = typeof completion === 'number' ? completion : 0
     const clarity_level = typeof clarity === 'number' ? clarity : 1
+    const mapped = mapProfileRow(data as Record<string, unknown>, user.id, null)
 
     return NextResponse.json({
-      profile: { ...data, clarity_level },
+      profile: { ...mapped, clarity_level },
       profile_completion_percentage,
       clarity_level,
     })

@@ -6,7 +6,12 @@ export interface ProfileWithComputed {
     onboarding_completed?: boolean
     nickname: string | null
     avatar_url: string | null
+    /** Numeric monthly income from onboarding / profile edit (peso). */
+    monthly_income: number | null
     monthly_income_range: string | null
+    income_frequency: string | null
+    /** Target savings rate 0–100 from onboarding. */
+    savings_percent: number | null
     primary_goal_category: string | null
     financial_stage: string | null
     savings_confidence: number | null

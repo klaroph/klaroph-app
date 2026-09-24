@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { monthlyIncomeToRange } from '@/lib/incomeRange'
 
 const VALID_FINANCIAL_STAGES = ['starter', 'stabilizing', 'building', 'scaling'] as const
 const VALID_RISK_COMFORT = ['low', 'medium', 'high'] as const
@@ -17,10 +18,12 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}))
-    const monthly_income_range =
-      typeof body?.monthly_income_range === 'string' ? body.monthly_income_range.trim() || null : null
     const monthly_income =
       typeof body?.monthly_income === 'number' && body.monthly_income >= 0 ? body.monthly_income : null
+    // Prefer explicit range; otherwise derive from numeric income so profile completion + identity hub stay in sync.
+    const monthly_income_range =
+      (typeof body?.monthly_income_range === 'string' ? body.monthly_income_range.trim() || null : null) ??
+      monthlyIncomeToRange(monthly_income)
     const income_frequency =
       typeof body?.income_frequency === 'string' ? body.income_frequency.trim() || null : null
     const primary_goal_category =

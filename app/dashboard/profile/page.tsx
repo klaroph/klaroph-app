@@ -16,7 +16,10 @@ import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeader
 
 type ProfileState = {
   nickname: string
+  monthly_income: string
   monthly_income_range: string
+  income_frequency: string
+  savings_percent: string
   primary_goal_category: string
   financial_stage: string
   savings_confidence: number | null
@@ -52,7 +55,10 @@ export default function ProfilePage() {
 
   const [form, setForm] = useState<ProfileState>({
     nickname: '',
+    monthly_income: '',
     monthly_income_range: '',
+    income_frequency: '',
+    savings_percent: '',
     primary_goal_category: '',
     financial_stage: '',
     savings_confidence: null,
@@ -77,7 +83,10 @@ export default function ProfilePage() {
       const p = payload.profile
       setForm({
         nickname: p.nickname ?? '',
+        monthly_income: p.monthly_income != null ? String(p.monthly_income) : '',
         monthly_income_range: p.monthly_income_range ?? '',
+        income_frequency: p.income_frequency ?? '',
+        savings_percent: p.savings_percent != null ? String(p.savings_percent) : '',
         primary_goal_category: p.primary_goal_category ?? '',
         financial_stage: p.financial_stage ?? '',
         savings_confidence: p.savings_confidence ?? null,
@@ -99,10 +108,21 @@ export default function ProfilePage() {
     setSaving(true)
     setError(null)
     try {
+      const body: Record<string, unknown> = { ...updates }
+      if ('monthly_income' in updates) {
+        const raw = updates.monthly_income
+        body.monthly_income =
+          raw === '' || raw == null ? null : Number(String(raw).replace(/[^0-9.]/g, ''))
+      }
+      if ('savings_percent' in updates) {
+        const raw = updates.savings_percent
+        body.savings_percent =
+          raw === '' || raw == null ? null : Number(String(raw).replace(/[^0-9.]/g, ''))
+      }
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(body),
         credentials: 'include',
       })
       const payload = await res.json().catch(() => ({}))
@@ -113,6 +133,13 @@ export default function ProfilePage() {
       }
       setData(payload)
       setForm((prev) => ({ ...prev, ...updates }))
+      // Keep displayed range in sync when income drove a derived range.
+      if (payload?.profile?.monthly_income_range != null) {
+        setForm((prev) => ({
+          ...prev,
+          monthly_income_range: payload.profile.monthly_income_range ?? prev.monthly_income_range,
+        }))
+      }
     } catch {
       setError('Something went wrong.')
     }
@@ -214,6 +241,50 @@ export default function ProfilePage() {
             gap: 16,
           }}
         >
+          <div>
+            <label style={labelStyle}>Monthly income (₱)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.monthly_income}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, monthly_income: e.target.value }))
+              }
+              onBlur={() => handleBlur('monthly_income', form.monthly_income)}
+              placeholder="e.g. 35000"
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Income frequency</label>
+            <select
+              value={form.income_frequency}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, income_frequency: e.target.value }))
+              }
+              onBlur={() => handleBlur('income_frequency', form.income_frequency)}
+              style={inputStyle}
+            >
+              <option value="">Select</option>
+              <option value="monthly">Monthly</option>
+              <option value="semi-monthly">Semi-monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Savings target (%)</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={form.savings_percent}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, savings_percent: e.target.value }))
+              }
+              onBlur={() => handleBlur('savings_percent', form.savings_percent)}
+              placeholder="e.g. 20"
+              style={inputStyle}
+            />
+          </div>
           <div>
             <label style={labelStyle}>Income Range</label>
             <select

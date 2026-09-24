@@ -27,6 +27,10 @@ type IncomeAllocationModalProps = {
   onSaved: (options?: IncomeSavedOptions) => void
   /** When set, modal is in edit mode: title "Edit income", pre-fill, submit = PUT */
   initialRecord?: IncomeRecordForEdit | null
+  /** Prefill amount when adding (e.g. onboarding monthly_income). */
+  suggestedAmount?: number | null
+  /** Prefill goal allocation using savings_percent × amount when adding. */
+  suggestedSavingsPercent?: number | null
 }
 
 export default function IncomeAllocationModal({
@@ -34,6 +38,8 @@ export default function IncomeAllocationModal({
   onClose,
   onSaved,
   initialRecord = null,
+  suggestedAmount = null,
+  suggestedSavingsPercent = null,
 }: IncomeAllocationModalProps) {
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(() => toLocalDateString(new Date()))
@@ -50,7 +56,8 @@ export default function IncomeAllocationModal({
   const isEditMode = Boolean(initialRecord?.id)
 
   useEffect(() => {
-    if (isOpen && initialRecord) {
+    if (!isOpen) return
+    if (initialRecord) {
       setAmount(String(initialRecord.total_amount))
       setDate(initialRecord.date)
       const validSource =
@@ -62,8 +69,20 @@ export default function IncomeAllocationModal({
       setAllocationsEdit([])
       setAddGoalId('')
       setAddAmount('')
+      return
     }
-  }, [isOpen, initialRecord])
+    // Add mode: seed from onboarding profile when available
+    if (suggestedAmount != null && suggestedAmount > 0) {
+      setAmount(String(Math.round(suggestedAmount)))
+    }
+    setDate(toLocalDateString(new Date()))
+    setIncomeSource(INCOME_SOURCES[0])
+    setAllocateGoalId('')
+    setAllocateAmount('')
+    setAllocationsEdit([])
+    setAddGoalId('')
+    setAddAmount('')
+  }, [isOpen, initialRecord, suggestedAmount])
 
   useEffect(() => {
     if (!isOpen) return
@@ -73,6 +92,35 @@ export default function IncomeAllocationModal({
     }
     load()
   }, [isOpen])
+
+  // After goals load in add mode, suggest first-goal allocation from savings %.
+  useEffect(() => {
+    if (!isOpen || isEditMode || goals.length === 0) return
+    if (allocateGoalId) return
+    const incomeHint =
+      suggestedAmount != null && suggestedAmount > 0
+        ? suggestedAmount
+        : parseFloat(amount) || 0
+    if (
+      suggestedSavingsPercent != null &&
+      suggestedSavingsPercent > 0 &&
+      incomeHint > 0
+    ) {
+      const alloc = Math.round(incomeHint * (suggestedSavingsPercent / 100))
+      if (alloc > 0) {
+        setAllocateGoalId(goals[0].id)
+        setAllocateAmount(String(alloc))
+      }
+    }
+  }, [
+    isOpen,
+    isEditMode,
+    goals,
+    suggestedAmount,
+    suggestedSavingsPercent,
+    amount,
+    allocateGoalId,
+  ])
 
   useEffect(() => {
     if (!isOpen || !initialRecord?.id || goals.length === 0) {

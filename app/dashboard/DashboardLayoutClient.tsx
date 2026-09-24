@@ -332,6 +332,8 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
                 if (opts?.allocationsChanged) dispatchDashboardGoalsRefresh()
               }}
               initialRecord={null}
+              suggestedAmount={profile?.profile?.monthly_income ?? null}
+              suggestedSavingsPercent={profile?.profile?.savings_percent ?? null}
             />
             <AddExpenseModal
               isOpen={fabExpenseOpen}
