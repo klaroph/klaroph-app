@@ -4941,6 +4941,195 @@ html { scroll-behavior: smooth; }
   color: var(--text-primary);
 }
 
+.free-plan-banner--quiet {
+  margin-top: var(--space-4);
+  margin-bottom: 0;
+  padding: var(--space-3) var(--space-4);
+  border-left-width: 3px;
+  box-shadow: none;
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  order: 99;
+}
+
+/* ================================================
+   DASHBOARD COMPOSITION — primary / secondary / deferred
+   ================================================ */
+
+.dashboard-page--composed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dashboard-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  contain: layout style;
+}
+
+.dashboard-primary-metric {
+  min-width: 0;
+}
+
+.dashboard-primary-cta {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--color-primary) 8%, var(--surface)) 0%,
+    var(--surface) 70%
+  );
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.dashboard-primary-cta-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.dashboard-primary-cta-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 48px;
+}
+
+.dashboard-primary-cta-secondary {
+  background: none;
+  border: none;
+  padding: 8px 0;
+  font: inherit;
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: 44px;
+}
+
+.dashboard-primary-cta-secondary:hover {
+  color: var(--color-primary);
+}
+
+.dashboard-secondary {
+  min-width: 0;
+  contain: layout style;
+}
+
+.dashboard-secondary .budget-overview,
+.dashboard-secondary .budget-overview-root,
+.dashboard-secondary > * {
+  /* Soften nested card noise: budget is supporting, not competing with momentum */
+  box-shadow: none;
+}
+
+.dashboard-deferred {
+  min-width: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-muted, var(--border));
+}
+
+.dashboard-deferred-toggle {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dashboard-deferred-toggle:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.dashboard-deferred-body {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.dashboard-deferred-body.is-open {
+  display: flex;
+}
+
+.dashboard-deferred-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-h3);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dashboard-deferred-desc {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-small);
+  color: var(--text-muted, var(--text-secondary));
+}
+
+.dashboard-deferred-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.dashboard-deferred-flow {
+  /* Flow sits flush — no extra dash-card chrome wrapping it */
+  padding: 0;
+}
+
+.dashboard-deferred-flow .income-expense-flow--dashboard-page .card.dash-card,
+.dashboard-deferred-flow .card.dash-card {
+  box-shadow: none;
+  border: 1px solid var(--border-muted, var(--border));
+}
+
+@media (min-width: 1024px) {
+  .dashboard-deferred-body {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+  }
+
+  .dashboard-deferred-trend {
+    min-width: 0;
+  }
+
+  .dashboard-deferred-flow {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1023px) {
+  .dashboard-primary {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .dashboard-primary-cta {
+    padding: var(--space-4);
+  }
+}
+
 /* Premium badge — pill with gradient, icon, soft glow */
 .premium-badge {
   display: inline-flex;

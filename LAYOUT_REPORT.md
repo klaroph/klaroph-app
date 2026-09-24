@@ -1,8 +1,10 @@
 # KlaroPH — Layout-Related Code Report
 
-This document consolidates all layout-related TSX and CSS for the KlaroPH dashboard and app shell.
+> **Superseded (2026-09-24):** Dashboard composition now uses primary / secondary / deferred sections in `app/dashboard/page.tsx` (Goal Momentum + CTA → Budget → deferred cashflow/trend). Focus Goals components and premium header were removed in earlier cleanup. Prefer live code over the historical excerpts below.
 
-**Last updated:** Dashboard top row 25:75 grid (Goal Momentum + 6-Month Expenses Trend | Monthly Budget Overview), ExpensesTrendChartCard, dashboard one-pager compact styles, card title consistency, Income & Expenses flow.
+This document consolidates historical layout-related TSX and CSS for the KlaroPH dashboard and app shell.
+
+**Last updated:** Dashboard composition pass (primary metric + CTA, deferred cashflow). Historical notes below may still reference Focus Goals / dual-column clusters that no longer ship.
 
 ---
 

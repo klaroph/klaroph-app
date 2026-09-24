@@ -15,7 +15,6 @@ import IncomeExpenseFlow from '@/components/dashboard/IncomeExpenseFlow'
 /** Static import: full card shell + title paint in initial bundle (LCP); data hydrates inside the component. */
 import BudgetOverview from '@/components/dashboard/BudgetOverview'
 import ActivationCelebration from '@/components/dashboard/ActivationCelebration'
-import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { PLAN_LIMITS } from '@/lib/planLimits'
@@ -61,6 +60,7 @@ export default function DashboardPage() {
   const [goalsRefreshTrigger, setGoalsRefreshTrigger] = useState(0)
   const currentMonthFirst = useMemo(() => getCurrentMonthFirst(), [])
   const [budgetMonth, setBudgetMonth] = useState(currentMonthFirst)
+  const [showDetails, setShowDetails] = useState(false)
 
   useEffect(() => {
     const onFull = () => {
@@ -139,7 +139,7 @@ export default function DashboardPage() {
 
   return (
     <div
-      className={`dashboard-page w-full max-w-md mx-auto px-4 max-lg:flex max-lg:flex-col max-lg:gap-3 lg:max-w-none lg:mx-0 lg:px-0${isPro ? ' dashboard-premium' : ''}`}
+      className={`dashboard-page dashboard-page--composed w-full max-w-md mx-auto px-4 max-lg:flex max-lg:flex-col max-lg:gap-3 lg:max-w-none lg:mx-0 lg:px-0${isPro ? ' dashboard-premium' : ''}`}
       aria-busy={loading || subscriptionLoading}
       aria-live="polite"
       role="region"
@@ -152,7 +152,7 @@ export default function DashboardPage() {
             <DashboardMobileHeaderLogo />
           </div>
           <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
-            Financial clarity, without complexity.
+            Savings first. One clear next step.
           </p>
         </div>
         <div className="dashboard-header-actions-desktop page-header-actions">
@@ -166,7 +166,7 @@ export default function DashboardPage() {
           </button>
           <button
             type="button"
-            className="btn-primary header-add-btn-desktop-only"
+            className="btn-secondary header-add-btn-desktop-only"
             onClick={openAddExpense}
             aria-label="Add expense"
           >
@@ -178,74 +178,106 @@ export default function DashboardPage() {
         <ActivationCelebration isPro={isPro} />
       </div>
 
+      {/* Primary: one metric + one CTA */}
+      <section
+        className="dashboard-primary max-lg:order-2 w-full"
+        aria-labelledby="dashboard-primary-heading"
+      >
+        <div className="dashboard-primary-metric">
+          <GoalMomentumSection
+            totalGoals={goals.length}
+            totalSaved={totalSaved}
+            totalTarget={totalTarget}
+          />
+        </div>
+        <div className="dashboard-primary-cta">
+          <p id="dashboard-primary-heading" className="dashboard-primary-cta-label">
+            Next step
+          </p>
+          <button
+            type="button"
+            className="btn-primary dashboard-primary-cta-btn"
+            onClick={openAddIncome}
+          >
+            Log income toward your goals
+          </button>
+          <button
+            type="button"
+            className="dashboard-primary-cta-secondary"
+            onClick={openAddExpense}
+          >
+            Or log an expense
+          </button>
+        </div>
+      </section>
+
+      {/* Secondary: budget only — supporting context */}
+      <section className="dashboard-secondary max-lg:order-3 w-full" aria-label="Monthly budget">
+        <BudgetOverview
+          selectedMonth={budgetMonth}
+          onMonthChange={setBudgetMonth}
+          budgetRefreshKey={refreshTrigger}
+          maxCategories={8}
+          breakdownTitle="Top spending to watch"
+          breakdownTitleMobile="Top 3 spending"
+          showBudgetEditorButtons={false}
+          headerAction={
+            <Link href="/dashboard/expenses" className="card-outline-link dashboard-card-link max-lg:hidden">
+              Expenses →
+            </Link>
+          }
+        />
+      </section>
+
+      {/* Deferred: trend + cashflow — opt-in on mobile, quieter chrome on desktop */}
+      <section className="dashboard-deferred max-lg:order-4 w-full">
+        <button
+          type="button"
+          className="dashboard-deferred-toggle lg:hidden"
+          aria-expanded={showDetails}
+          onClick={() => setShowDetails((v) => !v)}
+        >
+          {showDetails ? 'Hide cashflow details' : 'Show income, expenses & trends'}
+        </button>
+        <div className={`dashboard-deferred-body${showDetails ? ' is-open' : ''}`}>
+          <div className="dashboard-deferred-trend hidden lg:block">
+            <ExpensesTrendChartCard refreshTrigger={refreshTrigger} />
+          </div>
+          <div className="dashboard-deferred-flow">
+            <h3 className="dashboard-deferred-title">This month’s cashflow</h3>
+            <p className="dashboard-deferred-desc">
+              Income in, expenses out — without another card stack.
+            </p>
+            <div className="dashboard-deferred-links max-lg:hidden">
+              <Link href="/dashboard/income" className="card-outline-link">
+                Income →
+              </Link>
+              <Link href="/dashboard/expenses" className="card-outline-link">
+                Expenses →
+              </Link>
+            </div>
+            <IncomeExpenseFlow
+              refreshTrigger={refreshTrigger}
+              showTitle={false}
+              monthFirst={budgetMonth}
+              onMonthChange={setBudgetMonth}
+              className="income-expense-flow--dashboard-page"
+            />
+          </div>
+        </div>
+      </section>
+
       {!isPro && (
         <div
-          className="free-plan-banner premium-banner max-lg:flex-col max-lg:items-stretch max-lg:gap-3 max-lg:order-last w-full"
+          className="free-plan-banner free-plan-banner--quiet premium-banner max-lg:flex-col max-lg:items-stretch max-lg:gap-3 max-lg:order-last w-full"
           role="status"
         >
           <span className="max-lg:text-sm">
-            You can already track expenses, log income, manage goals, and do basic budgeting — all for free. Upgrade to KlaroPH Pro anytime to unlock deeper insights, extended history, and advanced tools.
+            Free covers tracking, goals, and basic budgeting. Pro unlocks deeper history and export.
           </span>
           <UpgradeCTA variant="compact" className="!w-full max-lg:!h-12 max-lg:!rounded-xl lg:!w-auto lg:!h-auto lg:!rounded-lg" />
         </div>
       )}
-
-      <div className="dashboard-top-cluster max-lg:order-4 w-full">
-        <div className="dashboard-top-row">
-          <div className="dashboard-col-left">
-            <div className="dashboard-left-module">
-              <GoalMomentumSection
-                totalGoals={goals.length}
-                totalSaved={totalSaved}
-                totalTarget={totalTarget}
-              />
-              <div className="hidden lg:block">
-                <ExpensesTrendChartCard refreshTrigger={refreshTrigger} />
-              </div>
-            </div>
-          </div>
-          <div className="dashboard-col-budget">
-            <BudgetOverview
-              selectedMonth={budgetMonth}
-              onMonthChange={setBudgetMonth}
-              budgetRefreshKey={refreshTrigger}
-              maxCategories={8}
-              breakdownTitle="Top 8 Spending to Watch"
-              breakdownTitleMobile="Top 3 Spending to Watch"
-              showBudgetEditorButtons={false}
-              headerAction={
-                <Link href="/dashboard/expenses" className="card-outline-link dashboard-card-link max-lg:hidden">
-                  Expenses Page →
-                </Link>
-              }
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="card dash-card dash-card-no-border max-lg:rounded-xl max-lg:order-3 max-lg:mt-0 w-full">
-        <CardHeaderWithAction
-          title="Income & Expenses"
-          titleAs="h3"
-          actions={
-            <>
-              <Link href="/dashboard/income" className="card-outline-link max-lg:hidden">
-                Income Page →
-              </Link>
-              <Link href="/dashboard/expenses" className="card-outline-link max-lg:hidden">
-                Expenses Page →
-              </Link>
-            </>
-          }
-        />
-        <IncomeExpenseFlow
-          refreshTrigger={refreshTrigger}
-          showTitle={false}
-          monthFirst={budgetMonth}
-          onMonthChange={setBudgetMonth}
-          className="income-expense-flow--dashboard-page"
-        />
-      </div>
 
       <ManageGoalsModal
         isOpen={manageGoalsOpen}
