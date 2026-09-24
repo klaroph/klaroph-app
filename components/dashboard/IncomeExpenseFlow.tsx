@@ -189,6 +189,10 @@ export default function IncomeExpenseFlow({
   monthFirst: monthFirstProp,
   onMonthChange,
   className,
+  /** Prefetched month rows from dashboard snapshot; used when viewing the synced month. */
+  snapshotIncome,
+  snapshotExpenses,
+  snapshotMonthFirst,
 }: {
   refreshTrigger?: number
   showTitle?: boolean
@@ -198,6 +202,9 @@ export default function IncomeExpenseFlow({
   onMonthChange?: (monthFirst: string) => void
   /** Optional BEM-style modifier for page-specific responsive CSS (e.g. dashboard mobile row). */
   className?: string
+  snapshotIncome?: IncomeRow[]
+  snapshotExpenses?: ExpenseRow[]
+  snapshotMonthFirst?: string
 }) {
   const [period, setPeriod] = useState<FilterKey>('current_month')
   const [customStart, setCustomStart] = useState('')
@@ -224,6 +231,21 @@ export default function IncomeExpenseFlow({
   useEffect(() => {
     let cancelled = false
     const load = async () => {
+      // Prefer parent snapshot when viewing the synced dashboard month (avoids duplicate fetches).
+      const canUseSnapshot =
+        snapshotIncome !== undefined &&
+        snapshotExpenses !== undefined &&
+        snapshotMonthFirst != null &&
+        monthFirstProp === snapshotMonthFirst &&
+        overridePeriod === null
+
+      if (canUseSnapshot) {
+        setIncomeRows(snapshotIncome)
+        setExpenseRows(snapshotExpenses)
+        setBreakdownLoading(false)
+        return
+      }
+
       setBreakdownLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -259,7 +281,16 @@ export default function IncomeExpenseFlow({
     return () => {
       cancelled = true
     }
-  }, [range.start, range.end, refreshTrigger])
+  }, [
+    range.start,
+    range.end,
+    refreshTrigger,
+    snapshotIncome,
+    snapshotExpenses,
+    snapshotMonthFirst,
+    monthFirstProp,
+    overridePeriod,
+  ])
 
   const totalIncome = incomeRows.reduce((s, r) => s + Number(r.total_amount), 0)
   const totalExpenses = expenseRows.reduce((s, r) => s + Number(r.amount), 0)

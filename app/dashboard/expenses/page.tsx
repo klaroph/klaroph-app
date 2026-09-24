@@ -45,6 +45,7 @@ import {
   useDashboardTransactionRefresh,
   useMobilePortrait,
 } from '@/hooks/useTransactionPageShared'
+import { TRANSACTION_PAGE_LIMIT } from '@/lib/dashboardSnapshot'
 
 type ExpenseRow = {
   id: string
@@ -169,6 +170,7 @@ export default function ExpensesPage() {
         .gte('date', range.start)
         .lte('date', range.end)
         .order('date', { ascending: false })
+        .limit(TRANSACTION_PAGE_LIMIT)
       if (typeFilter) query = query.eq('type', typeFilter)
       if (categoryFilter) query = query.eq('category', categoryFilter)
       const { data } = await query

@@ -28,10 +28,19 @@ const CHART_HEIGHT_PX = 200
 
 type ExpenseRow = { amount: number; date: string }
 
-export default function ExpensesTrendChartCard({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
+type ExpensesTrendChartCardProps = {
+  refreshTrigger?: number
+  /** When provided, skip the internal expenses fetch and use these rows. */
+  expenseRows?: { amount: number; date: string }[]
+}
+
+export default function ExpensesTrendChartCard({
+  refreshTrigger = 0,
+  expenseRows: expenseRowsProp,
+}: ExpensesTrendChartCardProps) {
   const { isPro } = useSubscription()
-  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const [expenseRowsFetched, setExpenseRowsFetched] = useState<ExpenseRow[]>([])
+  const [loading, setLoading] = useState(expenseRowsProp === undefined)
 
   const months = useMemo(() => getLast6Months(), [])
   const rangeStart = months[0].monthFirst
@@ -42,13 +51,20 @@ export default function ExpensesTrendChartCard({ refreshTrigger = 0 }: { refresh
     return toLocalDateString(lastDay)
   }, [months])
 
+  const useProp = expenseRowsProp !== undefined
+  const expenseRows = useProp ? expenseRowsProp : expenseRowsFetched
+
   useEffect(() => {
+    if (useProp) {
+      setLoading(false)
+      return
+    }
     let mounted = true
     const load = async () => {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setExpenseRows([])
+        setExpenseRowsFetched([])
         if (mounted) setLoading(false)
         return
       }
@@ -60,13 +76,13 @@ export default function ExpensesTrendChartCard({ refreshTrigger = 0 }: { refresh
         .lte('date', rangeEnd)
         .order('date', { ascending: true })
       if (mounted) {
-        setExpenseRows((data as ExpenseRow[]) ?? [])
+        setExpenseRowsFetched((data as ExpenseRow[]) ?? [])
         setLoading(false)
       }
     }
     load()
     return () => { mounted = false }
-  }, [rangeStart, rangeEnd, refreshTrigger])
+  }, [rangeStart, rangeEnd, refreshTrigger, useProp])
 
   const { labels, values } = useMemo(() => {
     const byMonth = new Map<string, number>()

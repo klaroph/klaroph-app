@@ -186,7 +186,7 @@ export default function BudgetOverview({
 
   const isCurrentMonth = selectedMonth === currentMonthFirst
   const spendingByCategory =
-    isCurrentMonth && spendingByCategoryProp !== undefined
+    spendingByCategoryProp !== undefined
       ? spendingByCategoryProp
       : spendingByCategoryFetched
 
@@ -215,8 +215,7 @@ export default function BudgetOverview({
   useEffect(() => {
     let mounted = true
     const { start, end } = getMonthRange(selectedMonth)
-    const useProp = isCurrentMonth && spendingByCategoryProp !== undefined
-    if (useProp) return
+    if (spendingByCategoryProp !== undefined) return
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!mounted || !user) return
       supabase
@@ -237,7 +236,7 @@ export default function BudgetOverview({
         })
     })
     return () => { mounted = false }
-  }, [selectedMonth, budgetRefreshKey, isCurrentMonth, spendingByCategoryProp])
+  }, [selectedMonth, budgetRefreshKey, spendingByCategoryProp])
 
   useEffect(() => {
     let mounted = true

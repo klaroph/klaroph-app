@@ -44,6 +44,7 @@ import {
   useDashboardTransactionRefresh,
   useMobilePortrait,
 } from '@/hooks/useTransactionPageShared'
+import { TRANSACTION_PAGE_LIMIT } from '@/lib/dashboardSnapshot'
 
 type IncomeRecord = {
   id: string
@@ -151,6 +152,7 @@ export default function IncomePage() {
         .gte('date', range.start)
         .lte('date', range.end)
         .order('date', { ascending: false })
+        .limit(TRANSACTION_PAGE_LIMIT)
       if (sourceFilter) query = query.eq('income_source', sourceFilter)
       const { data } = await query
       setRecords((data as IncomeRecord[]) || [])

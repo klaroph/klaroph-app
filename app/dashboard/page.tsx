@@ -23,6 +23,10 @@ import Link from 'next/link'
 import UpgradeCTA from '@/components/ui/UpgradeCTA'
 import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
 import { useDashboardActions } from './DashboardLayoutClient'
+import {
+  type DashboardSnapshot,
+  spendingByCategoryFromExpenses,
+} from '@/lib/dashboardSnapshot'
 
 const GoalMomentumSection = dynamic(
   () => import('@/components/dashboard/GoalMomentumSection'),
@@ -83,10 +87,32 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false)
   const [manageGoalsOpen, setManageGoalsOpen] = useState(false)
   const [addGoalOpen, setAddGoalOpen] = useState(false)
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
 
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadSnapshot = async () => {
+      try {
+        const res = await fetch(
+          `/api/dashboard/snapshot?month=${encodeURIComponent(budgetMonth)}`,
+          { credentials: 'include' }
+        )
+        if (!res.ok) return
+        const data = (await res.json()) as DashboardSnapshot
+        if (!cancelled) setSnapshot(data)
+      } catch {
+        /* keep prior snapshot */
+      }
+    }
+    loadSnapshot()
+    return () => {
+      cancelled = true
+    }
+  }, [budgetMonth, refreshTrigger])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -136,6 +162,16 @@ export default function DashboardPage() {
   const totalTarget = goals.reduce((sum, g) => sum + Number(g.target_amount || 0), 0)
   const maxGoals = features?.max_goals ?? PLAN_LIMITS.free.maxGoals
   const { openAddIncome, openAddExpense } = useDashboardActions()
+  const snapshotSpending =
+    snapshot && snapshot.monthFirst === budgetMonth
+      ? spendingByCategoryFromExpenses(snapshot.monthExpenses)
+      : undefined
+  const snapshotTrend =
+    snapshot && snapshot.monthFirst === budgetMonth ? snapshot.trendExpenses : undefined
+  const snapshotIncome =
+    snapshot && snapshot.monthFirst === budgetMonth ? snapshot.monthIncome : undefined
+  const snapshotExpenses =
+    snapshot && snapshot.monthFirst === budgetMonth ? snapshot.monthExpenses : undefined
 
   return (
     <div
@@ -217,6 +253,7 @@ export default function DashboardPage() {
           selectedMonth={budgetMonth}
           onMonthChange={setBudgetMonth}
           budgetRefreshKey={refreshTrigger}
+          spendingByCategory={snapshotSpending}
           maxCategories={8}
           breakdownTitle="Top spending to watch"
           breakdownTitleMobile="Top 3 spending"
@@ -241,7 +278,10 @@ export default function DashboardPage() {
         </button>
         <div className={`dashboard-deferred-body${showDetails ? ' is-open' : ''}`}>
           <div className="dashboard-deferred-trend hidden lg:block">
-            <ExpensesTrendChartCard refreshTrigger={refreshTrigger} />
+            <ExpensesTrendChartCard
+              refreshTrigger={refreshTrigger}
+              expenseRows={snapshotTrend}
+            />
           </div>
           <div className="dashboard-deferred-flow">
             <h3 className="dashboard-deferred-title">This month’s cashflow</h3>
@@ -262,6 +302,9 @@ export default function DashboardPage() {
               monthFirst={budgetMonth}
               onMonthChange={setBudgetMonth}
               className="income-expense-flow--dashboard-page"
+              snapshotIncome={snapshotIncome}
+              snapshotExpenses={snapshotExpenses}
+              snapshotMonthFirst={snapshot?.monthFirst}
             />
           </div>
         </div>
