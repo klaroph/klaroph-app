@@ -10,6 +10,8 @@ import BudgetOverview from '@/components/dashboard/BudgetOverview'
 import BudgetPlanner from '@/components/budget/BudgetPlanner'
 import MonthOverrideModal from '@/components/budget/MonthOverrideModal'
 import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
+import PeriodFilterPills from '@/components/dashboard/PeriodFilterPills'
+import ExportCsvButton from '@/components/dashboard/ExportCsvButton'
 import {
   TREND_CHART_TYPES,
   CATEGORY_CHART_TYPES,
@@ -23,18 +25,26 @@ import FinancialChart, { isProChartType, type ChartTypeTrend, type ChartTypeCate
 import PremiumBadge from '@/components/ui/PremiumBadge'
 import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
 import UpgradeCTA from '@/components/ui/UpgradeCTA'
-import LockIcon from '@/components/ui/LockIcon'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { usePremiumGate } from '@/hooks/usePremiumGate'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { useTriggerDateRangeBeyond90 } from '@/hooks/useSmartUpgradeTriggers'
 import { getAllTimeRangeAndGrouping, type AllTimeRangeResult } from '@/lib/allTimeRange'
+import { dispatchDashboardTransactionsRefresh } from '@/lib/dashboardRefresh'
+import { toLocalDateString } from '@/lib/format'
+import { buildTrendSeries, topNWithOthers } from '@/lib/buildTrendSeries'
 import {
-  DASHBOARD_REFRESH_EVENT,
-  DASHBOARD_TRANSACTIONS_REFRESH_EVENT,
-  dispatchDashboardTransactionsRefresh,
-} from '@/lib/dashboardRefresh'
-import { toLocalDateString, parseLocalDateString } from '@/lib/format'
+  type FilterPeriod,
+  PERIOD_LABELS,
+  getMonthRange,
+  getRange,
+  getTrendGrouping,
+  formatMonthLabel,
+} from '@/lib/transactionPeriod'
+import {
+  useDashboardTransactionRefresh,
+  useMobilePortrait,
+} from '@/hooks/useTransactionPageShared'
 
 type ExpenseRow = {
   id: string
@@ -43,53 +53,6 @@ type ExpenseRow = {
   amount: number
   date: string
   description?: string | null
-}
-
-type FilterPeriod = 'this_week' | 'previous_week' | 'month' | 'previous_month' | 'quarter' | 'previous_quarter' | 'year' | 'previous_year' | 'all_time' | 'custom'
-
-/** Returns { start, end } for the month whose first day is monthFirst (YYYY-MM-01). */
-function getMonthRange(monthFirst: string): { start: string; end: string } {
-  const [y, m] = monthFirst.split('-').map(Number)
-  const start = new Date(y, (m ?? 1) - 1, 1)
-  const end = new Date(y, (m ?? 1), 0)
-  return { start: toLocalDateString(start), end: toLocalDateString(end) }
-}
-
-function getRange(period: FilterPeriod, customStart: string, customEnd: string) {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = now.getMonth()
-  const dayOfWeek = now.getDay()
-  switch (period) {
-    case 'this_week': {
-      const start = new Date(now)
-      start.setDate(now.getDate() - dayOfWeek)
-      return { start: toLocalDateString(start), end: toLocalDateString(now) }
-    }
-    case 'previous_week': {
-      const end = new Date(now)
-      end.setDate(now.getDate() - dayOfWeek - 1)
-      const start = new Date(end)
-      start.setDate(end.getDate() - 6)
-      return { start: toLocalDateString(start), end: toLocalDateString(end) }
-    }
-    case 'month': return { start: toLocalDateString(new Date(y, m, 1)), end: toLocalDateString(new Date(y, m + 1, 0)) }
-    case 'previous_month': return { start: toLocalDateString(new Date(y, m - 1, 1)), end: toLocalDateString(new Date(y, m, 0)) }
-    case 'quarter': {
-      const q = Math.floor(m / 3) * 3
-      return { start: toLocalDateString(new Date(y, q, 1)), end: toLocalDateString(new Date(y, q + 3, 0)) }
-    }
-    case 'previous_quarter': {
-      const q = Math.floor(m / 3) * 3 - 3
-      const start = new Date(y, q, 1)
-      const end = new Date(y, q + 3, 0)
-      return { start: toLocalDateString(start), end: toLocalDateString(end) }
-    }
-    case 'year': return { start: `${y}-01-01`, end: `${y}-12-31` }
-    case 'previous_year': return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31` }
-    case 'all_time': return { start: toLocalDateString(now), end: toLocalDateString(now) }
-    case 'custom': return { start: customStart || `${y}-01-01`, end: customEnd || toLocalDateString(now) }
-  }
 }
 
 function aggregateByCategory(rows: ExpenseRow[]) {
@@ -101,48 +64,6 @@ function aggregateByCategory(rows: ExpenseRow[]) {
   return Array.from(map.entries())
     .map(([category, total]) => ({ category, total }))
     .sort((a, b) => b.total - a.total)
-}
-
-const PERIOD_LABELS: Record<FilterPeriod, string> = {
-  this_week: 'This Week',
-  previous_week: 'Last Week',
-  month: 'This Month',
-  previous_month: 'Last Month',
-  quarter: 'This Quarter',
-  previous_quarter: 'Last Quarter',
-  year: 'This Year',
-  previous_year: 'Last Year',
-  all_time: 'All Time',
-  custom: 'Custom Range',
-}
-
-/** Periods that require Pro (unlimited history). Free users see lock and open upgrade modal on click. */
-const PREMIUM_PERIODS = new Set<FilterPeriod>(['previous_quarter', 'year', 'previous_year', 'all_time', 'custom'])
-const LOCKED_FILTER_TOOLTIP = 'Available in Pro — unlock unlimited history.'
-
-function getTrendGrouping(period: FilterPeriod): 'day' | 'month' | 'year' {
-  if (period === 'year' || period === 'previous_year') return 'month'
-  return 'day'
-}
-
-const dayLabelFmt = new Intl.DateTimeFormat('en-PH', { month: '2-digit', day: '2-digit' })
-const monthLabelFmt = new Intl.DateTimeFormat('en-PH', { month: 'short', year: 'numeric' })
-const monthLongFmt = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' })
-function formatMonthLabel(monthFirst: string): string {
-  const [y, m] = monthFirst.split('-').map(Number)
-  return monthLongFmt.format(new Date(y, (m ?? 1) - 1, 1))
-}
-
-function formatTrendLabel(key: string, grouping: 'day' | 'month' | 'year'): string {
-  if (grouping === 'day') {
-    const [y, m, d] = key.split('-').map(Number)
-    return dayLabelFmt.format(new Date(y, (m ?? 1) - 1, d ?? 1))
-  }
-  if (grouping === 'month') {
-    const [y, m] = key.split('-').map(Number)
-    return monthLabelFmt.format(new Date(y, (m ?? 1) - 1, 1))
-  }
-  return key
 }
 
 const BAR_COLORS = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca', '#fee2e2']
@@ -165,7 +86,7 @@ export default function ExpensesPage() {
   const [editingExpense, setEditingExpense] = useState<ExpenseRecord | null>(null)
   const [rows, setRows] = useState<ExpenseRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const { refreshTrigger, setRefreshTrigger } = useDashboardTransactionRefresh()
   const [period, setPeriod] = useState<FilterPeriod>('month')
   const [typeFilter, setTypeFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -175,9 +96,8 @@ export default function ExpensesPage() {
   const [categoryChartType, setCategoryChartType] = useState<CategoryChartType>('pie')
   const [attemptedProTrendType, setAttemptedProTrendType] = useState<TrendChartType | null>(null)
   const [attemptedProCategoryType, setAttemptedProCategoryType] = useState<CategoryChartType | null>(null)
-  const [exportLoading, setExportLoading] = useState(false)
   const [allTimeRange, setAllTimeRange] = useState<AllTimeRangeResult | null>(null)
-  const [isMobilePortrait, setIsMobilePortrait] = useState(false)
+  const isMobilePortrait = useMobilePortrait()
   const [budgetRefreshKey, setBudgetRefreshKey] = useState(0)
   const [budgetPlannerOpen, setBudgetPlannerOpen] = useState(false)
   const [monthOverrideOpen, setMonthOverrideOpen] = useState(false)
@@ -197,28 +117,7 @@ export default function ExpensesPage() {
   const { isPro, features } = useSubscription()
   const { openUpgradeModal } = useUpgradeTrigger()
 
-  useEffect(() => {
-    const checkOrientation = () => {
-      const isMobile = window.innerWidth <= 768
-      const isPortrait = window.innerHeight > window.innerWidth
-      setIsMobilePortrait(isMobile && isPortrait)
-    }
 
-    checkOrientation()
-    window.addEventListener('resize', checkOrientation)
-
-    return () => window.removeEventListener('resize', checkOrientation)
-  }, [])
-
-  useEffect(() => {
-    const onRefresh = () => setRefreshTrigger((n) => n + 1)
-    window.addEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
-    window.addEventListener(DASHBOARD_TRANSACTIONS_REFRESH_EVENT, onRefresh)
-    return () => {
-      window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
-      window.removeEventListener(DASHBOARD_TRANSACTIONS_REFRESH_EVENT, onRefresh)
-    }
-  }, [])
 
   const userPlan = isPro ? 'pro' : 'free'
   const { requestProFeature } = usePremiumGate({ onRequestPro: openUpgradeModal })
@@ -295,68 +194,20 @@ export default function ExpensesPage() {
     ? (budgetSelectedMonth === currentMonthFirst ? 'month' : budgetSelectedMonth === previousMonthFirst ? 'previous_month' : period)
     : period
 
-  const trendData = useMemo(() => {
-    const trendMap = new Map<string, number>()
-    for (const r of rows) {
-      const key =
-        trendGrouping === 'day'
-          ? r.date
-          : trendGrouping === 'month'
-            ? r.date.slice(0, 7)
-            : r.date.slice(0, 4)
-      trendMap.set(key, (trendMap.get(key) ?? 0) + Number(r.amount))
-    }
-    if (trendGrouping === 'day' && range.start && range.end) {
-      const out: [string, number][] = []
-      const start = parseLocalDateString(range.start)
-      const end = parseLocalDateString(range.end)
-      for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate()); d <= end; d.setDate(d.getDate() + 1)) {
-        const key = toLocalDateString(d)
-        out.push([key, trendMap.get(key) ?? 0])
-      }
-      return out.sort((a, b) => a[0].localeCompare(b[0]))
-    }
-    if (trendGrouping === 'month' && range.start && range.end) {
-      const out: [string, number][] = []
-      const [sy, sm] = range.start.slice(0, 7).split('-').map(Number)
-      const [ey, em] = range.end.slice(0, 7).split('-').map(Number)
-      for (let y = sy; y <= ey; y++) {
-        const mStart = y === sy ? (sm ?? 1) : 1
-        const mEnd = y === ey ? (em ?? 12) : 12
-        for (let m = mStart; m <= mEnd; m++) {
-          const key = `${y}-${String(m).padStart(2, '0')}`
-          out.push([key, trendMap.get(key) ?? 0])
-        }
-      }
-      return out.sort((a, b) => a[0].localeCompare(b[0]))
-    }
-    if (trendGrouping === 'year' && range.start && range.end) {
-      const out: [string, number][] = []
-      const sy = Number(range.start.slice(0, 4))
-      const ey = Number(range.end.slice(0, 4))
-      for (let y = sy; y <= ey; y++) {
-        const key = String(y)
-        out.push([key, trendMap.get(key) ?? 0])
-      }
-      return out.sort((a, b) => a[0].localeCompare(b[0]))
-    }
-    return Array.from(trendMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [rows, range.start, range.end, trendGrouping])
-  const trendLabels = useMemo(() => trendData.map(([key]) => formatTrendLabel(key, trendGrouping)), [trendData, trendGrouping])
-  const trendValues = useMemo(() => trendData.map(([, v]) => v), [trendData])
+  const { labels: trendLabels, values: trendValues } = useMemo(
+    () =>
+      buildTrendSeries(
+        rows.map((r) => ({ date: r.date, amount: Number(r.amount) })),
+        range,
+        trendGrouping
+      ),
+    [rows, range, trendGrouping]
+  )
 
-  const categoryChartData = useMemo(() => {
-    if (byCategory.length <= 8) {
-      return { labels: byCategory.map((c) => c.category), values: byCategory.map((c) => c.total) }
-    }
-    const top = byCategory.slice(0, 7)
-    const rest = byCategory.slice(7)
-    const othersTotal = rest.reduce((s, c) => s + c.total, 0)
-    return {
-      labels: [...top.map((c) => c.category), 'Others'],
-      values: [...top.map((c) => c.total), othersTotal],
-    }
-  }, [byCategory])
+  const categoryChartData = useMemo(
+    () => topNWithOthers(byCategory, 'category'),
+    [byCategory]
+  )
 
   const labelStyle: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }
   const valueStyle: React.CSSProperties = { fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }
@@ -374,42 +225,7 @@ export default function ExpensesPage() {
           </p>
         </div>
         <div className="page-header-actions income-expenses-page-header-actions">
-          {isPro ? (
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ padding: '8px 14px', fontSize: 14 }}
-              disabled={exportLoading}
-              onClick={async () => {
-                setExportLoading(true)
-                try {
-                  const res = await fetch('/api/analytics/export', { credentials: 'include' })
-                  if (res.ok) {
-                    const blob = await res.blob()
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = 'klaroph-export.csv'
-                    a.click()
-                    URL.revokeObjectURL(url)
-                  }
-                } finally {
-                  setExportLoading(false)
-                }
-              }}
-            >
-              {exportLoading ? 'Exporting…' : 'Export CSV'}
-            </button>
-          ) : (
-            <span title="CSV export available in Pro plan." className="premium-btn-disabled">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              Export CSV
-              <PremiumBadge size="sm" />
-            </span>
-          )}
+          <ExportCsvButton isPro={isPro} />
           <button type="button" className="btn-secondary" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
             Import CSV
           </button>
@@ -479,43 +295,18 @@ export default function ExpensesPage() {
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Filters
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(['this_week', 'previous_week', 'month', 'previous_month', 'quarter', 'previous_quarter', 'year', 'previous_year', 'all_time', 'custom'] as FilterPeriod[]).map((p) => {
-              const isLocked = !isPro && PREMIUM_PERIODS.has(p)
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  title={isLocked ? LOCKED_FILTER_TOOLTIP : undefined}
-                  onClick={() => {
-                    if (isLocked) {
-                      openUpgradeModal()
-                      return
-                    }
-                    setSyncFromBudget(false)
-                    setPeriod(p)
-                    if (p === 'month') setBudgetSelectedMonth(currentMonthFirst)
-                    else if (p === 'previous_month') setBudgetSelectedMonth(previousMonthFirst)
-                  }}
-                  style={{
-                    padding: '4px 10px', fontSize: 12, fontWeight: effectivePeriodForPill === p ? 600 : 400,
-                    border: `1px solid ${effectivePeriodForPill === p ? '#dc2626' : 'var(--border)'}`,
-                    borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
-                    background: effectivePeriodForPill === p ? 'rgba(220, 38, 38, 0.08)' : 'var(--surface)',
-                    color: effectivePeriodForPill === p ? '#dc2626' : 'var(--text-secondary)',
-                    opacity: isLocked ? 0.85 : 1,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                  className={isLocked ? 'analytics-filter-locked' : ''}
-                >
-                  {isLocked && <LockIcon size={11} />}
-                  {PERIOD_LABELS[p]}
-                </button>
-              )
-            })}
-          </div>
+          <PeriodFilterPills
+            period={period}
+            activePeriod={effectivePeriodForPill}
+            isPro={isPro}
+            onLockedClick={openUpgradeModal}
+            onSelect={(p) => {
+              setSyncFromBudget(false)
+              setPeriod(p)
+              if (p === 'month') setBudgetSelectedMonth(currentMonthFirst)
+              else if (p === 'previous_month') setBudgetSelectedMonth(previousMonthFirst)
+            }}
+          />
           {period === 'custom' && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 6 }} />
@@ -599,7 +390,7 @@ export default function ExpensesPage() {
             </div>
             {loading ? (
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading...</span>
-            ) : trendData.length === 0 ? (
+            ) : trendLabels.length === 0 ? (
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No data yet.</span>
             ) : !availableTrendTypes?.length ? null : (
               <>
