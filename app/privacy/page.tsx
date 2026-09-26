@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 
-const LAST_UPDATED = 'February 2025'
+const LAST_UPDATED = 'September 2026'
 
 export const metadata = {
   title: 'Privacy Policy — KlaroPH',
@@ -49,8 +49,16 @@ export default function PrivacyPage() {
             <li>Authenticate your account and keep it secure</li>
             <li>Display your dashboard, analytics, and goal progress</li>
             <li>Respond to support requests and communicate with you</li>
+            <li>Send product updates, feature announcements, and other relevant KlaroPH communications by email</li>
             <li>Comply with applicable laws and protect our rights</li>
           </ul>
+          <p>
+            Product-update and marketing emails are separate from essential account and transactional emails, such as
+            sign-in, password reset, and payment confirmation messages. Every product-update email includes an
+            unsubscribe link, and you can unsubscribe at any time. Unsubscribing does not delete or disable your KlaroPH
+            account, and we will still send essential account and transactional emails where they are needed to provide
+            the service.
+          </p>
         </section>
 
         <section className="legal-section">

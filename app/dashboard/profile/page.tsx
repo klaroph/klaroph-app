@@ -11,6 +11,7 @@ import {
 import ClarityBadge from '@/components/profile/ClarityBadge'
 import ProfileActionCTA from '@/components/profile/ProfileActionCTA'
 import DeleteAccountSection from '@/components/profile/DeleteAccountSection'
+import EmailPreferencesSection from '@/components/profile/EmailPreferencesSection'
 import KlaroPageHeader from '@/components/layout/KlaroPageHeader'
 
 
@@ -360,7 +361,10 @@ export default function ProfilePage() {
       {/* Section 4 — Action Engine */}
       <ProfileActionCTA isComplete={isComplete} />
 
-      {/* Section 5 — Delete account (danger zone) */}
+      {/* Section 5 — Email preferences */}
+      <EmailPreferencesSection />
+
+      {/* Section 6 — Delete account (danger zone) */}
       <DeleteAccountSection />
     </div>
   )
