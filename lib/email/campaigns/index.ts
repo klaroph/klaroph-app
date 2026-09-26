@@ -3,6 +3,8 @@ import { v2LaunchCampaign } from './v2Launch'
 export type MarketingCampaign = {
   /** Stable id used for duplicate-send protection and Resend tags. Never reuse for new content. */
   id: string
+  /** Founder-facing name; never shown to recipients. */
+  name: string
   subject: string
   previewText: string
   headline: string
@@ -18,6 +20,10 @@ export type MarketingCampaign = {
 }
 
 const CAMPAIGNS: readonly MarketingCampaign[] = [v2LaunchCampaign]
+
+export function listMarketingCampaigns(): readonly MarketingCampaign[] {
+  return CAMPAIGNS
+}
 
 export function getMarketingCampaign(id: string): MarketingCampaign | null {
   return CAMPAIGNS.find((c) => c.id === id) ?? null

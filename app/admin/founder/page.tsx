@@ -1,201 +1,110 @@
-import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
-import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import Link from 'next/link'
+import { loadFounderSnapshot } from '@/lib/founder/data'
+import { configuredHealth, databaseHealth, type HealthSignal } from '@/lib/founder/metrics'
+import { formatCount, formatCountOf, formatLongDate, formatPeso, formatRelative, founderGreeting } from '@/lib/founder/format'
+import { AttentionList, DockHeader, DockSection, SignalList, StatCard, UnavailableNote } from '@/components/founder/DockUI'
 
-export const dynamic = 'force-dynamic'
+const ACTIVITY_ICONS = { signup: '＋', purchase: '₱', campaign: '✉' } as const
 
-type FounderMetrics = {
-  total_users?: number
-  new_users_today?: number
-  dau?: number
-  wau?: number
-  mau?: number
-  pro_users?: number
-  free_to_pro_conversion?: number
-  seven_day_retention?: number
-  seven_day_retention_activity?: number
-  auth_audit?: {
-    auth_users_count?: number
-    profiles_count?: number
-    auth_minus_profiles?: number
-    auth_without_profile?: number
-  }
-  first_value_moment?: {
-    avg_days_to_first_expense?: number | null
-    avg_hours_to_first_expense?: number | null
-  }
-}
+export default async function FounderOverviewPage() {
+  const s = await loadFounderSnapshot()
+  const now = new Date(s.now)
+  const { userSummary: users, revenue } = s
+  const activePct = users.total ? Math.round((users.active / users.total) * 100) : 0
+  const lastCampaign = s.campaigns.find((c) => c.delivery.lastSentAt)
 
-function MetricCard({
-  title,
-  value,
-  sub,
-}: {
-  title: string
-  value: React.ReactNode
-  sub?: string
-}) {
+  const health: HealthSignal[] = [
+    databaseHealth(s.database),
+    revenue.lastWebhookAt
+      ? { label: 'Payments', value: `Last PayMongo event ${formatRelative(revenue.lastWebhookAt, now)}`, tone: s.config.paymongoWebhookConfigured ? 'ok' : 'bad' }
+      : configuredHealth('Payments', s.config.paymongoWebhookConfigured, 'Webhook secret missing'),
+    s.config.aiConfigured
+      ? { label: 'Ask Klaro', value: `${formatCountOf(s.ai.requestsToday, 'request')} today`, tone: 'ok' }
+      : configuredHealth('Ask Klaro', false),
+    lastCampaign
+      ? { label: 'Email', value: `Last campaign: ${lastCampaign.delivery.sent} accepted`, tone: lastCampaign.delivery.pending ? 'warn' : 'ok' }
+      : configuredHealth('Email', s.config.deliveryConfigured),
+  ]
+
+  const attentionSummary =
+    s.attention.length === 0 ? 'All clear' : `${s.attention.length} item${s.attention.length === 1 ? '' : 's'} need${s.attention.length === 1 ? 's' : ''} attention`
+
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--color-card)] p-4 shadow-sm">
-      <p className="text-sm font-medium text-[var(--text-secondary)]">{title}</p>
-      <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{value}</p>
-      {sub != null && sub !== '' && (
-        <p className="mt-0.5 text-xs text-[var(--text-muted)]">{sub}</p>
-      )}
-    </div>
-  )
-}
+    <>
+      <DockHeader
+        eyebrow="KlaroPH Mission Control"
+        title={`${founderGreeting(now)}, Founder.`}
+        subtitle={
+          <>
+            {formatLongDate(now)} · <strong>{attentionSummary}</strong>
+          </>
+        }
+      />
+      <UnavailableNote sources={s.unavailable} />
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-      {children}
-    </h2>
-  )
-}
+      <DockSection title="Attention" hint="Only things that need a decision from you.">
+        <AttentionList items={s.attention} />
+      </DockSection>
 
-export default async function FounderDashboardPage() {
-  const supabase = await createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user) {
-    redirect('/')
-  }
-
-  const founderEmail = process.env.FOUNDER_EMAIL
-  if (founderEmail && session.user.email !== founderEmail) {
-    redirect('/dashboard')
-  }
-
-  let baseUrl = process.env.NEXT_PUBLIC_APP_URL
-  if (!baseUrl) {
-    const h = await headers()
-    const host = h.get('host') ?? 'localhost:3000'
-    const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https'
-    baseUrl = `${protocol}://${host}`
-  }
-
-  const secret = process.env.FOUNDER_DASHBOARD_SECRET
-  const requestHeaders: HeadersInit = {
-    ...(secret && { Authorization: `Bearer ${secret}` }),
-  }
-
-  let data: FounderMetrics | null = null
-  let fetchError: string | null = null
-
-  try {
-    const res = await fetch(`${baseUrl}/api/founder-dashboard`, {
-      cache: 'no-store',
-      headers: requestHeaders,
-    })
-    if (!res.ok) {
-      fetchError = `API ${res.status}: ${res.statusText}`
-    } else {
-      data = await res.json()
-    }
-  } catch (e) {
-    fetchError = e instanceof Error ? e.message : 'Failed to load metrics'
-  }
-
-  if (fetchError || !data) {
-    return (
-      <div className="min-h-screen bg-[var(--color-bg)] p-4 md:p-6">
-        <div className="mx-auto max-w-4xl">
-          <Link
-            href="/dashboard"
-            className="text-sm font-medium text-[var(--color-primary)] hover:underline"
-          >
-            ← Back to dashboard
-          </Link>
-          <div className="mt-6 rounded-xl border border-[var(--color-danger)] bg-[var(--color-error-bg)] p-6 text-center">
-            <p className="font-medium text-[var(--color-danger)]">Unable to load founder metrics</p>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">{fetchError ?? 'No data'}</p>
-          </div>
+      <DockSection title="Key numbers" hint="Real customers only — tester accounts are excluded.">
+        <div className="fd-grid fd-grid-4">
+          <StatCard
+            label="Users"
+            value={formatCount(users.total)}
+            context={users.newThisWeek ? `+${users.newThisWeek} this week` : 'No new signups this week'}
+          />
+          <StatCard
+            label="Active"
+            value={formatCount(users.active)}
+            context={`${activePct}% signed in within 30 days${s.activity ? ` · ${s.activity.wau} logged activity this week` : ''}`}
+          />
+          <StatCard
+            label="Pro"
+            value={formatCount(users.pro.total)}
+            context={`${users.pro.paid} paid · ${users.pro.lifetime} lifetime · ${users.pro.complimentary} complimentary`}
+          />
+          <StatCard
+            label="Revenue · 30 days"
+            value={formatPeso(revenue.last30.gross)}
+            context={`${formatPeso(revenue.allTime.gross)} collected all time`}
+          />
         </div>
+      </DockSection>
+
+      <div className="fd-grid fd-grid-2">
+        <DockSection
+          title="Product health"
+          action={
+            <Link href="/admin/founder/health" className="fd-link">
+              Details →
+            </Link>
+          }
+        >
+          <div className="fd-card">
+            <SignalList signals={health} />
+          </div>
+        </DockSection>
+
+        <DockSection title="Recent activity">
+          <div className="fd-card">
+            {s.recentActivity.length === 0 ? (
+              <p className="fd-empty">No recent activity.</p>
+            ) : (
+              <ul className="fd-activity">
+                {s.recentActivity.map((e, i) => (
+                  <li key={`${e.kind}-${e.at}-${i}`} className={`fd-activity-item fd-activity-${e.kind}`}>
+                    <span className="fd-activity-icon" aria-hidden>
+                      {ACTIVITY_ICONS[e.kind]}
+                    </span>
+                    <span className="fd-activity-text">{e.text}</span>
+                    <span className="fd-activity-time">{formatRelative(e.at, now)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DockSection>
       </div>
-    )
-  }
-
-  return (
-    <div className="min-h-screen bg-[var(--color-bg)] p-4 md:p-6">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">Founder dashboard</h1>
-            <p className="text-sm text-[var(--text-muted)]">Internal metrics (live)</p>
-          </div>
-          <Link
-            href="/dashboard"
-            className="text-sm font-medium text-[var(--color-primary)] hover:underline"
-          >
-            ← Dashboard
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <MetricCard title="Total users" value={data.total_users ?? '—'} />
-          <MetricCard title="New users today" value={data.new_users_today ?? '—'} />
-          <MetricCard title="DAU" value={data.dau ?? '—'} sub="Daily active users" />
-          <MetricCard title="WAU" value={data.wau ?? '—'} sub="Weekly active users" />
-          <MetricCard title="MAU" value={data.mau ?? '—'} sub="Monthly active users" />
-          <MetricCard title="Pro users" value={data.pro_users ?? '—'} />
-          <MetricCard
-            title="Free → Pro conversion"
-            value={data.free_to_pro_conversion != null ? `${data.free_to_pro_conversion}%` : '—'}
-          />
-          <MetricCard
-            title="7-day retention (login)"
-            value={data.seven_day_retention != null ? `${data.seven_day_retention}%` : '—'}
-          />
-          <MetricCard
-            title="7-day retention (activity)"
-            value={data.seven_day_retention_activity != null ? `${data.seven_day_retention_activity}%` : '—'}
-          />
-        </div>
-
-        {data.auth_audit && (
-          <div className="mt-8">
-            <SectionTitle>Auth audit</SectionTitle>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard title="auth.users count" value={data.auth_audit.auth_users_count ?? '—'} />
-              <MetricCard title="profiles count" value={data.auth_audit.profiles_count ?? '—'} />
-              <MetricCard
-                title="auth − profiles"
-                value={data.auth_audit.auth_minus_profiles ?? '—'}
-                sub="Should be 0"
-              />
-              <MetricCard
-                title="auth without profile"
-                value={data.auth_audit.auth_without_profile ?? '—'}
-              />
-            </div>
-          </div>
-        )}
-
-        {data.first_value_moment && (
-          <div className="mt-8">
-            <SectionTitle>First value moment</SectionTitle>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <MetricCard
-                title="Avg days to first expense"
-                value={
-                  data.first_value_moment.avg_days_to_first_expense != null
-                    ? data.first_value_moment.avg_days_to_first_expense
-                    : '—'
-                }
-              />
-              <MetricCard
-                title="Avg hours to first expense"
-                value={
-                  data.first_value_moment.avg_hours_to_first_expense != null
-                    ? data.first_value_moment.avg_hours_to_first_expense
-                    : '—'
-                }
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   )
 }

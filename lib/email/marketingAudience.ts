@@ -88,7 +88,7 @@ export function selectEligibleRecipients(input: {
   return recipients
 }
 
-async function loadAuthUsers(admin: SupabaseClient): Promise<AudienceAuthUser[]> {
+export async function loadAuthUsers(admin: SupabaseClient): Promise<AudienceAuthUser[]> {
   const users: AudienceAuthUser[] = []
   for (let page = 1; ; page++) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PAGE_SIZE })

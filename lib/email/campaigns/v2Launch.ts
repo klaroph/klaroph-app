@@ -6,6 +6,7 @@ import type { MarketingCampaign } from './index'
  */
 export const v2LaunchCampaign: MarketingCampaign = {
   id: 'v2-launch-2026',
+  name: 'KlaroPH V2 Launch',
   subject: 'KlaroPH V2 is here — your money, made Klaro.',
   previewText:
     "Your account is still here. We've rebuilt the experience around how you earn, plan, spend, and grow.",
