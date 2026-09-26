@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../../lib/supabaseClient'
+import { supabase, getBrowserUser } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
+import SuggestionChips from './SuggestionChips'
 import {
   EXPENSE_CATEGORIES,
   getTypeForCategory,
 } from '../../lib/expenseCategories'
 import { toLocalDateString } from '@/lib/format'
-import { suggestCategoriesFromDescription } from '../../lib/expenseCategorySuggestion'
+import { classifyTransactionDescription } from '@/lib/transactionSuggestion'
 
 type AddExpenseModalProps = {
   isOpen: boolean
@@ -24,13 +25,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const suggestionResult = useMemo(
-    () => (description.trim() ? suggestCategoriesFromDescription(description) : { suggestions: [], confidence: 'low' as const }),
-    [description]
-  )
-
-  const showChips = suggestionResult.confidence === 'high' || suggestionResult.confidence === 'medium'
-  const chips = showChips ? suggestionResult.suggestions : []
+  const suggestedCategories = useMemo(() => classifyTransactionDescription('expense', description), [description])
 
   const [budgetNotes, setBudgetNotes] = useState<Record<string, string>>({})
 
@@ -63,10 +58,6 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
     onClose()
   }
 
-  const handleChipClick = (selectedCategory: string) => {
-    setCategory(selectedCategory)
-  }
-
   const handleCategoryChange = (value: string) => {
     setCategory(value)
   }
@@ -75,7 +66,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBrowserUser()
     if (!user) {
       setError('Not authenticated.')
       setLoading(false)
@@ -142,34 +133,12 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
             autoComplete="off"
           />
 
-          {/* 2. Suggested category chips — only when high or medium confidence */}
-          {chips.length > 0 && (
-            <>
-              <div className="add-expense-suggestion-label" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, marginBottom: 6 }}>
-                <span className="add-expense-suggestion-stars" aria-hidden>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={18} height={18}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
-                  </svg>
-                </span>
-                <span>Suggested category</span>
-              </div>
-              <div
-                className="add-expense-chips"
-                style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}
-              >
-                {chips.map((s) => (
-                  <button
-                    key={s.category}
-                    type="button"
-                    className={`add-expense-chip add-expense-chip-gradient ${category === s.category ? 'active' : ''}`}
-                    onClick={() => handleChipClick(s.category)}
-                  >
-                    {s.category}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          <SuggestionChips
+            label="Suggested category"
+            chips={suggestedCategories}
+            selected={category}
+            onSelect={setCategory}
+          />
         </div>
 
         {/* 3. Amount */}
@@ -230,23 +199,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
         {error && (
           <p style={{ margin: 0, marginBottom: 16, fontSize: 13, color: 'var(--color-danger, #b91c1c)' }}>{error}</p>
         )}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '12px 20px',
-            fontSize: 14,
-            fontWeight: 600,
-            border: 'none',
-            borderRadius: 8,
-            backgroundColor: 'var(--color-success, #059669)',
-            color: '#fff',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-            width: '100%',
-            transition: 'opacity 0.15s ease',
-          }}
-        >
+        <button type="submit" disabled={loading} className="btn-primary" style={{ width: '100%' }}>
           {loading ? 'Saving...' : 'Add expense'}
         </button>
       </form>

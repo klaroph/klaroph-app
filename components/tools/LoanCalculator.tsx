@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { formatPeso } from '@/lib/format'
 import ToolSeoFaq from '@/components/tools/ToolSeoFaq'
+import KlaroPageHeader from '@/components/layout/KlaroPageHeader'
+import { computeLoanAmortization } from '@/lib/loanAmortization'
 
 export default function LoanCalculator() {
   type LoanType = 'personal' | 'car' | 'housing'
@@ -18,43 +21,53 @@ export default function LoanCalculator() {
         ? 'Car loans often include down payment requirements and bank processing fees.'
         : 'Housing loans usually have longer repayment periods and lower monthly installments but higher total interest over time.'
 
-  const result = useMemo(() => {
-    const p = parseFloat(principal) || 0
-    const r = (parseFloat(annualRate) || 0) / 100 / 12
-    const n = parseInt(termMonths) || 0
-    const hasInput = p > 0 && n > 0
-    let monthly = 0
-    let totalInterest = 0
-    if (hasInput) {
-      if (r === 0) { monthly = p / n; totalInterest = 0 }
-      else { monthly = (p * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1); totalInterest = monthly * n - p }
-    }
-    return { hasInput, monthly, totalPayment: monthly * n, totalInterest, principal: p, months: n }
-  }, [principal, annualRate, termMonths])
+  const result = useMemo(
+    () =>
+      computeLoanAmortization(
+        parseFloat(principal) || 0,
+        parseFloat(annualRate) || 0,
+        parseInt(termMonths) || 0
+      ),
+    [principal, annualRate, termMonths]
+  )
 
   return (
     <div className="tool-page">
-      <div className="page-header">
-        <h1 className="tool-page-title">Loan Calculator Philippines</h1>
-        <p className="tool-page-desc">
-          A loan calculator helps estimate monthly amortization, total interest, and repayment amount for personal, car, or housing loans in the Philippines. Use this free KlaroPH tool to plan your borrowing clearly.
-        </p>
-      </div>
+      <KlaroPageHeader
+        titleAs="h1"
+        title="Loan Calculator"
+        description="Understand your monthly payment before you commit."
+      />
 
       <div style={{ maxWidth: 480, margin: '0 0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
           <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Loan Type</label>
-          <select
-            className="login-input"
-            aria-label="Loan type selector"
-            value={loanType}
-            onChange={(e) => setLoanType(e.target.value as LoanType)}
-            style={{ width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
-          >
-            <option value="personal">Personal Loan</option>
-            <option value="car">Car Loan</option>
-            <option value="housing">Housing Loan</option>
-          </select>
+          <div className="tool-segmented" role="group" aria-label="Loan type">
+            <button
+              type="button"
+              className={`tool-segmented-btn${loanType === 'personal' ? ' is-active' : ''}`}
+              onClick={() => setLoanType('personal')}
+              aria-pressed={loanType === 'personal'}
+            >
+              Personal
+            </button>
+            <button
+              type="button"
+              className={`tool-segmented-btn${loanType === 'car' ? ' is-active' : ''}`}
+              onClick={() => setLoanType('car')}
+              aria-pressed={loanType === 'car'}
+            >
+              Car
+            </button>
+            <button
+              type="button"
+              className={`tool-segmented-btn${loanType === 'housing' ? ' is-active' : ''}`}
+              onClick={() => setLoanType('housing')}
+              aria-pressed={loanType === 'housing'}
+            >
+              Housing
+            </button>
+          </div>
         </div>
 
         <div
@@ -89,22 +102,26 @@ export default function LoanCalculator() {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ padding: 20, background: 'var(--color-blue-muted)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(0,56,168,0.12)', textAlign: 'center', marginBottom: 8 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>Monthly Amortization</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-blue)' }}>{result.hasInput ? `₱${result.monthly.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</div>
+          <div className="tool-result-hero" style={{ textAlign: 'center' }}>
+            <p className="tool-result-hero-label">Monthly Amortization</p>
+            <p className="tool-result-hero-value">
+              {result.hasInput
+                ? formatPeso(result.monthly, undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : '—'}
+            </p>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Loan Amount</span>
-            <span>{result.hasInput ? `₱${result.principal.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}</span>
+            <span>{result.hasInput ? formatPeso(result.principal, undefined, { minimumFractionDigits: 2 }) : '—'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Total Interest</span>
-            <span style={{ color: 'var(--color-red)' }}>{result.hasInput ? `₱${result.totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}</span>
+            <span style={{ color: 'var(--color-red)' }}>{result.hasInput ? formatPeso(result.totalInterest, undefined, { minimumFractionDigits: 2 }) : '—'}</span>
           </div>
           <div style={{ height: 1, background: 'var(--border)' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 600 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Total Payment</span>
-            <span>{result.hasInput ? `₱${result.totalPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}</span>
+            <span>{result.hasInput ? formatPeso(result.totalPayment, undefined, { minimumFractionDigits: 2 }) : '—'}</span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{result.hasInput ? `${result.months} monthly payments` : '—'}</div>
         </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getBrowserUser } from '@/lib/supabaseClient'
 import {
   DASHBOARD_REFRESH_EVENT,
   DASHBOARD_GOALS_REFRESH_EVENT,
@@ -11,34 +11,28 @@ import {
   dispatchDashboardRefresh,
 } from '@/lib/dashboardRefresh'
 import type { GoalRow, GoalWithSaved } from '@/types/database'
-import IncomeExpenseFlow from '@/components/dashboard/IncomeExpenseFlow'
-/** Static import: full card shell + title paint in initial bundle (LCP); data hydrates inside the component. */
 import BudgetOverview from '@/components/dashboard/BudgetOverview'
+import MonthPicker from '@/components/dashboard/MonthPicker'
 import ActivationCelebration from '@/components/dashboard/ActivationCelebration'
-import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { PLAN_LIMITS } from '@/lib/planLimits'
 import { toLocalDateString } from '@/lib/format'
 import Link from 'next/link'
-import UpgradeCTA from '@/components/ui/UpgradeCTA'
 import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
+import DashboardMonthStatStrip from '@/components/dashboard/DashboardMonthStatStrip'
+import DashboardQuickTools from '@/components/dashboard/DashboardQuickTools'
+import DashboardRecentTransactions from '@/components/dashboard/DashboardRecentTransactions'
+import DashboardFinancialHealthCard from '@/components/dashboard/DashboardFinancialHealthCard'
+import DashboardFinancialTrend from '@/components/dashboard/DashboardFinancialTrend'
+import DashboardProCard from '@/components/dashboard/DashboardProCard'
+import GoalMomentumSection from '@/components/dashboard/GoalMomentumSection'
+import KlaroInsightCard from '@/components/dashboard/KlaroInsightCard'
+import { deriveMonthInsights } from '@/lib/dashboardInsight'
+import { useDashboardMonthMoney } from '@/hooks/useDashboardMonthMoney'
+import { useDashboardProfile } from '@/contexts/DashboardProfileContext'
 import { useDashboardActions } from './DashboardLayoutClient'
 
-const GoalMomentumSection = dynamic(
-  () => import('@/components/dashboard/GoalMomentumSection'),
-  {
-    loading: () => <div className="goal-momentum-section-placeholder" aria-hidden />,
-  },
-)
-
-/* SSR enabled so first paint reserves real markup; still code-split. Avoids empty → pop-in CLS from ssr:false. */
-const ExpensesTrendChartCard = dynamic(
-  () => import('@/components/dashboard/ExpensesTrendChartCard'),
-  {
-    loading: () => <div className="dashboard-expenses-trend-placeholder" aria-hidden />,
-  },
-)
 const ManageGoalsModal = dynamic(
   () => import('@/components/dashboard/ManageGoalsModal'),
   { ssr: false },
@@ -61,6 +55,7 @@ export default function DashboardPage() {
   const [goalsRefreshTrigger, setGoalsRefreshTrigger] = useState(0)
   const currentMonthFirst = useMemo(() => getCurrentMonthFirst(), [])
   const [budgetMonth, setBudgetMonth] = useState(currentMonthFirst)
+  const { data: monthMoney, loading: monthMoneyLoading } = useDashboardMonthMoney(budgetMonth, refreshTrigger)
 
   useEffect(() => {
     const onFull = () => {
@@ -79,18 +74,67 @@ export default function DashboardPage() {
     }
   }, [])
   const [goals, setGoals] = useState<GoalWithSaved[]>([])
-  /** false on first paint so header + Income/Expenses summary are not blocked by goals fetch */
   const [loading, setLoading] = useState(false)
   const [manageGoalsOpen, setManageGoalsOpen] = useState(false)
   const [addGoalOpen, setAddGoalOpen] = useState(false)
+  const [aiInsight, setAiInsight] = useState<{
+    text: string
+    source: 'gemini' | 'fallback' | 'cache'
+    loading: boolean
+  } | null>({ text: '', source: 'fallback', loading: true })
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
+  const fetchAiInsight = useCallback(async (forceRefresh = false) => {
+    setAiInsight((prev) => ({
+      text: prev?.text ?? '',
+      source: prev?.source ?? 'fallback',
+      loading: true,
+    }))
+    try {
+      const res = await fetch('/api/ai/insight', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period: budgetMonth, forceRefresh }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (
+        res.ok &&
+        data?.success &&
+        typeof data.insight === 'string' &&
+        data.insight.trim().length > 0
+      ) {
+        const source =
+          data.source === 'gemini' || data.source === 'cache' || data.source === 'fallback'
+            ? data.source
+            : 'fallback'
+        setAiInsight({ text: data.insight.trim(), source, loading: false })
+        return
+      }
+      setAiInsight((prev) => ({
+        text: prev?.text ?? '',
+        source: prev?.source ?? 'fallback',
+        loading: false,
+      }))
+    } catch {
+      setAiInsight((prev) => ({
+        text: prev?.text ?? '',
+        source: prev?.source ?? 'fallback',
+        loading: false,
+      }))
+    }
+  }, [budgetMonth])
+
+  useEffect(() => {
+    fetchAiInsight(false)
+  }, [fetchAiInsight, refreshTrigger])
+
   const loadData = useCallback(async () => {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBrowserUser()
     if (!user) {
       setGoals([])
       setLoading(false)
@@ -134,117 +178,153 @@ export default function DashboardPage() {
 
   const totalSaved = goals.reduce((sum, g) => sum + g.saved, 0)
   const totalTarget = goals.reduce((sum, g) => sum + Number(g.target_amount || 0), 0)
+  const goalsOnTrack = goals.filter((g) => {
+    const target = Number(g.target_amount || 0)
+    if (target <= 0) return false
+    return g.saved > 0
+  }).length
+  const goalsProgressPct = totalTarget > 0 ? Math.min(100, (totalSaved / totalTarget) * 100) : 0
   const maxGoals = features?.max_goals ?? PLAN_LIMITS.free.maxGoals
   const { openAddIncome, openAddExpense } = useDashboardActions()
+  const profile = useDashboardProfile()
+  const displayName =
+    profile?.profile?.nickname?.trim() ||
+    profile?.profile?.full_name?.trim()?.split(/\s+/)[0] ||
+    'there'
+  const hour = new Date().getHours()
+  const greeting =
+    hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+
+  const previewGoals = [...goals]
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      saved: g.saved,
+      target: Number(g.target_amount) || 0,
+    }))
+    .sort((a, b) => {
+      const pa = a.target > 0 ? a.saved / a.target : 0
+      const pb = b.target > 0 ? b.saved / b.target : 0
+      return pb - pa
+    })
+    .slice(0, 3)
+
+  const monthIncome = monthMoney?.income ?? 0
+  const monthExpenses = monthMoney?.expenses ?? 0
+  const insightStack = deriveMonthInsights({
+    income: monthIncome,
+    expenses: monthExpenses,
+    goalsCount: goals.length,
+    goalsProgressPct,
+  })
 
   return (
     <div
-      className={`dashboard-page w-full max-w-md mx-auto px-4 max-lg:flex max-lg:flex-col max-lg:gap-3 lg:max-w-none lg:mx-0 lg:px-0${isPro ? ' dashboard-premium' : ''}`}
+      className={`dashboard-page dashboard-page--v2-command dashboard-page--one-glance w-full max-w-md mx-auto px-4 max-lg:flex max-lg:flex-col max-lg:gap-3 lg:max-w-none lg:mx-0 lg:px-0${isPro ? ' dashboard-premium' : ''}`}
       aria-busy={loading || subscriptionLoading}
       aria-live="polite"
       role="region"
       aria-label="Dashboard content"
     >
-      <div className="page-header page-header-with-actions dashboard-page-header max-lg:order-0 max-lg:items-start max-lg:gap-0 max-lg:mb-0 lg:gap-3">
+      <div className="page-header page-header-with-actions dashboard-page-header dash-one-glance-header max-lg:order-0 max-lg:items-start max-lg:gap-0 max-lg:mb-0 lg:gap-2">
         <div className="min-w-0 flex-1 max-lg:w-full">
           <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
-            <h2 className="max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0">Dashboard</h2>
+            <h2 className="dashboard-greeting-title max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0">
+              {greeting}, {displayName}!
+            </h2>
             <DashboardMobileHeaderLogo />
           </div>
-          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
-            Financial clarity, without complexity.
+          <p className="dashboard-greeting-sub max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0">
+            Small steps today. A brighter tomorrow.
           </p>
         </div>
-        <div className="dashboard-header-actions-desktop page-header-actions">
-          <button
-            type="button"
-            className="btn-primary header-add-btn-desktop-only"
-            onClick={openAddIncome}
-            aria-label="Add income"
-          >
-            + Add Income
-          </button>
-          <button
-            type="button"
-            className="btn-primary header-add-btn-desktop-only"
-            onClick={openAddExpense}
-            aria-label="Add expense"
-          >
-            + Add Expense
-          </button>
+        <div className="page-header-actions dashboard-header-controls">
+          <MonthPicker
+            id="dashboard-month-picker"
+            className="dashboard-month-picker"
+            value={budgetMonth}
+            onChange={setBudgetMonth}
+            refreshKey={refreshTrigger}
+          />
+          <div className="dashboard-header-actions-desktop">
+            <button
+              type="button"
+              className="btn-primary header-add-btn-desktop-only"
+              onClick={openAddIncome}
+              aria-label="Add income"
+            >
+              + Add Income
+            </button>
+            <button
+              type="button"
+              className="btn-primary header-add-btn-desktop-only"
+              onClick={openAddExpense}
+              aria-label="Add expense"
+            >
+              + Add Expense
+            </button>
+          </div>
         </div>
       </div>
+
       <div className="w-full max-lg:order-1">
         <ActivationCelebration isPro={isPro} />
       </div>
 
-      {!isPro && (
-        <div
-          className="free-plan-banner premium-banner max-lg:flex-col max-lg:items-stretch max-lg:gap-3 max-lg:order-last w-full"
-          role="status"
-        >
-          <span className="max-lg:text-sm">
-            You can already track expenses, log income, manage goals, and do basic budgeting — all for free. Upgrade to KlaroPH Pro anytime to unlock deeper insights, extended history, and advanced tools.
-          </span>
-          <UpgradeCTA variant="compact" className="!w-full max-lg:!h-12 max-lg:!rounded-xl lg:!w-auto lg:!h-auto lg:!rounded-lg" />
-        </div>
-      )}
-
-      <div className="dashboard-top-cluster max-lg:order-4 w-full">
-        <div className="dashboard-top-row">
-          <div className="dashboard-col-left">
-            <div className="dashboard-left-module">
-              <GoalMomentumSection
-                totalGoals={goals.length}
-                totalSaved={totalSaved}
-                totalTarget={totalTarget}
-              />
-              <div className="hidden lg:block">
-                <ExpensesTrendChartCard refreshTrigger={refreshTrigger} />
-              </div>
-            </div>
-          </div>
-          <div className="dashboard-col-budget">
-            <BudgetOverview
-              selectedMonth={budgetMonth}
-              onMonthChange={setBudgetMonth}
-              budgetRefreshKey={refreshTrigger}
-              maxCategories={8}
-              breakdownTitle="Top 8 Spending to Watch"
-              breakdownTitleMobile="Top 3 Spending to Watch"
-              showBudgetEditorButtons={false}
-              headerAction={
-                <Link href="/dashboard/expenses" className="card-outline-link dashboard-card-link max-lg:hidden">
-                  Expenses Page →
-                </Link>
-              }
-            />
-          </div>
-        </div>
+      {/* ROW 1 — Snapshot */}
+      <div className="w-full max-lg:order-2">
+        <DashboardMonthStatStrip
+          income={monthIncome}
+          expenses={monthExpenses}
+          loading={monthMoneyLoading}
+          goalsCount={goals.length}
+          goalsOnTrack={goalsOnTrack}
+          goalsProgressPct={goalsProgressPct}
+        />
       </div>
 
-      <div className="card dash-card dash-card-no-border max-lg:rounded-xl max-lg:order-3 max-lg:mt-0 w-full">
-        <CardHeaderWithAction
-          title="Income & Expenses"
-          titleAs="h3"
-          actions={
-            <>
-              <Link href="/dashboard/income" className="card-outline-link max-lg:hidden">
-                Income Page →
-              </Link>
-              <Link href="/dashboard/expenses" className="card-outline-link max-lg:hidden">
-                Expenses Page →
-              </Link>
-            </>
+      {/* ROW 2 — Monthly Budget | Spending to Watch | Goal Momentum | Klaro Insight */}
+      <div className="dash-one-glance-row dash-one-glance-row--main max-lg:order-3 w-full">
+        <BudgetOverview
+          spendingByCategory={monthMoney?.spendingByCategory ?? null}
+          selectedMonth={budgetMonth}
+          budgetRefreshKey={refreshTrigger}
+          maxCategories={3}
+          breakdownTitle="Top Spending to Watch"
+          breakdownTitleMobile="Top Spending to Watch"
+          showBudgetEditorButtons={false}
+          showMonthPicker={false}
+          onSetBudget={() => router.push('/dashboard/expenses?budget=setup')}
+          breakdownAction={
+            <Link href="/dashboard/expenses" className="card-outline-link dashboard-card-link">
+              View all →
+            </Link>
           }
         />
-        <IncomeExpenseFlow
-          refreshTrigger={refreshTrigger}
-          showTitle={false}
-          monthFirst={budgetMonth}
-          onMonthChange={setBudgetMonth}
-          className="income-expense-flow--dashboard-page"
+        <GoalMomentumSection
+          totalGoals={goals.length}
+          totalSaved={totalSaved}
+          totalTarget={totalTarget}
+          previewGoals={previewGoals}
         />
+        <KlaroInsightCard
+          stack={insightStack}
+          aiInsight={aiInsight}
+          onRefreshAi={() => fetchAiInsight(true)}
+        />
+      </div>
+
+      {/* ROW 3 — Trend | Financial Health | Quick Tools */}
+      <div className="dash-one-glance-row dash-one-glance-row--trend max-lg:order-4 w-full">
+        <DashboardFinancialTrend refreshTrigger={refreshTrigger} />
+        <DashboardFinancialHealthCard refreshTrigger={refreshTrigger} />
+        <DashboardQuickTools />
+      </div>
+
+      {/* ROW 4 — Recent activity | Pro */}
+      <div className="dash-one-glance-row dash-one-glance-row--activity max-lg:order-5 w-full">
+        <DashboardRecentTransactions refreshTrigger={refreshTrigger} limit={5} />
+        {!isPro && <DashboardProCard />}
       </div>
 
       <ManageGoalsModal
@@ -271,7 +351,6 @@ export default function DashboardPage() {
           dispatchDashboardRefresh()
         }}
       />
-
     </div>
   )
 }

@@ -7,11 +7,6 @@ import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabaseClient'
-import {
-  persistRememberMePreference,
-  readRememberMePreference,
-  setAuthSessionScopeForLogin,
-} from '@/lib/authSessionScope'
 import KlaroPHHandLogo from '../../components/ui/KlaroPHHandLogo'
 import Footer from '../../components/Footer'
 import PlanFeaturePremiumIcon from '../../components/ui/PlanFeaturePremiumIcon'
@@ -22,6 +17,7 @@ import {
   PRO_PLAN_TOOLS,
   PLAN_SECTION_TOOLS_LABEL,
 } from '../../lib/planFeatures'
+import { PRO_ANNUAL_PESOS, PRO_MONTHLY_PESOS, formatPlanPeso } from '@/lib/planPricing'
 import { LandingPromoCodeCapture } from './LandingPromoCodeCapture'
 import PasswordInput from '@/components/auth/PasswordInput'
 
@@ -51,8 +47,18 @@ const EMOTIONAL_TAGLINE = 'Finally understand where your money goes.'
 
 const FEATURES = [
   {
-    title: 'Smart Trend Analytics',
-    desc: 'Track income and expenses patterns with visual clarity.',
+    title: 'Budget Clarity',
+    desc: 'Set a monthly spending plan and see what is left in each category at a glance.',
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Income & Expense Tracking',
+    desc: 'Record where your money comes from and where it goes, with clear monthly trends.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
@@ -78,13 +84,43 @@ const FEATURES = [
     ),
   },
   {
-    title: 'Advanced Analytics, Import & Export (Pro)',
-    desc: 'Unlimited history, CSV import/export, and advanced trends for serious trackers.',
+    title: 'Financial Health',
+    desc: 'A simple check-in on how your savings, spending, and cash flow are holding up.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25M12 20.25v-2.25m0-13.5v-2.25M21 16.5v-2.25M19.5 21l-2.25-2.25M4.5 3L2.25 4.5m15 0L19.5 3m-15 13.5L4.5 21m15-15l2.25-2.25M19.5 3v2.25" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
       </svg>
     ),
+  },
+  {
+    title: 'Klaro Insight',
+    desc: 'A short, plain-language observation about your month, based on your KlaroPH numbers.',
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+      </svg>
+    ),
+  },
+]
+
+const ASK_KLARO_POINTS = [
+  'Ask about your budget, spending, goals, and net worth in plain language',
+  'Follow up naturally — compare months or dig into a category',
+  'Explore “what if” scenarios, like a new loan, without changing your records',
+]
+
+const TRUST_POINTS = [
+  {
+    title: 'Built on what you track',
+    desc: 'KlaroPH works with the income, expenses, budgets, and goals you record in your account.',
+  },
+  {
+    title: 'Numbers you can check',
+    desc: 'Totals and budgets are calculated from your KlaroPH records — the AI explains them, it does not make them up.',
+  },
+  {
+    title: 'Honest about its limits',
+    desc: 'Ask Klaro is in beta and only answers using what is in KlaroPH. It is not a financial advisor.',
   },
 ]
 
@@ -100,7 +136,9 @@ export default function LandingPageClient() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  /** submitting: password request in flight; welcome: auth succeeded, navigating to Dashboard; oauth: redirecting to Google. */
+  const [loginPhase, setLoginPhase] = useState<'idle' | 'submitting' | 'welcome' | 'oauth'>('idle')
+  const loginInFlightRef = useRef(false)
   const [showHowItWorks, setShowHowItWorks] = useState(false)
   const [showSignUpModal, setShowSignUpModal] = useState(false)
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false)
@@ -110,7 +148,6 @@ export default function LandingPageClient() {
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
   const [hasInstallPrompt, setHasInstallPrompt] = useState(false)
   const [showPwaInNav, setShowPwaInNav] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
   const deferredPromptRef = useRef<(Event & { prompt: () => Promise<{ outcome: string }> }) | null>(null)
 
   // Capture beforeinstallprompt globally on mount so it's ready before any modal interaction
@@ -140,11 +177,6 @@ export default function LandingPageClient() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    setRememberMe(readRememberMePreference())
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
     const stored = window.localStorage.getItem('klaroph_legal_consent_given')
     if (stored === 'true') {
       // Defer the state update to avoid cascading re-renders inside the effect.
@@ -171,20 +203,34 @@ export default function LandingPageClient() {
     return () => document.removeEventListener('keydown', onEscape)
   }, [showGoogleConsentModal])
 
-  const scrollToGetStarted = () => {
-    document.getElementById('login')?.scrollIntoView({ behavior: 'smooth' })
-  }
+  // Back from Google's page can restore this page from bfcache with the OAuth overlay still showing.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return
+      loginInFlightRef.current = false
+      setLoginPhase('idle')
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
+
+  const openSignUp = () => setShowSignUpModal(true)
 
   const handleLogin = async (e: React.FormEvent) => {
     e?.preventDefault?.()
+    if (loginInFlightRef.current) return
+    loginInFlightRef.current = true
     setError(null)
     setSuccess(null)
-    setLoading(true)
-    persistRememberMePreference(rememberMe)
-    setAuthSessionScopeForLogin(rememberMe)
+    setLoginPhase('submitting')
     const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (err) { setError(err.message); return }
+    if (err) {
+      loginInFlightRef.current = false
+      setLoginPhase('idle')
+      setError(err.message)
+      return
+    }
+    setLoginPhase('welcome')
     router.replace('/dashboard')
   }
 
@@ -193,10 +239,17 @@ export default function LandingPageClient() {
     if (!baseUrl) {
       throw new Error('NEXT_PUBLIC_APP_URL is required for OAuth redirect safety.')
     }
-    setAuthSessionScopeForLogin(true)
+    if (loginInFlightRef.current) return
+    loginInFlightRef.current = true
+    setLoginPhase('oauth')
     supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${baseUrl}/auth/callback` },
+    }).then(({ error: err }) => {
+      if (err) {
+        loginInFlightRef.current = false
+        setLoginPhase('idle')
+      }
     })
   }
 
@@ -260,14 +313,14 @@ export default function LandingPageClient() {
               </h1>
               <p className="landing-hero-subheadline">{HERO_SUBHEADLINE}</p>
               <div className="landing-hero-ctas">
-                <button type="button" className="landing-cta-btn landing-cta-primary" onClick={scrollToGetStarted}>
+                <button type="button" className="landing-cta-btn landing-cta-primary" onClick={openSignUp}>
                   Create Free Account
                 </button>
-                <button type="button" className="landing-cta-btn landing-cta-secondary" onClick={() => setShowAddToHomeModal(true)}>
-                  Quick Access
-                </button>
+                <Link href="/tools" className="landing-cta-btn landing-cta-secondary">
+                  Free calculators
+                </Link>
               </div>
-              <p className="landing-hero-pwa-helper">Fast mobile access. No download required.</p>
+              <p className="landing-hero-pwa-helper">Free to start · No credit card required</p>
             </div>
             <div className="landing-hero-right">
               <div className="landing-hero-mock-stack">
@@ -323,6 +376,65 @@ export default function LandingPageClient() {
           </div>
         </section>
 
+        <section id="ask-klaro" className="landing-ask" aria-labelledby="landing-ask-title">
+          <div className="landing-ask-inner">
+            <div className="landing-ask-copy">
+              <p className="landing-section-eyebrow">
+                Ask Klaro <span className="landing-beta-badge">Beta</span>
+              </p>
+              <h2 id="landing-ask-title" className="landing-ask-title">
+                Talk to the numbers you already track.
+              </h2>
+              <p className="landing-ask-lead">
+                Ask Klaro is a conversational way to understand the financial information in your
+                KlaroPH account.
+              </p>
+              <ul className="landing-ask-points">
+                {ASK_KLARO_POINTS.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+              <p className="landing-ask-note">
+                Ask Klaro can only answer using the financial information you track in KlaroPH. It
+                explains your numbers — it isn&apos;t a financial advisor.
+              </p>
+            </div>
+            <div className="landing-ask-demo" aria-label="Example Ask Klaro conversation" role="img">
+              <div className="landing-ask-bubble landing-ask-bubble--user">
+                <span className="landing-ask-bubble-label">You</span>
+                Where am I spending the most this month?
+              </div>
+              <div className="landing-ask-bubble landing-ask-bubble--klaro">
+                <span className="landing-ask-bubble-label">Klaro</span>
+                Groceries is your biggest category this month, followed by Transportation. Want me to
+                compare it with last month?
+              </div>
+              <div className="landing-ask-bubble landing-ask-bubble--user">
+                <span className="landing-ask-bubble-label">You</span>
+                What if I take out a loan?
+              </div>
+              <div className="landing-ask-bubble landing-ask-bubble--klaro">
+                <span className="landing-ask-bubble-label">Klaro</span>
+                I can estimate that. How much, at what interest rate, and for how many months?
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-trust" aria-labelledby="landing-trust-title">
+          <h2 id="landing-trust-title" className="landing-trust-title">
+            Clarity you can trust
+          </h2>
+          <div className="landing-trust-grid">
+            {TRUST_POINTS.map((t) => (
+              <div key={t.title} className="landing-trust-item">
+                <h3>{t.title}</h3>
+                <p>{t.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Free Financial Tools — SEO entry points, no signup */}
         <section id="tools" className="landing-tools">
           <h2 className="landing-tools-title">Free Financial Tools for Everyday Decisions</h2>
@@ -370,9 +482,12 @@ export default function LandingPageClient() {
         {/* Free vs Pro — consistent with Upgrade modal */}
         <section id="pricing" className="landing-compare">
           <h2 className="landing-compare-title">Free vs Pro</h2>
+          <p className="landing-compare-subtitle">Start free. Upgrade when you want more room to plan.</p>
           <div className="landing-compare-grid">
             <div className="landing-plan-card">
               <h3>FREE PLAN</h3>
+              <p className="landing-plan-price">₱0</p>
+              <p className="landing-plan-value">Free includes everything you need to start tracking.</p>
               <p className="plan-section-title">Core</p>
               <ul>
                 {FREE_PLAN_FEATURES.map((f) => (
@@ -385,12 +500,17 @@ export default function LandingPageClient() {
                   <li key={t}>{t}</li>
                 ))}
               </ul>
+              <button type="button" className="btn-secondary landing-plan-cta" onClick={openSignUp}>
+                Create Free Account
+              </button>
             </div>
             <div className="landing-plan-card landing-plan-pro">
               <span className="landing-plan-badge">Most Popular</span>
               <h3>PRO PLAN</h3>
-              <p className="landing-plan-price">₱99<span>/month</span></p>
-              <p className="landing-plan-value">Save more with annual: ₱999/year.</p>
+              <p className="landing-plan-price">
+                {formatPlanPeso(PRO_MONTHLY_PESOS)}<span>/month</span>
+              </p>
+              <p className="landing-plan-value">Save more with annual: {formatPlanPeso(PRO_ANNUAL_PESOS)}/year.</p>
               <p className="plan-section-title">Core</p>
               <ul>
                 {PRO_PLAN_FEATURES.map(({ label, premium }) => (
@@ -421,6 +541,9 @@ export default function LandingPageClient() {
                   </li>
                 ))}
               </ul>
+              <button type="button" className="klaro-upgrade-cta landing-plan-cta" onClick={openSignUp}>
+                Start free, then choose Pro
+              </button>
             </div>
           </div>
         </section>
@@ -429,7 +552,7 @@ export default function LandingPageClient() {
         <section className="landing-final-cta">
           <h2 className="landing-final-headline">{EMOTIONAL_TAGLINE}</h2>
           <p className="landing-final-sub">Start building financial clarity today.</p>
-          <button type="button" className="landing-cta-btn landing-cta-primary landing-cta-large" onClick={scrollToGetStarted}>
+          <button type="button" className="landing-cta-btn landing-cta-primary landing-cta-large" onClick={openSignUp}>
             Create Free Account
           </button>
           <div className="landing-final-checks">
@@ -444,9 +567,9 @@ export default function LandingPageClient() {
           <p className="landing-login-subtitle">Sign in to your account or create a new one</p>
 
           <div className="login-card">
-            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <form onSubmit={handleLogin} className="login-form">
               <div>
-                <label htmlFor="login-email" style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Email</label>
+                <label htmlFor="login-email" className="login-field-label">Email</label>
                 <input
                   id="login-email"
                   type="email"
@@ -459,8 +582,8 @@ export default function LandingPageClient() {
                 />
               </div>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <label htmlFor="login-password" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Password</label>
+                <div className="login-field-label-row">
+                  <label htmlFor="login-password" className="login-field-label">Password</label>
                   <button
                     type="button"
                     onClick={() => setShowForgotPasswordModal(true)}
@@ -478,31 +601,34 @@ export default function LandingPageClient() {
                   required
                   autoComplete="current-password"
                 />
-                <label className="login-terms-label login-remember-label" htmlFor="login-remember-me">
-                  <input
-                    id="login-remember-me"
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="login-terms-checkbox"
-                  />
-                  <span>Remember me on this device</span>
-                </label>
               </div>
               {error && (
-                <p role="alert" style={{ margin: 0, fontSize: 14, color: 'var(--color-error)', padding: 12, borderRadius: 'var(--radius-sm)', background: 'var(--color-error-bg)' }}>
+                <p role="alert" className="login-alert login-alert--error">
                   {error}
                 </p>
               )}
               {success && (
-                <p role="status" style={{ margin: 0, fontSize: 14, color: 'var(--color-success)', padding: 12, borderRadius: 'var(--radius-sm)', background: 'var(--color-primary-muted)' }}>
+                <p role="status" className="login-alert login-alert--success">
                   {success}
                 </p>
               )}
-              <button type="submit" disabled={loading} className="login-btn-primary">
-                {loading ? 'Signing in...' : 'Sign in'}
+              <button type="submit" disabled={loginPhase !== 'idle'} className="login-btn-primary">
+                {loginPhase !== 'idle' ? 'Signing in...' : 'Sign in'}
               </button>
             </form>
+
+            {loginPhase !== 'idle' && (
+              <div className="login-card-status" role="status" aria-live="polite">
+                <KlaroPHHandLogo size={36} className="login-card-status-logo" />
+                <p className="login-card-status-text">
+                  {loginPhase === 'oauth'
+                    ? 'Connecting to Google…'
+                    : loginPhase === 'welcome'
+                      ? 'Welcome back — getting things ready…'
+                      : 'Signing you in…'}
+                </p>
+              </div>
+            )}
 
             <button type="button" onClick={() => setShowSignUpModal(true)} className="login-btn-secondary">
               Create Free Account
@@ -510,7 +636,7 @@ export default function LandingPageClient() {
 
             <div className="login-divider">or continue with</div>
 
-            <button type="button" onClick={handleGoogleLogin} className="login-google">
+            <button type="button" onClick={handleGoogleLogin} disabled={loginPhase !== 'idle'} className="login-google">
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />

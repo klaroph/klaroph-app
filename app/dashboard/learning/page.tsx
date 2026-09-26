@@ -1,6 +1,6 @@
 'use client'
 
-import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
+import KlaroPageHeader from '@/components/layout/KlaroPageHeader'
 
 const ARTICLES = [
   {
@@ -37,31 +37,17 @@ const ARTICLES = [
 
 export default function LearningPage() {
   return (
-    <div className="learning-page premium-page">
-      <div className="page-header">
-        <div className="min-w-0 flex-1 max-lg:w-full">
-          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
-            <h2 className="max-lg:mb-0">Learning</h2>
-            <DashboardMobileHeaderLogo />
-          </div>
-          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
-            Build your money mindset. Small lessons today lead to lasting financial habits.
-          </p>
-        </div>
-      </div>
+    <div className="learning-page klaro-page-shell">
+      <KlaroPageHeader
+        title="Learning"
+        description="Build better financial habits, one step at a time."
+      />
 
       <div className="premium-banner-message">
         <p>Financial literacy is a superpower. The more you learn, the better decisions you&apos;ll make for yourself and your family.</p>
       </div>
 
-      <div
-        className="learning-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-          gap: 20,
-        }}
-      >
+      <div className="learning-grid">
         {ARTICLES.map((article, i) => (
           <div key={i} className="learning-card">
             <span className="learning-card-tag">

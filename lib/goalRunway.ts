@@ -4,6 +4,8 @@
  * keyed by parent income_records.date (allocations have no date of their own).
  */
 
+import { formatPeso } from '@/lib/format'
+
 export const GOAL_RUNWAY_MAX_PACE_MONTHS = 3
 /** Soft display cap so tiny paces don't show absurd numbers. */
 export const GOAL_RUNWAY_DISPLAY_MONTHS_CAP = 100
@@ -180,7 +182,7 @@ export function formatGoalRunwayCopy(runway: GoalRunwayResult): GoalRunwayCopy |
         : `${displayMonths} months`
 
   const paceRounded = Math.round(runway.pace)
-  const paceText = `Averaging about ₱${paceRounded.toLocaleString('en-PH')}/month toward this goal.`
+  const paceText = `Averaging about ${formatPeso(paceRounded, 'en-PH')}/month toward this goal.`
 
   const primary = `About ${monthsLabel} to go`
   const secondary =

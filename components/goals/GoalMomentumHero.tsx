@@ -17,6 +17,8 @@ export type StrongestGoalInsight = {
 
 type GoalMomentumHeroProps = GoalMomentumSummary & {
   strongestGoal?: StrongestGoalInsight
+  /** Same structure with placeholder values while goals load. */
+  loading?: boolean
 }
 
 function getEncouragement(percent: number): string {
@@ -31,6 +33,7 @@ export default function GoalMomentumHero({
   activeGoals,
   overallPercent,
   strongestGoal,
+  loading = false,
 }: GoalMomentumHeroProps) {
   const encouragement = getEncouragement(overallPercent)
 
@@ -38,6 +41,7 @@ export default function GoalMomentumHero({
     <section
       className="goal-momentum-hero"
       aria-labelledby="goal-momentum-hero-heading"
+      aria-busy={loading || undefined}
     >
       <div className="goal-momentum-hero-inner">
         <header className="goal-momentum-hero-header">
@@ -61,22 +65,27 @@ export default function GoalMomentumHero({
             <div className="goal-momentum-hero-stat">
               <span className="goal-momentum-hero-label">Total saved</span>
               <span className="goal-momentum-hero-value goal-momentum-hero-value-accent tabular-nums">
-                {formatCurrency(totalSaved)}
+                {loading ? '—' : formatCurrency(totalSaved)}
               </span>
             </div>
             <div className="goal-momentum-hero-stat">
               <span className="goal-momentum-hero-label">Total target</span>
               <span className="goal-momentum-hero-value tabular-nums">
-                {formatCurrency(totalTarget)}
+                {loading ? '—' : formatCurrency(totalTarget)}
               </span>
             </div>
             <div className="goal-momentum-hero-stat">
               <span className="goal-momentum-hero-label">Active goals</span>
               <span className="goal-momentum-hero-value tabular-nums">
-                {activeGoals}
+                {loading ? '—' : activeGoals}
               </span>
             </div>
-            {strongestGoal && strongestGoal.percent < 100 && (
+            {loading ? (
+              <div className="goal-momentum-hero-insight invisible" aria-hidden>
+                <span className="goal-momentum-hero-insight-label">Closest to target</span>
+                <span className="goal-momentum-hero-insight-value">—</span>
+              </div>
+            ) : strongestGoal && strongestGoal.percent < 100 && (
               <div className="goal-momentum-hero-insight">
                 <span className="goal-momentum-hero-insight-label">
                   Closest to target

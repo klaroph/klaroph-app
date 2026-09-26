@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { toLocalDateString } from '@/lib/format'
-import { supabase } from '../../lib/supabaseClient'
+import { useState, useEffect, useMemo } from 'react'
+import { formatPeso, toLocalDateString } from '@/lib/format'
+import { supabase, getBrowserUser } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
+import SuggestionChips from './SuggestionChips'
 import { INCOME_SOURCES, type IncomeSource } from '../../lib/incomeSources'
+import { classifyTransactionDescription } from '@/lib/transactionSuggestion'
 
 type Goal = { id: string; name: string; target_amount: number }
 
@@ -38,6 +40,9 @@ export default function IncomeAllocationModal({
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(() => toLocalDateString(new Date()))
   const [incomeSource, setIncomeSource] = useState<string>(INCOME_SOURCES[0])
+  /** Only drives the source suggestion; income_records has no description column. */
+  const [sourceHint, setSourceHint] = useState('')
+  const suggestedSources = useMemo(() => classifyTransactionDescription('income', sourceHint), [sourceHint])
   const [allocateGoalId, setAllocateGoalId] = useState('')
   const [allocateAmount, setAllocateAmount] = useState('')
   const [goals, setGoals] = useState<Goal[]>([])
@@ -101,6 +106,7 @@ export default function IncomeAllocationModal({
     setAmount('')
     setDate(toLocalDateString(new Date()))
     setIncomeSource(INCOME_SOURCES[0])
+    setSourceHint('')
     setAllocateGoalId('')
     setAllocateAmount('')
     setAllocationsEdit([])
@@ -137,7 +143,7 @@ export default function IncomeAllocationModal({
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBrowserUser()
     if (!user) {
       setError('Not authenticated.')
       setLoading(false)
@@ -250,6 +256,28 @@ export default function IncomeAllocationModal({
             style={inputStyle}
           />
         </div>
+        {!isEditMode && (
+          <div style={{ marginBottom: 16 }}>
+            <label htmlFor="income-source-hint" style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#374151' }}>
+              What&apos;s this income? (optional)
+            </label>
+            <input
+              id="income-source-hint"
+              type="text"
+              value={sourceHint}
+              onChange={(e) => setSourceHint(e.target.value)}
+              placeholder="e.g. freelance payment, sahod, 13th month"
+              style={inputStyle}
+              autoComplete="off"
+            />
+            <SuggestionChips
+              label="Suggested source"
+              chips={suggestedSources}
+              selected={incomeSource}
+              onSelect={setIncomeSource}
+            />
+          </div>
+        )}
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#374151' }}>
             Income source
@@ -334,7 +362,7 @@ export default function IncomeAllocationModal({
               )}
             </div>
             <p style={{ margin: '0 0 12px', fontSize: 13, color: allocationExceedsIncome ? '#b91c1c' : '#374151' }}>
-              Remaining unallocated: ₱{remaining.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Remaining unallocated: {formatPeso(remaining, 'en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               {allocationExceedsIncome && ' — Total allocations exceed income amount.'}
             </p>
             {canAddAllocation && (
@@ -376,16 +404,7 @@ export default function IncomeAllocationModal({
                     setAddAmount('')
                   }}
                   disabled={!addGoalId || !addAmount || parseFloat(addAmount) <= 0}
-                  style={{
-                    padding: '10px 14px',
-                    fontSize: 14,
-                    border: 'none',
-                    borderRadius: 8,
-                    backgroundColor: '#059669',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
+                  className="btn-secondary"
                 >
                   Add
                 </button>
@@ -438,16 +457,7 @@ export default function IncomeAllocationModal({
         <button
           type="submit"
           disabled={loading || (isEditMode && allocationExceedsIncome) || addModeAllocExceeds}
-          style={{
-            padding: '10px 18px',
-            fontSize: 14,
-            border: 'none',
-            borderRadius: 8,
-            backgroundColor: '#059669',
-            color: '#fff',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}
+          className="btn-primary"
         >
           {loading ? (isEditMode ? 'Saving...' : 'Saving...') : (isEditMode ? 'Save changes' : 'Save income')}
         </button>

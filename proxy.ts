@@ -1,9 +1,19 @@
 import { createServerClient } from '@supabase/ssr'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+function redirectWithCookies(request: NextRequest, pathname: string, from: NextResponse) {
+  const url = request.nextUrl.clone()
+  url.pathname = pathname
+  const redirectResponse = NextResponse.redirect(url)
+  // Copy full cookie objects so refreshed tokens keep Supabase's maxAge/sameSite/secure.
+  from.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie))
+  return redirectResponse
+}
+
 export async function proxy(request: NextRequest) {
-  const response = NextResponse.next()
+  let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,8 +22,12 @@ export async function proxy(request: NextRequest) {
       cookies: {
         getAll: () => request.cookies.getAll(),
         setAll: (cookiesToSet) => {
+          // Request cookies let Server Components in this request see the rotated tokens
+          // instead of refreshing again with the old refresh token.
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options ?? { path: '/' })
+            response.cookies.set(name, value, options)
           })
         },
       },
@@ -22,28 +36,22 @@ export async function proxy(request: NextRequest) {
 
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser()
 
-  const url = request.nextUrl.clone()
-
-  // If NOT logged in and trying to access dashboard
-  if (!user && url.pathname.startsWith('/dashboard')) {
-    url.pathname = '/'
-    const redirectResponse = NextResponse.redirect(url)
-    response.cookies.getAll().forEach(({ name, value }) => {
-      redirectResponse.cookies.set(name, value, { path: '/' })
-    })
-    return redirectResponse
+  // Auth server unreachable: session state is unknown, so do not guard, redirect, or clear anything.
+  if (error && isAuthRetryableFetchError(error)) {
+    return response
   }
 
-  // If logged in and trying to access landing or login
-  if (user && (url.pathname === '/' || url.pathname === '/login')) {
-    url.pathname = '/dashboard'
-    const redirectResponse = NextResponse.redirect(url)
-    response.cookies.getAll().forEach(({ name, value }) => {
-      redirectResponse.cookies.set(name, value, { path: '/' })
-    })
-    return redirectResponse
+  const { pathname } = request.nextUrl
+
+  if (!user && pathname.startsWith('/dashboard')) {
+    return redirectWithCookies(request, '/', response)
+  }
+
+  if (user && (pathname === '/' || pathname === '/login')) {
+    return redirectWithCookies(request, '/dashboard', response)
   }
 
   return response
@@ -54,5 +62,8 @@ export const config = {
     '/',
     '/login',
     '/dashboard/:path*',
+    '/onboarding',
+    '/legal-update',
+    '/admin/:path*',
   ],
 }

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { needsLegalReconsent } from '@/lib/legalConsent'
@@ -8,7 +9,19 @@ export const dynamic = 'force-dynamic'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { session }, error } = await supabase.auth.getSession()
+  // Auth server unreachable while refreshing: keep the session and offer a retry instead of the login page.
+  if (!session && error && isAuthRetryableFetchError(error)) {
+    return (
+      <main style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32, textAlign: 'center' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Can&apos;t reach KlaroPH right now</h1>
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
+          Check your connection and try again. You&apos;re still signed in.
+        </p>
+        <a href="/dashboard" className="btn-primary">Try again</a>
+      </main>
+    )
+  }
   if (!session?.user) {
     redirect('/')
   }

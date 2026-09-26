@@ -1,13 +1,16 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useLayoutEffect, startTransition } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import Image from 'next/image'
+import { supabase, getBrowserUser } from '@/lib/supabaseClient'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { useSubscriptionOptional } from '@/contexts/SubscriptionContext'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
-import { toLocalDateString } from '@/lib/format'
+import { formatWholePeso, toLocalDateString } from '@/lib/format'
+import { getMonthDateRange } from '@/lib/dashboardMonthMoney'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 import LockIcon from '@/components/ui/LockIcon'
+import MonthPicker, { formatMonthLabel } from '@/components/dashboard/MonthPicker'
 import {
   budgetHealthLabel,
   resolveBudgetHealth,
@@ -16,7 +19,11 @@ import {
 type EffectiveItem = { category: string; amount: number; note?: string | null }
 
 type BudgetOverviewProps = {
-  spendingByCategory?: Record<string, number>
+  /**
+   * Spending for `selectedMonth` owned by the parent. `null` = parent is still loading it;
+   * omitted = this card fetches spending itself.
+   */
+  spendingByCategory?: Record<string, number> | null
   budgetRefreshKey?: number
   onSetBudget?: () => void
   onEditThisMonth?: (month: string) => void
@@ -32,34 +39,17 @@ type BudgetOverviewProps = {
   breakdownTitleMobile?: string
   /** Optional header action, e.g. "Expenses Page →" */
   headerAction?: React.ReactNode
+  /** Optional action rendered beside the spending breakdown title, e.g. "View all →" */
+  breakdownAction?: React.ReactNode
   /** Hide budget editor buttons while keeping the standard card layout */
   showBudgetEditorButtons?: boolean
-}
-
-function formatPeso(n: number) {
-  return `₱${Math.abs(n).toLocaleString('en-PH', { maximumFractionDigits: 0 })}`
+  /** Hide the in-card month picker when the page owns month selection */
+  showMonthPicker?: boolean
 }
 
 function getCurrentMonthFirst(): string {
   const d = new Date()
   return toLocalDateString(new Date(d.getFullYear(), d.getMonth(), 1))
-}
-
-function getMonthRange(monthFirst: string): { start: string; end: string } {
-  const [y, m] = monthFirst.split('-').map(Number)
-  const start = new Date(y, (m ?? 1) - 1, 1)
-  const end = new Date(y, (m ?? 1), 0)
-  return {
-    start: toLocalDateString(start),
-    end: toLocalDateString(end),
-  }
-}
-
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-
-function formatMonthLabel(monthStr: string): string {
-  const [y, m] = monthStr.split('-').map(Number)
-  return `${MONTH_NAMES[(m ?? 1) - 1]} ${y}`
 }
 
 /** Fraction of the month elapsed (0–1) for the given month first-day string. Current month = day/days; past = 1; future = 0. */
@@ -136,22 +126,20 @@ export default function BudgetOverview({
   breakdownTitle: breakdownTitleProp,
   breakdownTitleMobile: breakdownTitleMobileProp,
   headerAction,
+  breakdownAction,
   showBudgetEditorButtons = true,
+  showMonthPicker = true,
 }: BudgetOverviewProps) {
   const [internalMonth, setInternalMonth] = useState(currentMonthFirst)
   const isControlled = selectedMonthProp !== undefined
   const selectedMonth = isControlled ? selectedMonthProp : internalMonth
-  const setSelectedMonth = (value: string | ((prev: string) => string)) => {
-    const next = typeof value === 'function' ? value(selectedMonth) : value
+  const setSelectedMonth = (next: string) => {
     if (onMonthChange) onMonthChange(next)
     if (!isControlled) setInternalMonth(next)
   }
-  const [selectableMonths, setSelectableMonths] = useState<{ value: string; label: string }[]>(() => [
-    { value: currentMonthFirst, label: formatMonthLabel(currentMonthFirst) },
-  ])
   const [effectiveBudgets, setEffectiveBudgets] = useState<EffectiveItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [spendingByCategoryFetched, setSpendingByCategoryFetched] = useState<Record<string, number>>({})
+  const [spendingByCategoryFetched, setSpendingByCategoryFetched] = useState<Record<string, number> | null>(null)
   const [noteTooltipCategory, setNoteTooltipCategory] = useState<string | null>(null)
   const [noteHoverCategory, setNoteHoverCategory] = useState<string | null>(null)
   const [noteTooltipPlacement, setNoteTooltipPlacement] = useState<'right' | 'left'>('right')
@@ -185,10 +173,10 @@ export default function BudgetOverview({
   }, [noteTooltipCategory, noteHoverCategory])
 
   const isCurrentMonth = selectedMonth === currentMonthFirst
-  const spendingByCategory =
-    isCurrentMonth && spendingByCategoryProp !== undefined
-      ? spendingByCategoryProp
-      : spendingByCategoryFetched
+  const spendingFromParent = spendingByCategoryProp !== undefined
+  const spendingSource = spendingFromParent ? spendingByCategoryProp : spendingByCategoryFetched
+  const spendingPending = spendingSource === null
+  const spendingByCategory = useMemo(() => spendingSource ?? {}, [spendingSource])
 
   useEffect(() => {
     let mounted = true
@@ -214,11 +202,14 @@ export default function BudgetOverview({
 
   useEffect(() => {
     let mounted = true
-    const { start, end } = getMonthRange(selectedMonth)
-    const useProp = isCurrentMonth && spendingByCategoryProp !== undefined
-    if (useProp) return
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!mounted || !user) return
+    const { start, end } = getMonthDateRange(selectedMonth)
+    if (spendingFromParent) return
+    getBrowserUser().then(({ data: { user } }) => {
+      if (!mounted) return
+      if (!user) {
+        setSpendingByCategoryFetched({})
+        return
+      }
       supabase
         .from('expenses')
         .select('category, amount')
@@ -237,30 +228,7 @@ export default function BudgetOverview({
         })
     })
     return () => { mounted = false }
-  }, [selectedMonth, budgetRefreshKey, isCurrentMonth, spendingByCategoryProp])
-
-  useEffect(() => {
-    let mounted = true
-    fetch('/api/expense-months', { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) return res.json().then(() => [])
-        return res.json()
-      })
-      .then((data: unknown) => {
-        if (!mounted) return
-        const list = Array.isArray(data) ? (data as string[]) : []
-        const set = new Set(list)
-        set.add(currentMonthFirst)
-        const months = Array.from(set)
-          .sort()
-          .reverse()
-          .map((m) => ({ value: m, label: formatMonthLabel(m) }))
-        setSelectableMonths(months)
-        if (!isControlled) setInternalMonth((prev) => (set.has(prev) ? prev : currentMonthFirst))
-      })
-      .catch(() => {})
-    return () => { mounted = false }
-  }, [budgetRefreshKey, loading])
+  }, [selectedMonth, budgetRefreshKey, spendingFromParent])
 
   /** Categories with a budget allocation, plus any category with spending and no budget (amount 0) so actual expenses match the breakdown. */
   const mergedBudgets = useMemo(() => {
@@ -305,60 +273,65 @@ export default function BudgetOverview({
   const sectionTitle = breakdownTitleProp ?? 'Category Breakdown'
   const sectionTitleMobile = breakdownTitleMobileProp ?? sectionTitle
 
-  /** Budget API not back yet — show full card shell + placeholders (LCP: h3 paints immediately) */
-  const showBudgetPlaceholderBody = loading && effectiveBudgets.length === 0
+  /**
+   * First reveal waits for both budgets and spending so the body renders once, not in stages.
+   * Latched: later month switches / refreshes keep showing the previous body while loading.
+   */
+  const [bodyReady, setBodyReady] = useState(false)
+  if (!bodyReady && !loading && !spendingPending) setBodyReady(true)
 
-  if (!loading && mergedBudgets.length === 0) {
+  /** Budget API not back yet — show full card shell + placeholders (LCP: h3 paints immediately) */
+  const showBudgetPlaceholderBody = !bodyReady || (loading && effectiveBudgets.length === 0)
+
+  if (bodyReady && !loading && mergedBudgets.length === 0) {
     return (
       <div className="card dash-card budget-overview-card budget-overview-empty-state">
         <div className="budget-overview-header">
           <h3 className="budget-overview-title">Monthly Budget Overview</h3>
-          <div className="budget-overview-controls">
-            <label htmlFor="budget-month-picker-empty" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              Month:
-            </label>
-            <select
-              id="budget-month-picker-empty"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{
-                fontSize: 13,
-                padding: '6px 10px',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                fontFamily: 'inherit',
-                color: 'var(--text-primary)',
-                backgroundColor: 'var(--surface)',
-              }}
-            >
-              {selectableMonths.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            {headerAction}
-          </div>
+          {(showMonthPicker || headerAction) && (
+            <div className="budget-overview-controls">
+              {showMonthPicker && (
+                <MonthPicker
+                  id="budget-month-picker-empty"
+                  value={selectedMonth}
+                  onChange={setSelectedMonth}
+                  refreshKey={budgetRefreshKey}
+                />
+              )}
+              {headerAction}
+            </div>
+          )}
         </div>
-        <p className="budget-overview-empty-message">
-          You have not set any spending limits yet.
-        </p>
-        {onSetBudget && canEditBudget && (
-          <button type="button" className="btn-primary" onClick={onSetBudget} style={{ padding: '10px 20px', fontSize: 14 }}>
-            Set Budget
-          </button>
-        )}
-        {onSetBudget && !canEditBudget && openUpgrade && (
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
-            style={{ padding: '10px 20px', fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}
-          >
-            <LockIcon size={14} />
-            Set Budget
-          </button>
-        )}
+        <div className="budget-empty-body">
+          <Image
+            src="/illustrations/budget-empty-state.png"
+            alt=""
+            width={584}
+            height={352}
+            className="budget-empty-art"
+            sizes="(max-width: 1279px) 90vw, 320px"
+          />
+          <h4 className="budget-empty-title">Set your spending limits</h4>
+          <p className="budget-overview-empty-message">
+            Create a monthly budget to track your spending and see your progress here.
+          </p>
+          {onSetBudget && canEditBudget && (
+            <button type="button" className="budget-empty-cta" onClick={onSetBudget}>
+              <span aria-hidden>+</span>
+              Set Up Monthly Budget
+            </button>
+          )}
+          {onSetBudget && !canEditBudget && openUpgrade && (
+            <button
+              type="button"
+              className="budget-empty-cta"
+              onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
+            >
+              <LockIcon size={14} />
+              Set Up Monthly Budget
+            </button>
+          )}
+        </div>
       </div>
     )
   }
@@ -407,69 +380,56 @@ export default function BudgetOverview({
     >
       <div className="budget-overview-header">
         <h3 className="budget-overview-title">Monthly Budget Overview</h3>
-        <div className="budget-overview-controls">
-          <label htmlFor="budget-month-picker" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Month:
-          </label>
-          <select
-            id="budget-month-picker"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            style={{
-              fontSize: 13,
-              padding: '6px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              fontFamily: 'inherit',
-              color: 'var(--text-primary)',
-              backgroundColor: 'var(--surface)',
-            }}
-          >
-            {selectableMonths.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          {showBudgetEditorButtons && onEditThisMonth && canEditBudget && (
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => onEditThisMonth(selectedMonth)}
-              style={{ padding: '8px 14px', fontSize: 13 }}
-            >
-              {isCurrentMonth ? 'Edit This Month' : `Edit ${formatMonthLabel(selectedMonth)}`}
-            </button>
-          )}
-          {showBudgetEditorButtons && onEditThisMonth && !canEditBudget && openUpgrade && (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
-              style={{ padding: '8px 14px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <LockIcon size={12} />
-              {isCurrentMonth ? 'Edit This Month' : `Edit ${formatMonthLabel(selectedMonth)}`}
-            </button>
-          )}
-          {showBudgetEditorButtons && onSetBudget && canEditBudget && (
-            <button type="button" className="btn-primary" onClick={onSetBudget} style={{ padding: '8px 16px', fontSize: 13 }}>
-              Edit Spending Plan
-            </button>
-          )}
-          {showBudgetEditorButtons && onSetBudget && !canEditBudget && openUpgrade && (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
-              style={{ padding: '8px 16px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <LockIcon size={12} />
-              Edit Spending Plan
-            </button>
-          )}
-          {headerAction}
-        </div>
+        {(showMonthPicker || showBudgetEditorButtons || headerAction) && (
+          <div className="budget-overview-controls">
+            {showMonthPicker && (
+              <MonthPicker
+                id="budget-month-picker"
+                value={selectedMonth}
+                onChange={setSelectedMonth}
+                refreshKey={budgetRefreshKey}
+              />
+            )}
+            {showBudgetEditorButtons && onEditThisMonth && canEditBudget && (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => onEditThisMonth(selectedMonth)}
+                style={{ padding: '8px 14px', fontSize: 13 }}
+              >
+                {isCurrentMonth ? 'Edit This Month' : `Edit ${formatMonthLabel(selectedMonth)}`}
+              </button>
+            )}
+            {showBudgetEditorButtons && onEditThisMonth && !canEditBudget && openUpgrade && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
+                style={{ padding: '8px 14px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <LockIcon size={12} />
+                {isCurrentMonth ? 'Edit This Month' : `Edit ${formatMonthLabel(selectedMonth)}`}
+              </button>
+            )}
+            {showBudgetEditorButtons && onSetBudget && canEditBudget && (
+              <button type="button" className="btn-primary" onClick={onSetBudget} style={{ padding: '8px 16px', fontSize: 13 }}>
+                Edit Spending Plan
+              </button>
+            )}
+            {showBudgetEditorButtons && onSetBudget && !canEditBudget && openUpgrade && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => openUpgrade({ message: BUDGET_LOCK_UPGRADE_MESSAGE })}
+                style={{ padding: '8px 16px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <LockIcon size={12} />
+                Edit Spending Plan
+              </button>
+            )}
+            {headerAction}
+          </div>
+        )}
       </div>
 
       {/* 2 nested sections: Budget Health card (left) | Category Breakdown card (right) */}
@@ -489,18 +449,19 @@ export default function BudgetOverview({
                 </div>
               </div>
               <p className="budget-health-used-label">No Plan</p>
+              <p className="budget-health-used-sublabel" aria-hidden>&nbsp;</p>
               <div className="budget-health-numbers">
                 <div className="budget-health-row">
                   <span className="budget-health-label">Spent</span>
-                  <span className="budget-health-value">{formatPeso(0)}</span>
+                  <span className="budget-health-value">{formatWholePeso(0)}</span>
                 </div>
                 <div className="budget-health-row">
                   <span className="budget-health-label">Budget</span>
-                  <span className="budget-health-value">{formatPeso(0)}</span>
+                  <span className="budget-health-value">{formatWholePeso(0)}</span>
                 </div>
                 <div className="budget-health-row">
                   <span className="budget-health-label">Remaining</span>
-                  <span className="budget-health-value">{formatPeso(0)}</span>
+                  <span className="budget-health-value">{formatWholePeso(0)}</span>
                 </div>
               </div>
               <div className="budget-burn-indicator">
@@ -519,10 +480,13 @@ export default function BudgetOverview({
               </div>
             </div>
             <div className="budget-breakdown-card">
-              <h4 className="budget-section-title">
-                <span className="lg:hidden">{sectionTitleMobile}</span>
-                <span className="hidden lg:inline">{sectionTitle}</span>
-              </h4>
+              <div className="budget-breakdown-header">
+                <h3 className="dash-card-title">
+                  <span className="lg:hidden">{sectionTitleMobile}</span>
+                  <span className="hidden lg:inline">{sectionTitle}</span>
+                </h3>
+                {breakdownAction}
+              </div>
               <div
                 className="budget-overview-rows budget-overview-rows-deferred"
                 aria-busy="true"
@@ -569,16 +533,16 @@ export default function BudgetOverview({
               <div className="budget-health-numbers">
                 <div className="budget-health-row">
                   <span className="budget-health-label">Spent</span>
-                  <span className="budget-health-value">{formatPeso(summary.totalSpent)}</span>
+                  <span className="budget-health-value">{formatWholePeso(summary.totalSpent)}</span>
                 </div>
                 <div className="budget-health-row">
                   <span className="budget-health-label">Budget</span>
-                  <span className="budget-health-value">{formatPeso(summary.totalBudget)}</span>
+                  <span className="budget-health-value">{formatWholePeso(summary.totalBudget)}</span>
                 </div>
                 <div className="budget-health-row">
                   <span className="budget-health-label">Remaining</span>
                   <span className={`budget-health-value ${summary.remaining < 0 ? 'budget-health-value-over' : ''}`}>
-                    {summary.remaining >= 0 ? formatPeso(summary.remaining) : `-${formatPeso(-summary.remaining)}`}
+                    {formatWholePeso(summary.remaining)}
                   </span>
                 </div>
               </div>
@@ -607,10 +571,13 @@ export default function BudgetOverview({
 
             {/* Right: Category Breakdown / Top N Spending to Watch */}
             <div className="budget-breakdown-card">
-              <h4 className="budget-section-title">
-                <span className="lg:hidden">{sectionTitleMobile}</span>
-                <span className="hidden lg:inline">{sectionTitle}</span>
-              </h4>
+              <div className="budget-breakdown-header">
+                <h3 className="dash-card-title">
+                  <span className="lg:hidden">{sectionTitleMobile}</span>
+                  <span className="hidden lg:inline">{sectionTitle}</span>
+                </h3>
+                {breakdownAction}
+              </div>
               <div className="budget-overview-rows">
                 {displayBudgets.map((b) => {
               const spent = spendingByCategory[b.category] ?? 0
@@ -648,12 +615,12 @@ export default function BudgetOverview({
                     ? 'Remaining'
                     : 'No activity'
               const insightValue = isUnbudgeted
-                ? formatPeso(spent)
+                ? formatWholePeso(spent)
                 : isOverspent
-                  ? formatPeso(overAmount)
+                  ? formatWholePeso(overAmount)
                   : isNormal
-                    ? formatPeso(remaining)
-                    : '₱0'
+                    ? formatWholePeso(remaining)
+                    : formatWholePeso(0)
 
               const noteText = b.note?.trim()
               const showNoteTooltip = noteText && (noteHoverCategory === b.category || noteTooltipCategory === b.category)
@@ -739,7 +706,7 @@ export default function BudgetOverview({
                   </div>
                   {(isNormal || isOverspent) && (
                     <div className="budget-category-amount">
-                      {formatPeso(spent)} / {formatPeso(budget)}
+                      {formatWholePeso(spent)} / {formatWholePeso(budget)}
                     </div>
                   )}
                   {isNoBudgetNoSpend && (
@@ -748,7 +715,7 @@ export default function BudgetOverview({
                   {isUnbudgeted && (
                     <>
                       <div className="budget-category-amount">
-                        {formatPeso(spent)} spent
+                        {formatWholePeso(spent)} spent
                       </div>
                     </>
                   )}

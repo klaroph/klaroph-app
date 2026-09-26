@@ -35,6 +35,11 @@ export function formatDate(date: Date | string): string {
   return `${mm}/${dd}/${yyyy}`
 }
 
+/** Shorten a YYYY-MM-DD string to YY-MM-DD for compact tables. */
+export function formatShortIsoDate(s: string): string {
+  return s.slice(2, 10)
+}
+
 /** Format number with comma separators (no currency symbol) */
 export function formatNumber(value: number, decimals = 0): string {
   const abs = Math.abs(value)
@@ -45,12 +50,27 @@ export function formatNumber(value: number, decimals = 0): string {
   return value < 0 ? `(${out})` : out
 }
 
-/** Format as currency: ₱ and comma separators; negative in () */
-export function formatCurrency(value: number, decimals = 0): string {
-  const formatted = formatNumber(value, decimals)
-  if (value < 0) return `₱${formatted}` // formatted already has ()
-  return `₱${formatted}`
+/**
+ * Accounting-style peso display for an already-formatted absolute amount:
+ * ₱1,250.00 when positive or zero, (₱1,250.00) when negative.
+ * Negatives that round to zero in the display render as ₱0 rather than (₱0).
+ */
+export function formatSignedPeso(value: number, absoluteText: string): string {
+  const text = `₱${absoluteText}`
+  return value < 0 && /[1-9]/.test(absoluteText) ? `(${text})` : text
 }
 
-/** Tabular numbers class for alignment in tables */
-export const TABULAR_NUMBERS_CLASS = 'tabular-nums'
+/** Peso amount with the caller's locale/precision (same options as Number#toLocaleString); negative in (). */
+export function formatPeso(value: number, locale?: string, options?: Intl.NumberFormatOptions): string {
+  return formatSignedPeso(value, Math.abs(value).toLocaleString(locale, options))
+}
+
+/** Whole-peso en-PH amount (e.g. ₱1,250 or (₱1,250)) for summaries, charts, and insight copy. */
+export function formatWholePeso(value: number): string {
+  return formatPeso(value, 'en-PH', { maximumFractionDigits: 0 })
+}
+
+/** Format as currency: ₱ and comma separators; negative in () */
+export function formatCurrency(value: number, decimals = 0): string {
+  return formatSignedPeso(value, formatNumber(Math.abs(value), decimals))
+}

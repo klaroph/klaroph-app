@@ -59,8 +59,8 @@ const graceCtaStyle: React.CSSProperties = {
 
 const expiredCtaStyle: React.CSSProperties = {
   ...ctaButtonStyle,
-  backgroundColor: 'var(--color-primary, #2563eb)',
-  color: '#fff',
+  backgroundColor: 'var(--color-yellow)',
+  color: 'var(--text-primary)',
 }
 
 function WarningIcon() {

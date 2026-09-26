@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatWholePeso } from '@/lib/format'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { GOAL_PRESETS } from '@/lib/goalPresets'
@@ -35,6 +36,19 @@ function presetToGoalCategory(presetId: string): string | null {
 
 const STEPS = 8
 
+/** Labels for steps 2–8 (step 1 is the welcome screen). */
+const STEP_LABELS: Record<number, string> = {
+  2: 'Income',
+  3: 'Spending plan',
+  4: 'Goal',
+  5: 'Savings',
+  6: 'Your journey',
+  7: 'What matters',
+  8: 'Your plan',
+}
+
+const SETUP_PREVIEW = ['Your income', 'A simple spending plan', 'Your first goal', 'How much to save first']
+
 export default function OnboardingFlow() {
   const router = useRouter()
   const [step, setStep] = useState(1)
@@ -58,47 +72,6 @@ export default function OnboardingFlow() {
   const targetNum = parseFloat(targetAmount.replace(/[^0-9.]/g, '')) || 0
   const monthsToGoal =
     savingsPerMonth > 0 ? Math.ceil(targetNum / savingsPerMonth) : 0
-
-  const containerStyle: React.CSSProperties = {
-    minHeight: '100vh',
-    backgroundColor: 'var(--background)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    overflow: 'auto',
-  }
-
-  const cardStyle: React.CSSProperties = {
-    maxWidth: 420,
-    width: '100%',
-    textAlign: 'center',
-  }
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '14px 16px',
-    fontSize: 16,
-    border: '1px solid var(--border)',
-    borderRadius: 12,
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-    marginTop: 8,
-  }
-
-  const buttonPrimaryStyle: React.CSSProperties = {
-    padding: '14px 28px',
-    fontSize: 16,
-    fontWeight: 600,
-    backgroundColor: 'var(--color-primary)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 12,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    boxShadow: '0 2px 12px var(--color-primary-shadow)',
-  }
 
   const handleFinish = async () => {
     setError(null)
@@ -165,359 +138,325 @@ export default function OnboardingFlow() {
     if (step > 1) setStep((s) => s - 1)
   }
 
-  const formatPeso = (n: number) =>
-    `₱${n.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`
+  const progressStep = step - 1
+  const progressTotal = STEPS - 1
+
+  const errorLine = error ? (
+    <p className="onb-error" role="alert">
+      {error}
+    </p>
+  ) : null
+
+  const backButton = (
+    <button type="button" onClick={goBack} className="btn-secondary onb-btn">
+      Back
+    </button>
+  )
 
   return (
-    <div style={containerStyle}>
-      {step > 1 && step < STEPS && (
-        <header style={{ position: 'absolute', top: 16, left: 16, right: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
-            <KlaroPHHandLogo size={32} variant="onWhite" />
-          </Link>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-            Step {step - 1} of {STEPS - 1}
-          </p>
-        </header>
-      )}
-      <div style={cardStyle}>
-        {/* Step 1: Intro */}
-        {step === 1 && (
-          <>
-            <div style={{ marginBottom: 8 }}>
-              <KlaroPHHandLogo size={36} variant="onWhite" />
-            </div>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-              🇵🇭 Financial clarity for every Filipino
-            </p>
-            <h1 style={{ margin: '0 0 12px', fontSize: 26, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Make Your Money Clear.
-            </h1>
-            <p style={{ margin: '0 0 24px', fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              We help Filipinos put savings first — before spending.
-            </p>
-            <p style={{ margin: '0 0 32px', fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Financial clarity doesn&apos;t require a big income. It starts with a clear plan.
-            </p>
-            <button type="button" onClick={() => setStep(2)} style={buttonPrimaryStyle}>
-              Start My Plan
-            </button>
-            <p style={{ margin: '24px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-              Takes less than 2 minutes.
-            </p>
-          </>
-        )}
+    <div className="onb">
+      <header className="onb-header">
+        <Link href="/" className="onb-logo" aria-label="KlaroPH home">
+          <KlaroPHHandLogo size={32} variant="onWhite" />
+        </Link>
+      </header>
 
-        {/* Step 2: Income */}
-        {step === 2 && (
-          <>
-            <h2 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 600, color: 'var(--text-primary)' }}>
-              Let&apos;s start with your income.
-            </h2>
-            <label style={{ display: 'block', textAlign: 'left', marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Monthly Income</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="₱ 25,000"
-                value={income}
-                onChange={(e) => setIncome(e.target.value)}
-                style={inputStyle}
-              />
-            </label>
-            <label style={{ display: 'block', textAlign: 'left', marginBottom: 24 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Frequency</span>
-              <select
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value as IncomeFrequency)}
-                style={inputStyle}
-              >
-                <option value="monthly">Monthly</option>
-                <option value="semi-monthly">Semi-Monthly</option>
-                <option value="weekly">Weekly</option>
-              </select>
-            </label>
-            {error && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-error)' }}>{error}</p>}
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button type="button" onClick={goBack} style={{ ...buttonPrimaryStyle, backgroundColor: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                Back
-              </button>
-              <button type="button" onClick={goNext} style={buttonPrimaryStyle}>
-                Continue
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Step 4: Goal */}
-        {step === 4 && (
-          <>
-            <h2 style={{ margin: '0 0 20px', fontSize: 22, fontWeight: 600, color: 'var(--text-primary)' }}>
-              What are you saving for?
-            </h2>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 20 }}>
-              {GOAL_PRESETS.filter((p) => p.id !== 'custom').map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => { setGoalPresetId(p.id); setGoalName(p.defaultName) }}
-                  style={{
-                    padding: '10px 16px',
-                    fontSize: 14,
-                    border: goalPresetId === p.id ? '2px solid var(--color-primary)' : '1px solid var(--border)',
-                    borderRadius: 10,
-                    background: goalPresetId === p.id ? 'var(--color-blue-muted)' : 'var(--surface)',
-                    color: 'var(--text-primary)',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => { setGoalPresetId('custom'); setGoalName('') }}
-                style={{
-                  padding: '10px 16px',
-                  fontSize: 14,
-                  border: goalPresetId === 'custom' ? '2px solid var(--color-primary)' : '1px solid var(--border)',
-                  borderRadius: 10,
-                  background: goalPresetId === 'custom' ? 'var(--color-blue-muted)' : 'var(--surface)',
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Custom
-              </button>
-            </div>
-            {goalPresetId === 'custom' && (
-              <label style={{ display: 'block', textAlign: 'left', marginBottom: 16 }}>
-                <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Goal name</span>
-                <input type="text" placeholder="e.g. New laptop" value={goalName} onChange={(e) => setGoalName(e.target.value)} style={inputStyle} />
-              </label>
-            )}
-            <label style={{ display: 'block', textAlign: 'left', marginBottom: 24 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Target Amount</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="₱ 100,000"
-                value={targetAmount}
-                onChange={(e) => setTargetAmount(e.target.value)}
-                style={inputStyle}
-              />
-            </label>
-            {error && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-error)' }}>{error}</p>}
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button type="button" onClick={goBack} style={{ ...buttonPrimaryStyle, backgroundColor: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                Back
-              </button>
-              <button type="button" onClick={goNext} style={buttonPrimaryStyle}>
-                Continue
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Step 3: Budget (Spending Plan) */}
-        {step === 3 && (
-          <BudgetStep
-            inputStyle={inputStyle}
-            buttonPrimaryStyle={buttonPrimaryStyle}
-            onBack={goBack}
-            onNext={goNext}
-          />
-        )}
-
-        {/* Step 4: Savings % */}
-        {step === 5 && (
-          <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 600, color: 'var(--text-primary)' }}>
-              Pay Your Future Self First.
-            </h2>
-            <p style={{ margin: '0 0 24px', fontSize: 15, color: 'var(--text-secondary)' }}>
-              How much will you save from every income?
-            </p>
-            <div style={{ marginBottom: 16 }}>
-              <input
-                type="range"
-                min="5"
-                max="50"
-                step="5"
-                value={savingsPercent}
-                onChange={(e) => setSavingsPercent(Number(e.target.value))}
-                style={{ width: '100%', height: 10, accentColor: 'var(--color-primary)' }}
-              />
-              <p style={{ margin: '12px 0 0', fontSize: 18, fontWeight: 600, color: 'var(--color-primary)' }}>
-                {savingsPercent}%
+      <main className="onb-main">
+        <div className="onb-card">
+          {step > 1 && (
+            <div className="onb-progress">
+              <p className="onb-progress-label">
+                Step {progressStep} of {progressTotal} · <span>{STEP_LABELS[step]}</span>
               </p>
+              <div
+                className="onb-progress-track"
+                role="progressbar"
+                aria-label="Setup progress"
+                aria-valuemin={1}
+                aria-valuemax={progressTotal}
+                aria-valuenow={progressStep}
+              >
+                <div className="onb-progress-fill" style={{ width: `${(progressStep / progressTotal) * 100}%` }} />
+              </div>
             </div>
-            <p style={{ margin: '0 0 8px', fontSize: 15, color: 'var(--text-secondary)' }}>
-              You will save {formatPeso(savingsPerMonth)} per month.
-            </p>
-            <p style={{ margin: '0 0 28px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              Savings is not what&apos;s left. It comes first.
-            </p>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button type="button" onClick={goBack} style={{ ...buttonPrimaryStyle, backgroundColor: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                Back
-              </button>
-              <button type="button" onClick={() => setStep(6)} style={buttonPrimaryStyle}>
-                Continue
-              </button>
-            </div>
-          </>
-        )}
+          )}
 
-        {/* Step 6: Profile — financial stage & savings confidence */}
-        {step === 6 && (
-          <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 600, color: 'var(--text-primary)' }}>
-              A bit about your financial journey.
-            </h2>
-            <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--text-muted)' }}>
-              You can edit these later in your profile.
-            </p>
-            <label style={{ display: 'block', textAlign: 'left', marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Where are you now?</span>
-              <select value={financialStage} onChange={(e) => setFinancialStage(e.target.value)} style={inputStyle}>
-                <option value="">Select</option>
-                {FINANCIAL_STAGES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </label>
-            <label style={{ display: 'block', textAlign: 'left', marginBottom: 24 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>How confident are you about saving? (1–5)</span>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                {[1, 2, 3, 4, 5].map((n) => (
+          {/* Step 1: Welcome */}
+          {step === 1 && (
+            <div className="onb-welcome">
+              <KlaroPHHandLogo size={44} variant="onWhite" />
+              <p className="onb-eyebrow">🇵🇭 Financial clarity for every Filipino</p>
+              <h1 className="onb-title onb-title--lg">Let&apos;s make your money a little clearer.</h1>
+              <p className="onb-lead">
+                We help Filipinos put savings first — before spending. Financial clarity doesn&apos;t
+                require a big income. It starts with a clear plan.
+              </p>
+              <div className="onb-preview">
+                <p className="onb-preview-title">We&apos;ll set up</p>
+                <ul>
+                  {SETUP_PREVIEW.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <button type="button" onClick={() => setStep(2)} className="btn-primary onb-btn onb-btn--wide">
+                Start My Plan
+              </button>
+              <p className="onb-hint">Takes less than 2 minutes. You can change everything later.</p>
+            </div>
+          )}
+
+          {/* Step 2: Income */}
+          {step === 2 && (
+            <>
+              <h2 className="onb-title">Let&apos;s start with your income.</h2>
+              <p className="onb-lead">This helps KlaroPH size your spending plan and savings.</p>
+              <label className="onb-field">
+                <span className="onb-label">Income amount</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="₱ 25,000"
+                  value={income}
+                  onChange={(e) => setIncome(e.target.value)}
+                  className="login-input"
+                />
+              </label>
+              <label className="onb-field">
+                <span className="onb-label">How often you get paid</span>
+                <select
+                  value={frequency}
+                  onChange={(e) => setFrequency(e.target.value as IncomeFrequency)}
+                  className="login-input"
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="semi-monthly">Semi-Monthly</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </label>
+              {errorLine}
+              <div className="onb-actions">
+                {backButton}
+                <button type="button" onClick={goNext} className="btn-primary onb-btn">
+                  Continue
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step 3: Budget (Spending Plan) */}
+          {step === 3 && <BudgetStep onBack={goBack} onNext={goNext} />}
+
+          {/* Step 4: Goal */}
+          {step === 4 && (
+            <>
+              <h2 className="onb-title">What are you saving for?</h2>
+              <p className="onb-lead">Pick one to start. You can add more goals later.</p>
+              <div className="onb-chips" role="group" aria-label="Goal type">
+                {GOAL_PRESETS.filter((p) => p.id !== 'custom').map((p) => (
                   <button
-                    key={n}
+                    key={p.id}
                     type="button"
-                    onClick={() => setSavingsConfidence(n)}
-                    style={{
-                      padding: '10px 16px',
-                      fontSize: 16,
-                      border: savingsConfidence === n ? '2px solid var(--color-primary)' : '1px solid var(--border)',
-                      borderRadius: 10,
-                      background: savingsConfidence === n ? 'var(--color-blue-muted)' : 'var(--surface)',
-                      color: 'var(--text-primary)',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                    }}
+                    aria-pressed={goalPresetId === p.id}
+                    className="onb-chip"
+                    onClick={() => { setGoalPresetId(p.id); setGoalName(p.defaultName) }}
                   >
-                    {n}
+                    {p.label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  aria-pressed={goalPresetId === 'custom'}
+                  className="onb-chip"
+                  onClick={() => { setGoalPresetId('custom'); setGoalName('') }}
+                >
+                  Custom
+                </button>
               </div>
-            </label>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button type="button" onClick={goBack} style={{ ...buttonPrimaryStyle, backgroundColor: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                Back
-              </button>
-              <button type="button" onClick={() => setStep(7)} style={buttonPrimaryStyle}>
-                Continue
-              </button>
-            </div>
-          </>
-        )}
+              {goalPresetId === 'custom' && (
+                <label className="onb-field">
+                  <span className="onb-label">Goal name</span>
+                  <input type="text" placeholder="e.g. New laptop" value={goalName} onChange={(e) => setGoalName(e.target.value)} className="login-input" />
+                </label>
+              )}
+              <label className="onb-field">
+                <span className="onb-label">Target amount</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="₱ 100,000"
+                  value={targetAmount}
+                  onChange={(e) => setTargetAmount(e.target.value)}
+                  className="login-input"
+                />
+              </label>
+              {errorLine}
+              <div className="onb-actions">
+                {backButton}
+                <button type="button" onClick={goNext} className="btn-primary onb-btn">
+                  Continue
+                </button>
+              </div>
+            </>
+          )}
 
-        {/* Step 7: Profile — risk comfort, motivation, dream */}
-        {step === 7 && (
-          <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 600, color: 'var(--text-primary)' }}>
-              What matters most to you?
-            </h2>
-            <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--text-muted)' }}>
-              You can edit these later in your profile.
-            </p>
-            <label style={{ display: 'block', textAlign: 'left', marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Risk comfort</span>
-              <select value={riskComfort} onChange={(e) => setRiskComfort(e.target.value)} style={inputStyle}>
-                <option value="">Select</option>
-                {RISK_COMFORT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </label>
-            <label style={{ display: 'block', textAlign: 'left', marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>What motivates you?</span>
-              <select value={motivationType} onChange={(e) => setMotivationType(e.target.value)} style={inputStyle}>
-                <option value="">Select</option>
-                {MOTIVATION_TYPES.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </label>
-            <label style={{ display: 'block', textAlign: 'left', marginBottom: 24 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Dream or goal in one sentence (optional)</span>
-              <input
-                type="text"
-                placeholder="e.g. Own a home by 35"
-                value={dreamStatement}
-                onChange={(e) => setDreamStatement(e.target.value)}
-                style={inputStyle}
-              />
-            </label>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button type="button" onClick={goBack} style={{ ...buttonPrimaryStyle, backgroundColor: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                Back
-              </button>
-              <button type="button" onClick={() => setStep(8)} style={buttonPrimaryStyle}>
-                See My Plan
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Step 8: Summary */}
-        {step === 8 && (
-          <>
-            <h2 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 600, color: 'var(--text-primary)' }}>
-              Your Plan is Ready! 🎯
-            </h2>
-            <div
-              style={{
-                textAlign: 'left',
-                padding: 20,
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                marginBottom: 24,
-              }}
-            >
-              <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-muted)' }}>Income</p>
-              <p style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 600 }}>{formatPeso(monthlyIncome)}/month</p>
-              <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-muted)' }}>Monthly Savings</p>
-              <p style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 600 }}>{formatPeso(savingsPerMonth)}</p>
-              <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-muted)' }}>Goal</p>
-              <p style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 600 }}>{goalName.trim() || 'My Goal'}</p>
-              <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-muted)' }}>Target</p>
-              <p style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 600 }}>{formatPeso(targetNum)}</p>
-              <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-muted)' }}>Projected Completion</p>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
-                {monthsToGoal > 0 ? `~${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}` : '—'}
+          {/* Step 5: Savings % */}
+          {step === 5 && (
+            <>
+              <h2 className="onb-title">Pay your future self first.</h2>
+              <p className="onb-lead">How much will you save from every income?</p>
+              <div className="onb-range">
+                <input
+                  type="range"
+                  min="5"
+                  max="50"
+                  step="5"
+                  value={savingsPercent}
+                  onChange={(e) => setSavingsPercent(Number(e.target.value))}
+                  aria-label="Savings percentage"
+                />
+                <p className="onb-range-value">{savingsPercent}%</p>
+              </div>
+              <p className="onb-callout">
+                You will save <strong>{formatWholePeso(savingsPerMonth)}</strong> per month.
               </p>
-            </div>
-            <p style={{ margin: '0 0 24px', fontSize: 15, color: 'var(--text-secondary)' }}>
-              {monthsToGoal > 0
-                ? `You can reach your goal in ${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}.`
-                : 'Adjust your savings % or target to see your timeline.'}
-            </p>
-            {error && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-error)' }}>{error}</p>}
-            <button
-              type="button"
-              onClick={handleFinish}
-              disabled={loading}
-              style={{ ...buttonPrimaryStyle, opacity: loading ? 0.8 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
-            >
-              {loading ? 'Setting up...' : 'Go to Dashboard'}
-            </button>
-          </>
-        )}
-      </div>
+              <p className="onb-hint">Savings is not what&apos;s left. It comes first.</p>
+              <div className="onb-actions">
+                {backButton}
+                <button type="button" onClick={() => setStep(6)} className="btn-primary onb-btn">
+                  Continue
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step 6: Profile — financial stage & savings confidence */}
+          {step === 6 && (
+            <>
+              <h2 className="onb-title">A bit about your financial journey.</h2>
+              <p className="onb-lead">Optional — you can edit these later in your profile.</p>
+              <label className="onb-field">
+                <span className="onb-label">Where are you now?</span>
+                <select value={financialStage} onChange={(e) => setFinancialStage(e.target.value)} className="login-input">
+                  <option value="">Select</option>
+                  {FINANCIAL_STAGES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="onb-field">
+                <span className="onb-label" id="onb-confidence-label">How confident are you about saving? (1–5)</span>
+                <div className="onb-chips onb-chips--start" role="group" aria-labelledby="onb-confidence-label">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-pressed={savingsConfidence === n}
+                      className="onb-chip onb-chip--square"
+                      onClick={() => setSavingsConfidence(n)}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="onb-actions">
+                {backButton}
+                <button type="button" onClick={() => setStep(7)} className="btn-primary onb-btn">
+                  Continue
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step 7: Profile — risk comfort, motivation, dream */}
+          {step === 7 && (
+            <>
+              <h2 className="onb-title">What matters most to you?</h2>
+              <p className="onb-lead">Optional — you can edit these later in your profile.</p>
+              <label className="onb-field">
+                <span className="onb-label">Risk comfort</span>
+                <select value={riskComfort} onChange={(e) => setRiskComfort(e.target.value)} className="login-input">
+                  <option value="">Select</option>
+                  {RISK_COMFORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="onb-field">
+                <span className="onb-label">What motivates you?</span>
+                <select value={motivationType} onChange={(e) => setMotivationType(e.target.value)} className="login-input">
+                  <option value="">Select</option>
+                  {MOTIVATION_TYPES.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="onb-field">
+                <span className="onb-label">Dream or goal in one sentence (optional)</span>
+                <input
+                  type="text"
+                  placeholder="e.g. Own a home by 35"
+                  value={dreamStatement}
+                  onChange={(e) => setDreamStatement(e.target.value)}
+                  className="login-input"
+                />
+              </label>
+              <div className="onb-actions">
+                {backButton}
+                <button type="button" onClick={() => setStep(8)} className="btn-primary onb-btn">
+                  See My Plan
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step 8: Summary — first value moment from the user's own entries */}
+          {step === 8 && (
+            <>
+              <h2 className="onb-title">Your plan is ready! 🎯</h2>
+              <p className="onb-lead">
+                {monthsToGoal > 0
+                  ? `You can reach your goal in ${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}.`
+                  : 'Adjust your savings % or target to see your timeline.'}
+              </p>
+              <dl className="onb-summary">
+                <div>
+                  <dt>Income</dt>
+                  <dd>{formatWholePeso(monthlyIncome)}/month</dd>
+                </div>
+                <div>
+                  <dt>Monthly savings</dt>
+                  <dd>{formatWholePeso(savingsPerMonth)}</dd>
+                </div>
+                <div>
+                  <dt>Goal</dt>
+                  <dd>{goalName.trim() || 'My Goal'}</dd>
+                </div>
+                <div>
+                  <dt>Target</dt>
+                  <dd>{formatWholePeso(targetNum)}</dd>
+                </div>
+                <div className="onb-summary-wide">
+                  <dt>Projected completion</dt>
+                  <dd>{monthsToGoal > 0 ? `~${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}` : '—'}</dd>
+                </div>
+              </dl>
+              <p className="onb-hint">
+                Next: your dashboard, where you can add expenses, track your goal, and ask Klaro about
+                your numbers.
+              </p>
+              {errorLine}
+              <div className="onb-actions">
+                {backButton}
+                <button type="button" onClick={handleFinish} disabled={loading} className="btn-primary onb-btn">
+                  {loading ? 'Setting up…' : 'Go to Dashboard'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </main>
     </div>
   )
 }

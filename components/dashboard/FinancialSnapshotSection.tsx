@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabaseClient'
+import { formatPeso } from '@/lib/format'
+import { supabase, getBrowserUser } from '../../lib/supabaseClient'
 import { getAccountDisplayLabel, type FinancialAccount } from '@/lib/financialAccounts'
 import { getWeightedLiquidAssets } from '@/lib/financialHealthInsights'
 import ManageAssetsLiabilitiesModal from './ManageAssetsLiabilitiesModal'
@@ -65,7 +66,7 @@ function SnapshotCard({ label, value, breakdown, netWorthBreakdown }: SnapshotCa
               }}
             >
               <span>{item.name}</span>
-              <span>₱{Number(item.amount).toLocaleString()}</span>
+              <span>{formatPeso(Number(item.amount))}</span>
             </div>
           ))}
         </div>
@@ -102,7 +103,7 @@ function SnapshotCard({ label, value, breakdown, netWorthBreakdown }: SnapshotCa
               }}
             >
               <span>{item.name}</span>
-              <span>₱{Number(item.amount).toLocaleString()}</span>
+              <span>{formatPeso(Number(item.amount))}</span>
             </div>
           ))}
           <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginTop: 12, marginBottom: 8 }}>
@@ -119,7 +120,7 @@ function SnapshotCard({ label, value, breakdown, netWorthBreakdown }: SnapshotCa
               }}
             >
               <span>{item.name}</span>
-              <span>₱{Number(item.amount).toLocaleString()}</span>
+              <span>{formatPeso(Number(item.amount))}</span>
             </div>
           ))}
           <div
@@ -134,7 +135,7 @@ function SnapshotCard({ label, value, breakdown, netWorthBreakdown }: SnapshotCa
             }}
           >
             <span>Net worth</span>
-            <span>₱{netWorthBreakdown.net.toLocaleString()}</span>
+            <span>{formatPeso(netWorthBreakdown.net)}</span>
           </div>
         </div>
       )}
@@ -160,7 +161,7 @@ export default function FinancialSnapshotSection({
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await getBrowserUser()
       if (!user) return
       const { data } = await supabase
         .from('financial_accounts')
@@ -225,17 +226,17 @@ export default function FinancialSnapshotSection({
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
         <SnapshotCard
           label="Total assets"
-          value={`₱${assetsSum.toLocaleString()}`}
+          value={formatPeso(assetsSum)}
           breakdown={assets}
         />
         <SnapshotCard
           label="Total liabilities"
-          value={`₱${liabilitiesSum.toLocaleString()}`}
+          value={formatPeso(liabilitiesSum)}
           breakdown={liabilities}
         />
         <SnapshotCard
           label="Net worth"
-          value={`₱${net.toLocaleString()}`}
+          value={formatPeso(net)}
           netWorthBreakdown={{
             assets,
             liabilities,

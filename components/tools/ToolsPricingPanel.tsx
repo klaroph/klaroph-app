@@ -6,6 +6,7 @@ import {
   PRO_PLAN_TOOLS,
   PLAN_SECTION_TOOLS_LABEL,
 } from '@/lib/planFeatures'
+import { PRO_ANNUAL_PESOS, PRO_MONTHLY_PESOS, formatPlanPeso } from '@/lib/planPricing'
 
 export function ToolsPricingFree() {
   return (
@@ -36,8 +37,10 @@ export function ToolsPricingPro() {
       <div className="landing-plan-card landing-plan-pro">
         <span className="landing-plan-badge">Most Popular</span>
         <h3>PRO PLAN</h3>
-        <p className="landing-plan-price">₱99<span>/month</span></p>
-        <p className="landing-plan-value">Save more with annual: ₱999/year.</p>
+        <p className="landing-plan-price">
+          {formatPlanPeso(PRO_MONTHLY_PESOS)}<span>/month</span>
+        </p>
+        <p className="landing-plan-value">Save more with annual: {formatPlanPeso(PRO_ANNUAL_PESOS)}/year.</p>
         <p className="plan-section-title">Core</p>
         <ul>
           {PRO_PLAN_FEATURES.map(({ label, premium }) => (

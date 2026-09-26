@@ -11,7 +11,7 @@ import {
 import ClarityBadge from '@/components/profile/ClarityBadge'
 import ProfileActionCTA from '@/components/profile/ProfileActionCTA'
 import DeleteAccountSection from '@/components/profile/DeleteAccountSection'
-import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
+import KlaroPageHeader from '@/components/layout/KlaroPageHeader'
 
 
 type ProfileState = {
@@ -25,24 +25,6 @@ type ProfileState = {
   dream_statement: string
 }
 
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  fontSize: 14,
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  fontFamily: 'inherit',
-  boxSizing: 'border-box',
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  marginBottom: 6,
-  fontSize: 13,
-  fontWeight: 500,
-  color: 'var(--text-secondary)',
-}
 
 export default function ProfilePage() {
   const [data, setData] = useState<ProfileWithComputed | null>(null)
@@ -128,8 +110,12 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="page-header">
-        <p style={{ margin: 0, color: 'var(--text-muted)' }}>Loading your profile...</p>
+      <div className="profile-page klaro-page-shell">
+        <KlaroPageHeader
+          title="Profile"
+          description="Your personal KlaroPH information."
+        />
+        <p style={{ margin: 0, color: 'var(--text-muted)' }}>Loading your profile…</p>
       </div>
     )
   }
@@ -141,18 +127,11 @@ export default function ProfilePage() {
   const isComplete = (data?.profile_completion_percentage ?? 0) >= 100
 
   return (
-    <div className="profile-page premium-page">
-      <div className="page-header">
-        <div className="min-w-0 flex-1 max-lg:w-full">
-          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
-            <h2 className="max-lg:mb-0">Financial Identity</h2>
-            <DashboardMobileHeaderLogo />
-          </div>
-          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
-            Your profile helps us give you smarter, more personal clarity.
-          </p>
-        </div>
-      </div>
+    <div className="profile-page premium-page klaro-page-shell">
+      <KlaroPageHeader
+        title="Profile"
+        description="Your personal KlaroPH information."
+      />
 
       {error && (
         <div
@@ -214,9 +193,10 @@ export default function ProfilePage() {
             gap: 16,
           }}
         >
-          <div>
-            <label style={labelStyle}>Income Range</label>
+          <div className="klaro-field">
+            <label className="klaro-field-label">Income Range</label>
             <select
+              className="klaro-field-select"
               value={form.monthly_income_range}
               onChange={(e) =>
                 setForm((f) => ({ ...f, monthly_income_range: e.target.value }))
@@ -224,7 +204,6 @@ export default function ProfilePage() {
               onBlur={() =>
                 handleBlur('monthly_income_range', form.monthly_income_range)
               }
-              style={inputStyle}
             >
               {INCOME_RANGES.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -233,10 +212,11 @@ export default function ProfilePage() {
               ))}
             </select>
           </div>
-          <div>
-            <label style={labelStyle}>Primary Goal Category</label>
+          <div className="klaro-field">
+            <label className="klaro-field-label">Primary Goal Category</label>
             <input
               type="text"
+              className="klaro-field-input"
               value={form.primary_goal_category}
               onChange={(e) =>
                 setForm((f) => ({ ...f, primary_goal_category: e.target.value }))
@@ -245,18 +225,17 @@ export default function ProfilePage() {
                 handleBlur('primary_goal_category', form.primary_goal_category)
               }
               placeholder="e.g. Emergency Fund, House"
-              style={inputStyle}
             />
           </div>
-          <div>
-            <label style={labelStyle}>Financial Stage</label>
+          <div className="klaro-field">
+            <label className="klaro-field-label">Financial Stage</label>
             <select
+              className="klaro-field-select"
               value={form.financial_stage}
               onChange={(e) =>
                 setForm((f) => ({ ...f, financial_stage: e.target.value }))
               }
               onBlur={() => handleBlur('financial_stage', form.financial_stage)}
-              style={inputStyle}
             >
               <option value="">Select</option>
               {FINANCIAL_STAGES.map((opt) => (
@@ -266,15 +245,15 @@ export default function ProfilePage() {
               ))}
             </select>
           </div>
-          <div>
-            <label style={labelStyle}>Risk Comfort</label>
+          <div className="klaro-field">
+            <label className="klaro-field-label">Risk Comfort</label>
             <select
+              className="klaro-field-select"
               value={form.risk_comfort}
               onChange={(e) =>
                 setForm((f) => ({ ...f, risk_comfort: e.target.value }))
               }
               onBlur={() => handleBlur('risk_comfort', form.risk_comfort)}
-              style={inputStyle}
             >
               <option value="">Select</option>
               {RISK_COMFORT_OPTIONS.map((opt) => (
@@ -285,8 +264,8 @@ export default function ProfilePage() {
             </select>
           </div>
         </div>
-        <div style={{ marginTop: 16 }}>
-          <label style={labelStyle}>
+        <div className="klaro-field" style={{ marginTop: 16 }}>
+          <label className="klaro-field-label">
             Savings Confidence (1–5): {form.savings_confidence ?? '—'}
           </label>
           <input
@@ -319,22 +298,23 @@ export default function ProfilePage() {
             <span>Very confident</span>
           </div>
         </div>
-        <div style={{ marginTop: 16 }}>
-          <label style={labelStyle}>Nickname (how we address you)</label>
+        <div className="klaro-field" style={{ marginTop: 16 }}>
+          <label className="klaro-field-label">Nickname (how we address you)</label>
           <input
             type="text"
+            className="klaro-field-input"
             value={form.nickname}
             onChange={(e) =>
               setForm((f) => ({ ...f, nickname: e.target.value }))
             }
             onBlur={() => handleBlur('nickname', form.nickname)}
             placeholder="e.g. Jerald"
-            style={inputStyle}
           />
         </div>
-        <div style={{ marginTop: 16 }}>
-          <label style={labelStyle}>Motivation</label>
+        <div className="klaro-field" style={{ marginTop: 16 }}>
+          <label className="klaro-field-label">Motivation</label>
           <select
+            className="klaro-field-select"
             value={form.motivation_type}
             onChange={(e) =>
               setForm((f) => ({ ...f, motivation_type: e.target.value }))
@@ -342,7 +322,6 @@ export default function ProfilePage() {
             onBlur={() =>
               handleBlur('motivation_type', form.motivation_type)
             }
-            style={inputStyle}
           >
             <option value="">Select</option>
             {MOTIVATION_TYPES.map((opt) => (
@@ -362,22 +341,20 @@ export default function ProfilePage() {
         <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-muted)' }}>
           A clear &quot;why&quot; keeps you going when things get busy.
         </p>
-        <textarea
-          value={form.dream_statement}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, dream_statement: e.target.value }))
-          }
-          onBlur={() =>
-            handleBlur('dream_statement', form.dream_statement)
-          }
-          placeholder="I want financial freedom so that..."
-          rows={4}
-          style={{
-            ...inputStyle,
-            resize: 'vertical',
-            minHeight: 100,
-          }}
-        />
+        <div className="klaro-field">
+          <textarea
+            className="klaro-field-textarea"
+            value={form.dream_statement}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, dream_statement: e.target.value }))
+            }
+            onBlur={() =>
+              handleBlur('dream_statement', form.dream_statement)
+            }
+            placeholder="I want financial freedom so that..."
+            rows={4}
+          />
+        </div>
       </div>
 
       {/* Section 4 — Action Engine */}

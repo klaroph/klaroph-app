@@ -8,9 +8,8 @@ import {
   type KlaroPromoVoucher,
 } from '@/lib/klaroPromoStorage'
 import { FOUNDER_FINAL_CENTAVOS, FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
+import { PRO_ANNUAL_PESOS as ANNUAL_PESOS, PRO_MONTHLY_PESOS as MONTHLY_PESOS, formatPlanPeso } from '@/lib/planPricing'
 
-const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 99
-const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 999
 const POLL_INTERVAL_MS = 3500
 
 /** Matches UpgradeModal / server checkout (pesos; final rounded for display). */
@@ -157,7 +156,6 @@ export default function PaymentQRModal({
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  const listPeso = (n: number) => `₱${Math.round(n).toLocaleString('en-PH')}`
   const basePeso = planType === 'annual' ? ANNUAL_PESOS : MONTHLY_PESOS
   const promoForDisplay =
     promoOverride !== undefined ? promoOverride : readKlaroPromo()?.promo ?? null
@@ -228,12 +226,12 @@ export default function PaymentQRModal({
                     }}
                     aria-hidden
                   >
-                    {listPeso(basePeso)}
+                    {formatPlanPeso(basePeso)}
                   </span>
-                  <span>{listPeso(finalPeso)}</span>
+                  <span>{formatPlanPeso(finalPeso)}</span>
                 </>
               ) : (
-                <span>{listPeso(basePeso)}</span>
+                <span>{formatPlanPeso(basePeso)}</span>
               )}{' '}
               {!isFounderLifetime && (
                 <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>

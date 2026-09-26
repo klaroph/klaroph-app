@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import { getBrowserUser } from '@/lib/supabaseClient'
 import { signOutWithFullCleanup } from '@/lib/supabaseAuthSignOut'
 import Modal from '@/components/ui/Modal'
 
@@ -20,7 +20,7 @@ export default function DeleteAccountSection() {
 
   useEffect(() => {
     if (!open) return
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    getBrowserUser().then(({ data: { user } }) => {
       setUserEmail(user?.email ?? null)
     })
   }, [open])
@@ -58,7 +58,7 @@ export default function DeleteAccountSection() {
         setLoading(false)
         return
       }
-      await signOutWithFullCleanup()
+      await signOutWithFullCleanup('global')
       router.replace('/')
       return
     } catch {

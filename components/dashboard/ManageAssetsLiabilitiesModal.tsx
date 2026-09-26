@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatPeso } from '@/lib/format'
 import { supabase } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import AddAssetLiabilityModal from './AddAssetLiabilityModal'
@@ -169,7 +170,7 @@ export default function ManageAssetsLiabilitiesModal({
                         <>
                           <span style={{ flex: 1, fontSize: 14 }}>{getAccountDisplayLabel(row)}</span>
                           <span style={{ fontSize: 14, color: '#374151' }}>
-                            ₱{Number(row.amount).toLocaleString()}
+                            {formatPeso(Number(row.amount))}
                           </span>
                           <button
                             type="button"
@@ -238,7 +239,7 @@ export default function ManageAssetsLiabilitiesModal({
                         <>
                           <span style={{ flex: 1, fontSize: 14 }}>{getAccountDisplayLabel(row)}</span>
                           <span style={{ fontSize: 14, color: '#374151' }}>
-                            ₱{Number(row.amount).toLocaleString()}
+                            {formatPeso(Number(row.amount))}
                           </span>
                           <button
                             type="button"

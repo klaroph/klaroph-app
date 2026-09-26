@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabaseClient'
+import { supabase, getBrowserUser } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import {
   ASSET_SUBTYPES,
@@ -84,7 +84,7 @@ export default function AddAssetLiabilityModal({
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBrowserUser()
     if (!user) {
       setError('Not authenticated.')
       setLoading(false)

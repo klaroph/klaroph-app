@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabaseClient'
+import { formatPeso } from '@/lib/format'
+import { supabase, getBrowserUser } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import NewGoalModal from './NewGoalModal'
 import UpgradeCTA from '../ui/UpgradeCTA'
@@ -73,7 +74,7 @@ export default function ManageGoalsModal({ isOpen, onClose, onGoalsChange, maxGo
   const load = async () => {
     setLoading(true)
     setError(null)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBrowserUser()
     if (!user) {
       setGoals([])
       setLoading(false)
@@ -211,10 +212,10 @@ export default function ManageGoalsModal({ isOpen, onClose, onGoalsChange, maxGo
                           style={inputStyle}
                         />
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button type="button" onClick={saveEdit} style={{ padding: '8px 14px', fontSize: 13, fontWeight: 500, background: 'var(--color-success)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+                          <button type="button" onClick={saveEdit} className="btn-primary" style={{ padding: '8px 14px', fontSize: 13 }}>
                             Save
                           </button>
-                          <button type="button" onClick={() => setEditingId(null)} style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', cursor: 'pointer' }}>
+                          <button type="button" onClick={() => setEditingId(null)} className="btn-secondary" style={{ padding: '8px 14px', fontSize: 13 }}>
                             Cancel
                           </button>
                         </div>
@@ -225,7 +226,7 @@ export default function ManageGoalsModal({ isOpen, onClose, onGoalsChange, maxGo
                           <GoalIcon iconKey={getIconKeyForGoalName(g.name)} />
                           <div>
                             <div style={{ fontWeight: 600, fontSize: 14 }}>{g.name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>₱{allocated.toLocaleString()} / ₱{target.toLocaleString()} ({pct.toFixed(0)}%)</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{formatPeso(allocated)} / {formatPeso(target)} ({pct.toFixed(0)}%)</div>
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>

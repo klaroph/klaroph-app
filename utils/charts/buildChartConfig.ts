@@ -1,11 +1,12 @@
 /**
  * Build Chart.js config for FinancialChart. Single place for chart options and theme.
- * Chart semantics (design system): income=success, expenses=danger, savings=primary.
+ * Chart semantics (KlaroPH V2): income=blue, expenses=coral, savings=lavender.
  * Chart type constants live in @/lib/chart-types (single source of truth).
  */
 
 import type { ChartData, ChartDataset } from 'chart.js'
 import type { TrendChartType, CategoryChartType } from '@/lib/chart-types'
+import { formatWholePeso } from '@/lib/format'
 
 export type ChartTypeTrend = TrendChartType
 export type ChartTypeCategory = CategoryChartType
@@ -23,19 +24,19 @@ export type ChartTheme = {
   palette: string[]
 }
 
-/** Token-aligned: income=success, expense=danger, savings=primary */
-const CHART_SEMANTIC = { income: '#059669', expense: '#CE1126', savings: '#0038A8' } as const
+/** KlaroPH V2 pastels — green is not used as a default chart brand color */
+const CHART_SEMANTIC = { income: '#3b82f6', expense: '#f87171', savings: '#8b5cf6' } as const
 
 const DEFAULT_PALETTE = [
   CHART_SEMANTIC.income,
   CHART_SEMANTIC.expense,
   CHART_SEMANTIC.savings,
-  '#FCD116',
-  '#1a4fbf',
-  '#059669',
-  '#CE1126',
-  '#7ba3f0',
-  '#fde047',
+  '#eab308',
+  '#93c5fd',
+  '#fda4af',
+  '#c4b5fd',
+  '#fdba74',
+  '#0038A8',
 ]
 
 /** Reusable KlaroPH color palette for charts. Returns `count` colors (cycles palette). */
@@ -66,10 +67,6 @@ export type TrendData = {
 export type CategoryData = {
   labels: string[]
   values: number[]
-}
-
-function formatPeso(value: number): string {
-  return `₱${value.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`
 }
 
 export type ChartDataInput = TrendData | CategoryData
@@ -135,7 +132,7 @@ export function buildChartConfig(
   options: BuildChartConfigOptions = {}
 ): BuiltChartConfig {
   const theme = { ...DEFAULT_THEME, ...options.theme }
-  const formatValue = options.formatValue ?? formatPeso
+  const formatValue = options.formatValue ?? formatWholePeso
 
   if (type === 'line' || type === 'bar' || type === 'area' || type === 'multiLine') {
     const trendData = data as TrendData

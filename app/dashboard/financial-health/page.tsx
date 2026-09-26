@@ -1,17 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, getBrowserUser } from '@/lib/supabaseClient'
 import { getAccountDisplayLabel, type FinancialAccount } from '@/lib/financialAccounts'
 import { getFinancialHealthInsight, getWeightedLiquidAssets } from '@/lib/financialHealthInsights'
-import { formatDate } from '@/lib/format'
+import { formatPeso, formatDate } from '@/lib/format'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import UpgradeCTA from '@/components/ui/UpgradeCTA'
 import LockIcon from '@/components/ui/LockIcon'
 import AddAssetLiabilityModal from '@/components/dashboard/AddAssetLiabilityModal'
 import EditFinancialAccountModal from '@/components/dashboard/EditFinancialAccountModal'
 import FinancialAccountIcon from '@/components/dashboard/FinancialAccountIcon'
-import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
+import KlaroPageHeader from '@/components/layout/KlaroPageHeader'
 
 export default function FinancialHealthPage() {
   const { isPro } = useSubscription()
@@ -23,7 +23,7 @@ export default function FinancialHealthPage() {
   const [editModalOpen, setEditModalOpen] = useState(false)
 
   const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBrowserUser()
     if (!user) {
       setAccounts([])
       setLoading(false)
@@ -57,6 +57,8 @@ export default function FinancialHealthPage() {
         return !max || new Date(ts) > new Date(max) ? ts : max
       }, null)
   const lastUpdatedLabel = lastUpdatedIso ? formatDate(lastUpdatedIso) : null
+  /** Non-breaking space keeps the meta line's height before accounts load and when there are none. */
+  const headerMeta = lastUpdatedLabel != null ? `Last updated: ${lastUpdatedLabel}` : '\u00a0'
 
   const handleDelete = async (id: string) => {
     if (!confirm('Remove this item?')) return
@@ -64,64 +66,40 @@ export default function FinancialHealthPage() {
     load()
   }
 
-  const rowStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '10px 0',
-    borderBottom: '1px solid var(--border)',
-    fontSize: 14,
-  } as const
-
   return (
-    <div className="dashboard-page">
-      <div className="page-header">
-        <div className="min-w-0 flex-1 max-lg:w-full">
-          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
-            <h2 className="max-lg:mb-0">Financial Health</h2>
-            <DashboardMobileHeaderLogo />
-          </div>
-          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
-            Track your assets, liabilities, and net worth. Get a clear snapshot and premium insights on your financial position.
-          </p>
-        </div>
-      </div>
-      {lastUpdatedLabel != null && (
-        <p className="page-header-meta" style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)' }}>
-          Last updated: {lastUpdatedLabel}
-        </p>
-      )}
+    <div className="dashboard-page klaro-page-shell">
+      <KlaroPageHeader
+        title="Financial Health"
+        description="Your financial position at a glance — assets, liabilities, and net worth."
+        meta={headerMeta}
+      />
 
-      {/* Summary card — full width */}
       <section className="dashboard-card-section">
         <div className="dash-card">
           <h2 className="dash-card-title" style={{ margin: '0 0 16px' }}>Summary</h2>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-            <div className="income-expense-summary-card premium-summary-card" style={{ flex: 1, minWidth: 120 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Total assets</div>
-              <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                {loading ? '…' : `₱${assetsSum.toLocaleString()}`}
-              </div>
+          <div className="fh-summary-grid">
+            <div className="fh-summary-tile">
+              <p className="fh-summary-label">Total Assets</p>
+              <p className="fh-summary-value">{loading ? '…' : formatPeso(assetsSum)}</p>
             </div>
-            <div className="income-expense-summary-card premium-summary-card" style={{ flex: 1, minWidth: 120 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Total liabilities</div>
-              <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                {loading ? '…' : `₱${liabilitiesSum.toLocaleString()}`}
-              </div>
+            <div className="fh-summary-tile fh-summary-tile--liabilities">
+              <p className="fh-summary-label">Total Liabilities</p>
+              <p className="fh-summary-value">{loading ? '…' : formatPeso(liabilitiesSum)}</p>
             </div>
-            <div className="income-expense-summary-card premium-summary-card" style={{ flex: 1, minWidth: 120 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Net worth</div>
-              <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: net >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                {loading ? '…' : `₱${net.toLocaleString()}`}
-              </div>
+            <div className="fh-summary-tile fh-summary-tile--net">
+              <p className="fh-summary-label">Net Worth</p>
+              <p
+                className={`fh-summary-value${net > 0 ? ' is-positive' : net < 0 ? ' is-negative' : ''}`}
+              >
+                {loading ? '…' : formatPeso(net)}
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Two-column layout: left 65% (Assets + Liabilities), right 35% (Insights) */}
-      <div className="dashboard-card-section financial-health-two-col">
-        {/* Left column — Assets and Liabilities */}
+      {/* Distinct keys: loaded account lists replace the loading cards rather than pushing them down. */}
+      <div key={loading ? 'fh-loading' : 'fh-ready'} className="dashboard-card-section financial-health-two-col">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div className="dash-card">
             <div className="dash-card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
@@ -129,27 +107,26 @@ export default function FinancialHealthPage() {
               <button
                 type="button"
                 className="btn-primary"
-                style={{ padding: '8px 14px', fontSize: 14 }}
                 onClick={() => { setAddDefaultTab('asset'); setAddModalOpen(true) }}
               >
-                Add Asset
+                + Add Asset
               </button>
             </div>
             {loading ? (
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>Loading…</p>
+              <p className="klaro-page-header-desc">Loading…</p>
             ) : assets.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>No assets yet. Add your first asset above.</p>
+              <p className="klaro-page-header-desc">No assets yet. Add your first asset above.</p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {assets.map((row) => (
-                  <li key={row.id} style={rowStyle}>
+                  <li key={row.id} className="fh-account-row">
                     <FinancialAccountIcon subtype={row.subtype} />
                     <span style={{ flex: 1, color: 'var(--text-primary)' }}>{getAccountDisplayLabel(row)}</span>
-                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>₱{Number(row.amount).toLocaleString()}</span>
+                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatPeso(Number(row.amount))}</span>
                     <button type="button" className="btn-secondary" style={{ padding: '4px 10px', fontSize: 13 }} onClick={() => { setEditAccount(row); setEditModalOpen(true) }}>
                       Edit
                     </button>
-                    <button type="button" style={{ padding: '4px 10px', fontSize: 13, color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => handleDelete(row.id)}>
+                    <button type="button" className="btn-secondary" style={{ padding: '4px 10px', fontSize: 13, color: 'var(--color-danger)' }} onClick={() => handleDelete(row.id)}>
                       Delete
                     </button>
                   </li>
@@ -163,27 +140,26 @@ export default function FinancialHealthPage() {
               <button
                 type="button"
                 className="btn-primary"
-                style={{ padding: '8px 14px', fontSize: 14 }}
                 onClick={() => { setAddDefaultTab('liability'); setAddModalOpen(true) }}
               >
-                Add Liability
+                + Add Liability
               </button>
             </div>
             {loading ? (
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>Loading…</p>
+              <p className="klaro-page-header-desc">Loading…</p>
             ) : liabilities.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>No liabilities yet. Add your first liability above.</p>
+              <p className="klaro-page-header-desc">No liabilities yet. Add your first liability above.</p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {liabilities.map((row) => (
-                  <li key={row.id} style={rowStyle}>
+                  <li key={row.id} className="fh-account-row">
                     <FinancialAccountIcon subtype={row.subtype} />
                     <span style={{ flex: 1, color: 'var(--text-primary)' }}>{getAccountDisplayLabel(row)}</span>
-                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>₱{Number(row.amount).toLocaleString()}</span>
+                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatPeso(Number(row.amount))}</span>
                     <button type="button" className="btn-secondary" style={{ padding: '4px 10px', fontSize: 13 }} onClick={() => { setEditAccount(row); setEditModalOpen(true) }}>
                       Edit
                     </button>
-                    <button type="button" style={{ padding: '4px 10px', fontSize: 13, color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => handleDelete(row.id)}>
+                    <button type="button" className="btn-secondary" style={{ padding: '4px 10px', fontSize: 13, color: 'var(--color-danger)' }} onClick={() => handleDelete(row.id)}>
                       Delete
                     </button>
                   </li>
@@ -193,18 +169,17 @@ export default function FinancialHealthPage() {
           </div>
         </div>
 
-        {/* Right column — Financial Health Insights */}
         <div className="dash-card" style={{ position: 'sticky', top: 24 }}>
-          <h2 className="dash-card-title" style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>
+          <h2 className="dash-card-title" style={{ margin: '0 0 8px' }}>
             Financial Health Insights
           </h2>
-          <p style={{ margin: '0 0 16px', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          <p className="klaro-page-header-desc" style={{ marginBottom: 16 }}>
             {isPro
               ? 'Advisory-style insights on your net worth, liquidity, and debt pressure.'
               : 'Explore KlaroPH Pro to unlock detailed insights on your financial position, liquidity, and debt pressure.'}
           </p>
           {!isPro ? (
-            <div className="premium-gate-block" style={{ padding: 16, background: 'var(--border-muted)', borderRadius: 8, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+            <div className="premium-gate-block" style={{ padding: 16, background: 'var(--pastel-sky)', borderRadius: 12, border: '1px solid var(--border-soft)', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
               <span className="premium-feature-locked" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--text-secondary)' }}>
                 <LockIcon size={16} />
                 Insights locked
@@ -212,7 +187,7 @@ export default function FinancialHealthPage() {
               <UpgradeCTA variant="compact" />
             </div>
           ) : (
-            <div style={{ padding: 16, background: 'var(--border-muted)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div style={{ padding: 16, background: 'var(--pastel-lavender)', borderRadius: 12, border: '1px solid var(--border-soft)' }}>
               <h3 style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
                 {insight.headline}
               </h3>

@@ -10,46 +10,25 @@ const lockIcon = (
 )
 
 type UpgradeCTAProps = {
-  /** Optional label; default "Explore KlaroPH Pro" */
+  /** Optional label; default "Upgrade to Pro" */
   label?: string
   /** Compact style for inline/banner use */
   variant?: 'default' | 'compact'
   className?: string
 }
 
-export default function UpgradeCTA({ label = 'Explore KlaroPH Pro', variant = 'default', className = '' }: UpgradeCTAProps) {
+export default function UpgradeCTA({ label = 'Upgrade to Pro', variant = 'default', className = '' }: UpgradeCTAProps) {
   const trigger = useUpgradeTriggerOptional()
   const openModal = trigger?.openUpgradeModal
 
   if (!openModal) return null
 
-  const isCompact = variant === 'compact'
-  const style: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: isCompact ? '8px 14px' : '10px 18px',
-    fontSize: isCompact ? 13 : 14,
-    fontWeight: 600,
-    backgroundColor: 'var(--color-primary)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    transition: 'opacity 0.15s ease, transform 0.1s ease',
-  }
+  const classes = ['klaro-upgrade-cta', variant === 'compact' ? 'klaro-upgrade-cta--compact' : '', className]
+    .filter(Boolean)
+    .join(' ')
 
   return (
-    <button
-      type="button"
-      className={className}
-      style={style}
-      onClick={() => openModal()}
-      onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
-      onMouseUp={(e) => e.currentTarget.style.transform = ''}
-      onMouseLeave={(e) => e.currentTarget.style.transform = ''}
-    >
+    <button type="button" className={classes} onClick={() => openModal()}>
       {lockIcon}
       {label}
     </button>

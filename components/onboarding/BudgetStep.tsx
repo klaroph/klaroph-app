@@ -8,18 +8,11 @@ const BUDGET_ONBOARDING_CATEGORIES = EXPENSE_CATEGORIES.filter((c) =>
 )
 
 type BudgetStepProps = {
-  inputStyle: React.CSSProperties
-  buttonPrimaryStyle: React.CSSProperties
   onBack: () => void
   onNext: () => void
 }
 
-export default function BudgetStep({
-  inputStyle,
-  buttonPrimaryStyle,
-  onBack,
-  onNext,
-}: BudgetStepProps) {
+export default function BudgetStep({ onBack, onNext }: BudgetStepProps) {
   const [amounts, setAmounts] = useState<Record<string, string>>(() =>
     Object.fromEntries(BUDGET_ONBOARDING_CATEGORIES.map((c) => [c.value, '']))
   )
@@ -60,20 +53,16 @@ export default function BudgetStep({
 
   return (
     <>
-      <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 600, color: 'var(--text-primary)' }}>
-        Create your monthly spending plan
-      </h2>
-      <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--text-muted)' }}>
-        You can change these later. Set a default budget per category (0 or empty = skip).
+      <h2 className="onb-title">Create your monthly spending plan</h2>
+      <p className="onb-lead">
+        Set a budget for the categories you use. Leave any blank to skip — you can change these later.
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24, textAlign: 'left' }}>
+      <div className="onb-budget-grid">
         {BUDGET_ONBOARDING_CATEGORIES.map((c) => (
-          <label key={c.value} style={{ display: 'block' }}>
-            <span style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-              {c.label}
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>₱</span>
+          <label key={c.value} className="onb-field onb-field--tight">
+            <span className="onb-label">{c.label}</span>
+            <span className="onb-peso-input">
+              <span aria-hidden="true">₱</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -82,51 +71,24 @@ export default function BudgetStep({
                 onChange={(e) =>
                   setAmounts((prev) => ({ ...prev, [c.value]: e.target.value }))
                 }
-                style={{ ...inputStyle, marginTop: 0 }}
+                className="login-input"
               />
-            </div>
+            </span>
           </label>
         ))}
       </div>
       {error && (
-        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-error)' }}>{error}</p>
+        <p className="onb-error" role="alert">{error}</p>
       )}
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={onBack}
-          style={{
-            ...buttonPrimaryStyle,
-            backgroundColor: 'var(--surface)',
-            color: 'var(--text-primary)',
-            border: '1px solid var(--border)',
-          }}
-        >
+      <div className="onb-actions">
+        <button type="button" onClick={onBack} className="btn-secondary onb-btn">
           Back
         </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={loading}
-          style={{
-            ...buttonPrimaryStyle,
-            opacity: loading ? 0.8 : 1,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {loading ? 'Saving…' : 'Save Budgets'}
-        </button>
-        <button
-          type="button"
-          onClick={onNext}
-          style={{
-            ...buttonPrimaryStyle,
-            backgroundColor: 'var(--surface)',
-            color: 'var(--text-primary)',
-            border: '1px solid var(--border)',
-          }}
-        >
+        <button type="button" onClick={onNext} className="btn-ghost onb-btn">
           Skip for now
+        </button>
+        <button type="button" onClick={handleSave} disabled={loading} className="btn-primary onb-btn">
+          {loading ? 'Saving…' : 'Save Budgets'}
         </button>
       </div>
     </>

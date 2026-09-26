@@ -3,16 +3,16 @@
 import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import Sidebar from '../../components/layout/Sidebar'
 import MobileBottomNav from '../../components/layout/MobileBottomNav'
 import HowKlaroPHWorksModal, { hasSeenOnboarding } from '../../components/onboarding/HowKlaroPHWorksModal'
-import UpgradeModal from '../../components/dashboard/UpgradeModal'
-import PaymentQRModal from '../../components/dashboard/PaymentQRModal'
 import GraceBanner from '../../components/dashboard/GraceBanner'
 import NewGoalModal from '../../components/dashboard/NewGoalModal'
 import IncomeAllocationModal from '../../components/dashboard/IncomeAllocationModal'
 import AddExpenseModal from '../../components/dashboard/AddExpenseModal'
 import Footer from '../../components/Footer'
+import KlaroAIButton from '../../components/ai/KlaroAIButton'
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext'
 import { UpgradeTriggerProvider, useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { DashboardProfileProvider } from '@/contexts/DashboardProfileContext'
@@ -23,6 +23,9 @@ import type { ProfileWithComputed } from '@/types/profile'
 
 /** Ignore backdrop close briefly after open (iOS Safari can deliver a ghost click on the new layer). */
 const DRAWER_OPEN_GUARD_MS = 400
+
+const UpgradeModal = dynamic(() => import('../../components/dashboard/UpgradeModal'), { ssr: false })
+const PaymentQRModal = dynamic(() => import('../../components/dashboard/PaymentQRModal'), { ssr: false })
 
 const DashboardActionsContext = createContext<{
   openAddIncome: () => void
@@ -66,33 +69,41 @@ function UpgradeModalGate() {
   const [paymentPromo, setPaymentPromo] = useState<KlaroPromoVoucher | null | undefined>(
     undefined
   )
+  /** Modal chunks load on first open, then stay mounted so open/close behaves as before. */
+  const [upgradeFlowRequested, setUpgradeFlowRequested] = useState(false)
+  if (isUpgradeModalOpen && !upgradeFlowRequested) setUpgradeFlowRequested(true)
+
   return (
     <>
       <Suspense fallback={null}>
         <UpgradeUrlAutoOpen />
       </Suspense>
-      <UpgradeModal
-        isOpen={isUpgradeModalOpen}
-        onClose={closeUpgradeModal}
-        message={upgradeModalMessage ?? undefined}
-        onUpgrade={() => {}}
-        onOpenPaymentModal={(planType, promo) => {
-          setPaymentPlanType(planType ?? 'monthly')
-          setPaymentPromo(promo ?? null)
-          setPaymentQROpen(true)
-        }}
-      />
-      <PaymentQRModal
-        isOpen={paymentQROpen}
-        onClose={() => {
-          setPaymentQROpen(false)
-          setPaymentPromo(undefined)
-        }}
-        refreshSubscription={refreshSubscription}
-        isPro={isPro}
-        planType={paymentPlanType}
-        promoOverride={paymentPromo}
-      />
+      {upgradeFlowRequested && (
+        <>
+          <UpgradeModal
+            isOpen={isUpgradeModalOpen}
+            onClose={closeUpgradeModal}
+            message={upgradeModalMessage ?? undefined}
+            onUpgrade={() => {}}
+            onOpenPaymentModal={(planType, promo) => {
+              setPaymentPlanType(planType ?? 'monthly')
+              setPaymentPromo(promo ?? null)
+              setPaymentQROpen(true)
+            }}
+          />
+          <PaymentQRModal
+            isOpen={paymentQROpen}
+            onClose={() => {
+              setPaymentQROpen(false)
+              setPaymentPromo(undefined)
+            }}
+            refreshSubscription={refreshSubscription}
+            isPro={isPro}
+            planType={paymentPlanType}
+            promoOverride={paymentPromo}
+          />
+        </>
+      )}
     </>
   )
 }
@@ -308,6 +319,7 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
               onAddIncome={() => setFabIncomeOpen(true)}
               onAddExpense={() => setFabExpenseOpen(true)}
             />
+            <KlaroAIButton />
             <HowKlaroPHWorksModal
               isOpen={showOnboarding}
               onClose={handleOnboardingClose}

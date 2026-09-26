@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../../../lib/supabaseClient'
+import { supabase, getBrowserUser } from '../../../lib/supabaseClient'
 import { INCOME_SOURCES } from '../../../lib/incomeSources'
 import IncomeAllocationModal from '../../../components/dashboard/IncomeAllocationModal'
 import type { IncomeRecordForEdit } from '../../../components/dashboard/IncomeAllocationModal'
 import ImportCSVModal from '@/components/dashboard/ImportCSVModal'
+import RecordActionsModal, { clickableRowProps } from '@/components/dashboard/RecordActionsModal'
 import CardHeaderWithAction from '@/components/cards/CardHeaderWithAction'
 import {
   TREND_CHART_TYPES,
@@ -16,15 +17,17 @@ import {
   type TrendChartType,
   type CategoryChartType,
 } from '@/lib/chart-types'
-import FinancialChart, { isProChartType, type ChartTypeTrend, type ChartTypeCategory } from '@/components/charts/FinancialChart'
+import FinancialChart from '@/components/charts/FinancialChart'
+import { isProChartType, type ChartTypeTrend, type ChartTypeCategory } from '@/utils/charts/buildChartConfig'
 import PremiumBadge from '@/components/ui/PremiumBadge'
-import DashboardMobileHeaderLogo from '@/components/layout/DashboardMobileHeaderLogo'
+import KlaroPageHeader from '@/components/layout/KlaroPageHeader'
 import UpgradeCTA from '@/components/ui/UpgradeCTA'
 import LockIcon from '@/components/ui/LockIcon'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { usePremiumGate } from '@/hooks/usePremiumGate'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { useTriggerDateRangeBeyond90 } from '@/hooks/useSmartUpgradeTriggers'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { getAllTimeRangeAndGrouping, type AllTimeRangeResult } from '@/lib/allTimeRange'
 import {
   DASHBOARD_REFRESH_EVENT,
@@ -32,7 +35,7 @@ import {
   dispatchDashboardTransactionsRefresh,
   dispatchDashboardGoalsRefresh,
 } from '@/lib/dashboardRefresh'
-import { toLocalDateString, parseLocalDateString } from '@/lib/format'
+import { formatPeso, toLocalDateString, parseLocalDateString, formatShortIsoDate } from '@/lib/format'
 
 type IncomeRecord = {
   id: string
@@ -107,7 +110,7 @@ const PERIOD_LABELS: Record<FilterPeriod, string> = {
 
 /** Periods that require Pro (unlimited history). Free users see lock and open upgrade modal on click. */
 const PREMIUM_PERIODS = new Set<FilterPeriod>(['previous_quarter', 'year', 'previous_year', 'all_time', 'custom'])
-const LOCKED_FILTER_TOOLTIP = 'Available in Pro — unlock unlimited history.'
+const LOCKED_FILTER_TOOLTIP = 'Available in Pro â€” unlock unlimited history.'
 
 function getTrendGrouping(period: FilterPeriod): 'day' | 'month' | 'year' {
   if (period === 'year' || period === 'previous_year') return 'month'
@@ -160,22 +163,27 @@ export default function IncomePage() {
   const [attemptedProCategoryType, setAttemptedProCategoryType] = useState<CategoryChartType | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
   const [allTimeRange, setAllTimeRange] = useState<AllTimeRangeResult | null>(null)
-  const [isMobilePortrait, setIsMobilePortrait] = useState(false)
+  const [selectedRecord, setSelectedRecord] = useState<IncomeRecord | null>(null)
+  const isMobilePortrait = useMediaQuery('(max-width: 768px) and (orientation: portrait)')
+  const compactTable = useMediaQuery('(max-width: 768px)')
 
   const { isPro, features } = useSubscription()
 
-  useEffect(() => {
-    const checkOrientation = () => {
-      const isMobile = window.innerWidth <= 768
-      const isPortrait = window.innerHeight > window.innerWidth
-      setIsMobilePortrait(isMobile && isPortrait)
+  const openEditRecord = (r: IncomeRecord) => {
+    setEditingRecord({ id: r.id, total_amount: r.total_amount, date: r.date, income_source: r.income_source ?? null })
+    setModalOpen(true)
+  }
+
+  const deleteRecord = async (id: string): Promise<string | null> => {
+    const res = await fetch(`/api/income/${id}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      return (data?.error as string) ?? 'Could not delete.'
     }
-
-    checkOrientation()
-    window.addEventListener('resize', checkOrientation)
-
-    return () => window.removeEventListener('resize', checkOrientation)
-  }, [])
+    setRefreshTrigger((n) => n + 1)
+    dispatchDashboardTransactionsRefresh()
+    return null
+  }
 
   useEffect(() => {
     const onRefresh = () => setRefreshTrigger((n) => n + 1)
@@ -211,7 +219,7 @@ export default function IncomePage() {
       return
     }
     let mounted = true
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    getBrowserUser().then(({ data: { user } }) => {
       if (!mounted || !user) return
       getAllTimeRangeAndGrouping(supabase, user.id, 'income_records').then((result) => {
         if (mounted) setAllTimeRange(result)
@@ -224,7 +232,7 @@ export default function IncomePage() {
     if (period === 'all_time' && !allTimeRange) return
     const load = async () => {
       setLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await getBrowserUser()
       if (!user) {
         setRecords([])
         setLoading(false)
@@ -318,62 +326,57 @@ export default function IncomePage() {
   const valueStyle: React.CSSProperties = { fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }
 
   return (
-    <div className="income-page premium-page">
-      <div className="page-header page-header-with-actions dashboard-page-header max-lg:order-0 max-lg:items-start max-lg:gap-0 max-lg:mb-0 lg:gap-3">
-        <div className="min-w-0 flex-1 max-lg:w-full">
-          <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
-            <h2 className="max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0">Income</h2>
-            <DashboardMobileHeaderLogo />
-          </div>
-          <p className="max-lg:mt-1 max-lg:text-xs max-lg:leading-snug max-lg:mb-0 max-lg:text-[var(--text-muted,#64748b)]">
-            Track your income over time. Every peso logged moves you closer to clarity.
-          </p>
-        </div>
-        <div className="page-header-actions income-expenses-page-header-actions">
-          {isPro ? (
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ padding: '8px 14px', fontSize: 14 }}
-              disabled={exportLoading}
-              onClick={async () => {
-                setExportLoading(true)
-                try {
-                  const res = await fetch('/api/analytics/export', { credentials: 'include' })
-                  if (res.ok) {
-                    const blob = await res.blob()
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = 'klaroph-export.csv'
-                    a.click()
-                    URL.revokeObjectURL(url)
+    <div className="income-page premium-page klaro-page-shell">
+      <KlaroPageHeader
+        title="Income"
+        description="Track where your money comes from."
+        actions={
+          <div className="income-expenses-page-header-actions">
+            {isPro ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ padding: '8px 14px', fontSize: 14 }}
+                disabled={exportLoading}
+                onClick={async () => {
+                  setExportLoading(true)
+                  try {
+                    const res = await fetch('/api/analytics/export', { credentials: 'include' })
+                    if (res.ok) {
+                      const blob = await res.blob()
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = 'klaroph-export.csv'
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    }
+                  } finally {
+                    setExportLoading(false)
                   }
-                } finally {
-                  setExportLoading(false)
-                }
-              }}
-            >
-              {exportLoading ? 'Exporting…' : 'Export CSV'}
+                }}
+              >
+                {exportLoading ? 'Exportingâ€¦' : 'Export CSV'}
+              </button>
+            ) : (
+              <span title="CSV export available in Pro plan." className="premium-btn-disabled">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Export CSV
+                <PremiumBadge size="sm" />
+              </span>
+            )}
+            <button type="button" className="btn-secondary" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
+              Import CSV
             </button>
-          ) : (
-            <span title="CSV export available in Pro plan." className="premium-btn-disabled">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              Export CSV
-              <PremiumBadge size="sm" />
-            </span>
-          )}
-          <button type="button" className="btn-secondary" style={{ padding: '8px 14px', fontSize: 14 }} onClick={() => setImportModalOpen(true)}>
-            Import CSV
-          </button>
-          <button className="btn-primary header-add-btn-desktop-only" onClick={() => { setEditingRecord(null); setModalOpen(true) }}>
-            + Add Income
-          </button>
-        </div>
-      </div>
+            <button className="btn-primary header-add-btn-desktop-only" onClick={() => { setEditingRecord(null); setModalOpen(true) }}>
+              + Add Income
+            </button>
+          </div>
+        }
+      />
 
       <ImportCSVModal
         mode="income"
@@ -388,7 +391,7 @@ export default function IncomePage() {
         <div className="income-expense-summary-card premium-summary-card premium-summary-card-accent-blue">
           <div style={labelStyle}>Total Income</div>
           <div style={{ ...valueStyle, color: 'var(--color-blue)' }}>
-            {loading ? '...' : `₱${totalIncome.toLocaleString()}`}
+            {loading ? '...' : formatPeso(totalIncome)}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{PERIOD_LABELS[period]}</div>
         </div>
@@ -396,13 +399,13 @@ export default function IncomePage() {
         <div className="income-expense-summary-card premium-summary-card premium-summary-card-accent-yellow">
           <div style={labelStyle}>Top Category</div>
           <div style={valueStyle}>
-            {loading ? '...' : (topSource?.source ?? '—')}
+            {loading ? '...' : (topSource?.source ?? 'â€”')}
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontWeight: 600 }}>
-            {loading ? '...' : (topSource ? `₱${topSource.total.toLocaleString()}` : '—')}
+            {loading ? '...' : (topSource ? formatPeso(topSource.total) : 'â€”')}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-            {loading ? '...' : (topSource ? `${topSourcePct}% of income` : '—')}
+            {loading ? '...' : (topSource ? `${topSourcePct}% of income` : 'â€”')}
           </div>
         </div>
 
@@ -485,7 +488,7 @@ export default function IncomePage() {
 
       {/* Row 2: Two-column layout */}
       <div className="income-expense-two-col">
-        {/* LEFT — Trend + Breakdown */}
+        {/* LEFT â€” Trend + Breakdown */}
         <div className="income-expense-left-col">
           {/* Trend Chart */}
           <div className="income-expense-trend-section premium-section">
@@ -647,7 +650,7 @@ export default function IncomePage() {
                     </div>
                   ) : null}
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, flexShrink: 0 }}>
-                    Total: ₱{totalIncome.toLocaleString()}
+                    Total: {formatPeso(totalIncome)}
                   </div>
                 </div>
                 <div className="income-expense-breakdown-scroll">
@@ -658,7 +661,7 @@ export default function IncomePage() {
                         <div key={s.source}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
                             <span style={{ fontWeight: 500 }}>{s.source}</span>
-                            <span style={{ color: 'var(--text-muted)' }}>{pct.toFixed(0)}% · ₱{s.total.toLocaleString()}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>{pct.toFixed(0)}% Â· {formatPeso(s.total)}</span>
                           </div>
                           <div style={{ height: 4, background: 'var(--border-muted)', borderRadius: 2 }}>
                             <div style={{ height: '100%', width: `${(s.total / maxSourceVal) * 100}%`, background: BAR_COLORS[i % BAR_COLORS.length], borderRadius: 2 }} />
@@ -673,7 +676,7 @@ export default function IncomePage() {
           </div>
         </div>
 
-        {/* RIGHT — Detailed Table (stable height; only body scrolls) */}
+        {/* RIGHT â€” Detailed Table (stable height; only body scrolls) */}
         <div className="income-expense-table-card premium-section">
           <CardHeaderWithAction title="Detailed Breakdown" titleAs="h3" />
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -705,56 +708,52 @@ export default function IncomePage() {
                       <th>Date</th>
                       <th>Income source</th>
                       <th style={{ textAlign: 'right' }}>Amount</th>
-                      <th style={{ width: 1, textAlign: 'right' }}>Actions</th>
+                      {!compactTable && <th style={{ width: 1, textAlign: 'right' }}>Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {records.map((r, i) => (
-                      <tr key={r.id ?? `${r.date}-${i}`}>
-                        <td>{r.date}</td>
-                        <td>{r.income_source || '—'}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--color-success)', fontVariantNumeric: 'tabular-nums' }}>₱{Number(r.total_amount).toLocaleString()}</td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          <div className="goal-card-premium-actions" style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', alignItems: 'center' }}>
-                            <button
-                              type="button"
-                              className="goal-card-premium-btn goal-card-premium-btn-edit"
-                              onClick={() => {
-                                setEditingRecord({ id: r.id, total_amount: r.total_amount, date: r.date, income_source: r.income_source ?? null })
-                                setModalOpen(true)
-                              }}
-                              title="Edit"
-                              aria-label="Edit"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="goal-card-premium-btn goal-card-premium-btn-delete"
-                              onClick={async () => {
-                                if (!confirm('Delete this income record?')) return
-                                const res = await fetch(`/api/income/${r.id}`, { method: 'DELETE', credentials: 'include' })
-                                if (!res.ok) {
-                                  const data = await res.json().catch(() => ({}))
-                                  alert((data?.error as string) ?? 'Could not delete.')
-                                  return
-                                }
-                                setRefreshTrigger((n) => n + 1)
-                                dispatchDashboardTransactionsRefresh()
-                              }}
-                              title="Delete"
-                              aria-label="Delete"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
+                      <tr
+                        key={r.id ?? `${r.date}-${i}`}
+                        {...(compactTable ? clickableRowProps(() => setSelectedRecord(r)) : {})}
+                      >
+                        <td>{compactTable ? formatShortIsoDate(r.date) : r.date}</td>
+                        <td>{r.income_source || 'â€”'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--color-success)', fontVariantNumeric: 'tabular-nums' }}>{formatPeso(Number(r.total_amount))}</td>
+                        {!compactTable && (
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <div className="goal-card-premium-actions" style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                className="goal-card-premium-btn goal-card-premium-btn-edit"
+                                onClick={() => openEditRecord(r)}
+                                title="Edit"
+                                aria-label="Edit"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="goal-card-premium-btn goal-card-premium-btn-delete"
+                                onClick={async () => {
+                                  if (!confirm('Delete this income record?')) return
+                                  const error = await deleteRecord(r.id)
+                                  if (error) alert(error)
+                                }}
+                                title="Delete"
+                                aria-label="Delete"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                     <tr className="income-expense-table-total">
                       <td colSpan={2}>Total</td>
-                      <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>₱{totalIncome.toLocaleString()}</td>
-                      <td />
+                      <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>{formatPeso(totalIncome)}</td>
+                      {!compactTable && <td />}
                     </tr>
                   </tbody>
                 </table>
@@ -776,6 +775,23 @@ export default function IncomePage() {
         }}
         initialRecord={editingRecord}
       />
+      {selectedRecord && (
+        <RecordActionsModal
+          title="Income record"
+          details={[
+            { label: 'Date', value: selectedRecord.date },
+            { label: 'Source', value: selectedRecord.income_source || 'â€”' },
+            { label: 'Amount', value: formatPeso(Number(selectedRecord.total_amount)) },
+          ]}
+          deleteWarning="Delete this income record? This can't be undone."
+          onClose={() => setSelectedRecord(null)}
+          onEdit={() => {
+            openEditRecord(selectedRecord)
+            setSelectedRecord(null)
+          }}
+          onDelete={() => deleteRecord(selectedRecord.id)}
+        />
+      )}
     </div>
   )
 }

@@ -15,13 +15,13 @@ import {
   type KlaroPromoVoucher,
 } from '@/lib/klaroPromoStorage'
 import { FOUNDER_FINAL_CENTAVOS, FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
-
-const MONTHLY_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_MONTHLY_PESOS) || 99
-const ANNUAL_PESOS = Number(process.env.NEXT_PUBLIC_CLARITY_PREMIUM_ANNUAL_PESOS) || 999
-
-function formatPeso(n: number) {
-  return `₱${Math.round(n).toLocaleString('en-PH')}`
-}
+import {
+  PRO_ANNUAL_PESOS as ANNUAL_PESOS,
+  PRO_MONTHLY_PESOS as MONTHLY_PESOS,
+  formatPlanPeso as formatPeso,
+} from '@/lib/planPricing'
+import { KLARO_AI_CHAT_LIMITS } from '@/lib/ai/chatLimits'
+import { KLARO_AI_LIMITS } from '@/lib/ai/limits'
 
 function formatExpiryDate(planType: 'monthly' | 'annual') {
   const d = new Date()
@@ -63,7 +63,7 @@ function computePricing(
   }
   const off = Math.min(original, Math.max(0, promo.value))
   const final = original - off
-  return { original, final, discountLabel: `-${formatPeso(off)}`, specialLabel: null as string | null }
+  return { original, final, discountLabel: formatPeso(-off), specialLabel: null as string | null }
 }
 
 type UpgradeModalProps = {
@@ -140,6 +140,16 @@ function UpgradeTableRows() {
         </td>
         <td className="upgrade-modal-free">Up to 2 imports only</td>
         <td className="upgrade-modal-pro">Unlimited</td>
+      </tr>
+      <tr className="upgrade-modal-row">
+        <td className="upgrade-modal-feature">Ask Klaro (Beta) messages</td>
+        <td className="upgrade-modal-free">{KLARO_AI_CHAT_LIMITS.FREE_DAILY_MESSAGES}/day</td>
+        <td className="upgrade-modal-pro">{KLARO_AI_CHAT_LIMITS.PRO_DAILY_MESSAGES}/day</td>
+      </tr>
+      <tr className="upgrade-modal-row">
+        <td className="upgrade-modal-feature">Klaro Insight</td>
+        <td className="upgrade-modal-free">{KLARO_AI_LIMITS.FREE_DAILY_GENERATIONS}/day</td>
+        <td className="upgrade-modal-pro">{KLARO_AI_LIMITS.PRO_DAILY_GENERATIONS}/day</td>
       </tr>
       <tr className="upgrade-modal-row">
         <td className="upgrade-modal-feature">20 Active Goals</td>
@@ -387,211 +397,139 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Upgrade to KlaroPH Pro" contentMaxWidth={520} closeOnOutsideClick={false}>
-      <p style={{ margin: '0 0 20px', fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-        {message || 'Free plan includes analytics for the last 90 days. Upgrade to unlock unlimited history and advanced insights.'}
-      </p>
-
-      <div className="upgrade-modal-table-wrap">
-        <table className="upgrade-modal-table">
-          <thead>
-            <tr>
-              <th className="upgrade-modal-th-feature">Feature</th>
-              <th className="upgrade-modal-th-free">Free</th>
-              <th className="upgrade-modal-th-pro">Pro</th>
-            </tr>
-          </thead>
-          <tbody>
-            <UpgradeTableRows />
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-        <label
-          style={{
-            flex: 1,
-            padding: 16,
-            border: `2px solid ${planType === 'monthly' ? 'var(--color-primary)' : 'var(--border)'}`,
-            borderRadius: 12,
-            background: planType === 'monthly' ? 'var(--color-blue-muted)' : 'var(--surface)',
-            cursor: 'pointer',
-          }}
-        >
-          <input type="radio" name="plan" checked={planType === 'monthly'} onChange={() => setPlanType('monthly')} style={{ marginRight: 8 }} />
-          <strong>Monthly</strong>
-          <div style={{ fontSize: 14, marginTop: 4 }}>₱{MONTHLY_PESOS} / month</div>
-        </label>
-        <label
-          style={{
-            flex: 1,
-            padding: 16,
-            border: `2px solid ${planType === 'annual' ? 'var(--color-primary)' : 'var(--border)'}`,
-            borderRadius: 12,
-            background: planType === 'annual' ? 'var(--color-blue-muted)' : 'var(--surface)',
-            cursor: 'pointer',
-            position: 'relative',
-          }}
-        >
-          <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, fontWeight: 700, color: 'var(--color-primary)', background: 'var(--color-blue-muted)', padding: '2px 6px', borderRadius: 6 }}>Best Value</span>
-          <input type="radio" name="plan" checked={planType === 'annual'} onChange={() => setPlanType('annual')} style={{ marginRight: 8 }} />
-          <strong>Annual</strong>
-          <div style={{ fontSize: 14, marginTop: 4 }}>₱{ANNUAL_PESOS} / year</div>
-          <div style={{ fontSize: 12, color: 'var(--color-primary)', fontWeight: 600, marginTop: 2 }}>Best annual price</div>
-        </label>
-      </div>
-      <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-secondary)' }}>
-        Expiry: <strong style={{ color: 'var(--text-primary)' }}>{expiryText}</strong>
-      </p>
-
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-          Have a promo code?
+    <Modal isOpen={isOpen} onClose={handleClose} title="Upgrade to KlaroPH Pro" contentMaxWidth={980} closeOnOutsideClick={false}>
+      <div className="upgrade-modal-layout">
+        <p className="upgrade-modal-lead">
+          {message || 'Free includes the essentials for tracking your money. Pro adds unlimited history, full budgeting, and more room to ask Klaro.'}
         </p>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'stretch' }}>
-          <input
-            type="text"
-            value={promoInput}
-            onChange={(e) => setPromoInput(e.target.value)}
-            placeholder="Enter code"
-            autoComplete="off"
-            disabled={isApplying}
-            aria-label="Promo code"
-            style={{
-              flex: '1 1 160px',
-              minWidth: 0,
-              padding: '10px 12px',
-              fontSize: 14,
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              background: 'var(--surface)',
-              color: 'var(--text-primary)',
-              fontFamily: 'inherit',
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleApplyPromo}
-            disabled={isApplying}
-            className="btn-secondary"
-            style={{
-              padding: '10px 16px',
-              fontSize: 14,
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-              opacity: isApplying ? 0.65 : 1,
-              cursor: isApplying ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {isApplying ? 'Applying…' : 'Apply'}
-          </button>
-        </div>
-        {promo && (
-          <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--color-primary)', fontWeight: 600 }}>
-            {appliedPromoCode?.toUpperCase() === FOUNDER_PROMO_CODE
-              ? `🎉 Founder promo applied! Final price is ${formatPeso(FOUNDER_FINAL_CENTAVOS / 100)}`
-              : promo.type === 'percentage'
-              ? `🎉 Promo applied! You got ${promo.value}% off`
-              : `🎉 Promo applied! You got ${formatPeso(promo.value)} off`}
-          </p>
-        )}
-        {error && !promo && (
-          <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--color-error)' }}>{error}</p>
-        )}
-        {urlApplyFailed && !promo && !error && (
-          <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-            The code from your link couldn&apos;t be applied. You can try another code above.
-          </p>
-        )}
-      </div>
 
-      {promo && (
-        <div
-          style={{
-            marginBottom: 20,
-            padding: 14,
-            borderRadius: 10,
-            border: '1px solid var(--border)',
-            background: 'var(--color-blue-muted)',
-            fontSize: 14,
-            lineHeight: 1.6,
-          }}
-        >
-          {!isFounderLifetime && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Original Price:</span>
-              <span style={{ fontWeight: 600 }}>{formatPeso(originalPrice)}</span>
+        <div className="upgrade-modal-table-wrap">
+          <table className="upgrade-modal-table">
+            <thead>
+              <tr>
+                <th className="upgrade-modal-th-feature">Feature</th>
+                <th className="upgrade-modal-th-free">Free</th>
+                <th className="upgrade-modal-th-pro">Pro</th>
+              </tr>
+            </thead>
+            <tbody>
+              <UpgradeTableRows />
+            </tbody>
+          </table>
+        </div>
+
+        <div className="upgrade-modal-checkout">
+          <fieldset className="upgrade-modal-plans">
+            <legend className="sr-only">Billing period</legend>
+            <label className={`upgrade-modal-plan${planType === 'monthly' ? ' is-selected' : ''}`}>
+              <input type="radio" name="plan" checked={planType === 'monthly'} onChange={() => setPlanType('monthly')} />
+              <span className="upgrade-modal-plan-name">Monthly</span>
+              <span className="upgrade-modal-plan-price">{formatPeso(MONTHLY_PESOS)} / month</span>
+            </label>
+            <label className={`upgrade-modal-plan${planType === 'annual' ? ' is-selected' : ''}`}>
+              <input type="radio" name="plan" checked={planType === 'annual'} onChange={() => setPlanType('annual')} />
+              <span className="upgrade-modal-plan-badge">Best value</span>
+              <span className="upgrade-modal-plan-name">Annual</span>
+              <span className="upgrade-modal-plan-price">{formatPeso(ANNUAL_PESOS)} / year</span>
+            </label>
+          </fieldset>
+          <p className="upgrade-modal-expiry">
+            Access until: <strong>{expiryText}</strong>
+          </p>
+
+          <div className="upgrade-modal-promo">
+            <label htmlFor="upgrade-promo-code" className="upgrade-modal-promo-label">
+              Have a promo code?
+            </label>
+            <div className="upgrade-modal-promo-row">
+              <input
+                id="upgrade-promo-code"
+                type="text"
+                className="upgrade-modal-promo-input"
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value)}
+                placeholder="Enter code"
+                autoComplete="off"
+                disabled={isApplying}
+              />
+              <button
+                type="button"
+                onClick={handleApplyPromo}
+                disabled={isApplying}
+                className="btn-secondary"
+              >
+                {isApplying ? 'Applying…' : 'Apply'}
+              </button>
             </div>
+            {promo && (
+              <p className="upgrade-modal-promo-ok" role="status">
+                {appliedPromoCode?.toUpperCase() === FOUNDER_PROMO_CODE
+                  ? `🎉 Founder promo applied! Final price is ${formatPeso(FOUNDER_FINAL_CENTAVOS / 100)}`
+                  : promo.type === 'percentage'
+                  ? `🎉 Promo applied! You got ${promo.value}% off`
+                  : `🎉 Promo applied! You got ${formatPeso(promo.value)} off`}
+              </p>
+            )}
+            {error && !promo && (
+              <p className="upgrade-modal-promo-error" role="alert">{error}</p>
+            )}
+            {urlApplyFailed && !promo && !error && (
+              <p className="upgrade-modal-promo-hint">
+                The code from your link couldn&apos;t be applied. You can try another code above.
+              </p>
+            )}
+          </div>
+
+          {promo && (
+            <dl className="upgrade-modal-summary">
+              {!isFounderLifetime && (
+                <div>
+                  <dt>Original price</dt>
+                  <dd>{formatPeso(originalPrice)}</dd>
+                </div>
+              )}
+              {discountLabel && (
+                <div>
+                  <dt>Discount</dt>
+                  <dd className="is-accent">{discountLabel}</dd>
+                </div>
+              )}
+              {specialLabel && (
+                <div>
+                  <dt>Offer</dt>
+                  <dd className="is-accent">{specialLabel}</dd>
+                </div>
+              )}
+              <div className="upgrade-modal-summary-total">
+                <dt>Final price</dt>
+                <dd>{formatPeso(finalPrice)}</dd>
+              </div>
+            </dl>
           )}
-          {discountLabel && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 4 }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Discount:</span>
-              <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{discountLabel}</span>
-            </div>
+
+          {checkoutError && (
+            <p className="upgrade-modal-checkout-error" role="alert">{checkoutError}</p>
           )}
-          {specialLabel && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 4 }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Offer:</span>
-              <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{specialLabel}</span>
-            </div>
-          )}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 12,
-              marginTop: 10,
-              paddingTop: 10,
-              borderTop: '1px solid var(--border)',
-            }}
-          >
-            <span style={{ fontWeight: 700 }}>Final Price:</span>
-            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{formatPeso(finalPrice)}</span>
+
+          <div className="upgrade-modal-actions">
+            <button
+              type="button"
+              onClick={handleUpgrade}
+              disabled={loading}
+              className="klaro-upgrade-cta"
+            >
+              {loading ? 'Redirecting to payment…' : 'Choose Pro'}
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={loading}
+              className="btn-ghost"
+            >
+              Maybe later
+            </button>
           </div>
         </div>
-      )}
-
-      {checkoutError && (
-        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-error)' }}>{checkoutError}</p>
-      )}
-
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={handleUpgrade}
-          disabled={loading}
-          style={{
-            padding: '12px 20px',
-            fontSize: 14,
-            fontWeight: 600,
-            backgroundColor: loading ? 'var(--text-muted)' : 'var(--color-primary)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? 'Redirecting to payment...' : 'Explore KlaroPH Pro'}
-        </button>
-        <button
-          type="button"
-          onClick={handleClose}
-          disabled={loading}
-          style={{
-            padding: '12px 20px',
-            fontSize: 14,
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            background: 'var(--surface)',
-            color: 'var(--text-secondary)',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          Maybe Later
-        </button>
       </div>
     </Modal>
   )

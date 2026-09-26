@@ -1,27 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabaseClient'
-import {
-  computeGoalRunway,
-  formatGoalRunwayCopy,
-  type GoalAllocationEvent,
-  type GoalRunwayCopy,
-} from '@/lib/goalRunway'
+import type { GoalRunwayCopy } from '@/lib/goalRunway'
+import type { GoalListItem } from '@/lib/goalsSummary'
 import GoalsEmptyState from './GoalsEmptyState'
 import GoalCard from './GoalCard'
-
-type Goal = {
-  id: string
-  name: string
-  target_amount: number
-}
-
-type AllocationJoinRow = {
-  goal_id: string
-  amount: number
-  income_records: { date: string } | { date: string }[] | null
-}
 
 export type GoalForActions = {
   id: string
@@ -29,168 +11,27 @@ export type GoalForActions = {
   target_amount: number
 }
 
-export type GoalSummary = {
-  totalSaved: number
-  totalTarget: number
-  activeGoals: number
-  overallPercent: number
-  strongestGoal: { name: string; percent: number } | null
-}
-
 type GoalListProps = {
-  refreshTrigger: number
+  goals: GoalListItem[]
+  allocationsByGoal: Record<string, number>
+  runwayByGoal: Record<string, GoalRunwayCopy | null>
+  loading: boolean
+  error: string | null
   onEdit?: (goal: GoalForActions) => void
   onDelete?: (goal: GoalForActions) => void
-  onDataLoaded?: (summary: GoalSummary) => void
+  onAddClick?: () => void
 }
 
-function incomeDateFromJoin(
-  incomeRecords: AllocationJoinRow['income_records']
-): string | null {
-  if (!incomeRecords) return null
-  const row = Array.isArray(incomeRecords) ? incomeRecords[0] : incomeRecords
-  const date = row?.date
-  return typeof date === 'string' && date.trim() ? date.trim() : null
-}
-
-export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoaded }: GoalListProps) {
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [allocationsByGoal, setAllocationsByGoal] = useState<Record<string, number>>({})
-  const [runwayByGoal, setRunwayByGoal] = useState<Record<string, GoalRunwayCopy | null>>({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadGoals = async (getIsMounted: () => boolean) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!getIsMounted()) return
-      if (!user) {
-        setGoals([])
-        setAllocationsByGoal({})
-        setRunwayByGoal({})
-        setError('Not authenticated.')
-        setLoading(false)
-        return
-      }
-
-      const { data: goalsData, error: goalsError } = await supabase
-        .from('goals')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (!getIsMounted()) return
-      if (goalsError) {
-        setGoals([])
-        setAllocationsByGoal({})
-        setRunwayByGoal({})
-        setError(goalsError.message)
-        setLoading(false)
-        return
-      }
-
-      const goalsList = (goalsData || []) as Goal[]
-      if (!getIsMounted()) return
-      setGoals(goalsList)
-
-      if (goalsList.length === 0) {
-        setAllocationsByGoal({})
-        setRunwayByGoal({})
-        onDataLoaded?.({
-          totalSaved: 0,
-          totalTarget: 0,
-          activeGoals: 0,
-          overallPercent: 0,
-          strongestGoal: null,
-        })
-        setLoading(false)
-        return
-      }
-
-      const goalIds = goalsList.map((g) => g.id)
-      const { data: allocData, error: allocError } = await supabase
-        .from('income_allocations')
-        .select('goal_id, amount, income_records(date)')
-        .in('goal_id', goalIds)
-
-      if (!getIsMounted()) return
-      if (allocError) {
-        setError(allocError.message)
-        setLoading(false)
-        return
-      }
-
-      const rows = (allocData || []) as AllocationJoinRow[]
-      const byGoal: Record<string, number> = {}
-      const eventsByGoal: Record<string, GoalAllocationEvent[]> = {}
-
-      for (const row of rows) {
-        const amt = Number(row.amount)
-        byGoal[row.goal_id] = (byGoal[row.goal_id] ?? 0) + amt
-        const incomeDate = incomeDateFromJoin(row.income_records)
-        if (incomeDate) {
-          if (!eventsByGoal[row.goal_id]) eventsByGoal[row.goal_id] = []
-          eventsByGoal[row.goal_id].push({ amount: amt, incomeDate })
-        }
-      }
-
-      const runwayMap: Record<string, GoalRunwayCopy | null> = {}
-      for (const g of goalsList) {
-        const target = Number(g.target_amount) || 0
-        const saved = byGoal[g.id] ?? 0
-        const runway = computeGoalRunway({
-          target,
-          saved,
-          events: eventsByGoal[g.id] ?? [],
-        })
-        runwayMap[g.id] = formatGoalRunwayCopy(runway)
-      }
-
-      if (!getIsMounted()) return
-      setAllocationsByGoal(byGoal)
-      setRunwayByGoal(runwayMap)
-
-      const totalSaved = goalsList.reduce((sum, g) => sum + (byGoal[g.id] ?? 0), 0)
-      const totalTarget = goalsList.reduce((sum, g) => sum + (Number(g.target_amount) || 0), 0)
-      const overallPercent = totalTarget > 0 ? Math.min(100, (totalSaved / totalTarget) * 100) : 0
-      const withPct = goalsList
-        .map((g) => ({
-          name: g.name,
-          percent: (Number(g.target_amount) || 0) > 0
-            ? Math.min(100, ((byGoal[g.id] ?? 0) / Number(g.target_amount)) * 100)
-            : 0,
-        }))
-        .filter((x) => x.percent < 100)
-        .sort((a, b) => b.percent - a.percent)
-      const strongestGoal = withPct[0] ? { name: withPct[0].name, percent: withPct[0].percent } : null
-      onDataLoaded?.({
-        totalSaved,
-        totalTarget,
-        activeGoals: goalsList.length,
-        overallPercent,
-        strongestGoal,
-      })
-
-      setLoading(false)
-    } catch (err) {
-      if (!getIsMounted()) return
-      setGoals([])
-      setAllocationsByGoal({})
-      setRunwayByGoal({})
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    let isMounted = true
-    loadGoals(() => isMounted)
-    return () => {
-      isMounted = false
-    }
-  }, [refreshTrigger])
-
+export default function GoalList({
+  goals,
+  allocationsByGoal,
+  runwayByGoal,
+  loading,
+  error,
+  onEdit,
+  onDelete,
+  onAddClick,
+}: GoalListProps) {
   if (loading) {
     return (
       <p style={{ margin: 0, padding: 24, fontSize: 14, color: '#6b7280' }}>
@@ -208,7 +49,7 @@ export default function GoalList({ refreshTrigger, onEdit, onDelete, onDataLoade
   }
 
   if (goals.length === 0) {
-    return <GoalsEmptyState />
+    return <GoalsEmptyState onAddClick={onAddClick} />
   }
 
   return (

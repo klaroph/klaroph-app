@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabaseClient'
+import { getBrowserUser } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
 import { GOAL_PRESETS } from '../../lib/goalPresets'
 
@@ -94,7 +94,7 @@ export default function NewGoalModal({ isOpen, onClose, onGoalCreated, initialGo
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBrowserUser()
     if (!user) {
       setError('You must be logged in to create a goal.')
       setLoading(false)
@@ -199,20 +199,7 @@ export default function NewGoalModal({ isOpen, onClose, onGoalCreated, initialGo
         {error && (
           <p style={{ margin: 0, marginBottom: 16, fontSize: 13, color: '#b91c1c' }}>{error}</p>
         )}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '10px 18px',
-            fontSize: 14,
-            border: 'none',
-            borderRadius: 8,
-            backgroundColor: '#059669',
-            color: '#fff',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
+        <button type="submit" disabled={loading} className="btn-primary">
           {loading ? (isEditMode ? 'Saving...' : 'Adding...') : (isEditMode ? 'Save changes' : 'Add goal')}
         </button>
       </form>

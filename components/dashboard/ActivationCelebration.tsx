@@ -8,7 +8,7 @@ function runConfetti(canvas: HTMLCanvasElement, durationMs: number) {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  const colors = ['#0038a8', '#d4af37', '#fff', '#e6e9ef']
+  const colors = ['#0038a8', '#fcd116', '#fff', '#e6e9ef']
   const particles: Array<{
     x: number
     y: number

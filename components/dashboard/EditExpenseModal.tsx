@@ -177,20 +177,7 @@ export default function EditExpenseModal({
         {error && (
           <p style={{ margin: 0, marginBottom: 16, fontSize: 13, color: '#b91c1c' }}>{error}</p>
         )}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '10px 18px',
-            fontSize: 14,
-            border: 'none',
-            borderRadius: 8,
-            backgroundColor: '#059669',
-            color: '#fff',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
+        <button type="submit" disabled={loading} className="btn-primary">
           {loading ? 'Saving...' : 'Save changes'}
         </button>
       </form>

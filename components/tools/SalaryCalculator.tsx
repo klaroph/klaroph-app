@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { formatPeso } from '@/lib/format'
 import { computeSalaryResult } from '@/lib/salaryCalculations'
 import ToolSeoFaq from '@/components/tools/ToolSeoFaq'
+import KlaroPageHeader from '@/components/layout/KlaroPageHeader'
 
 function Row({ label, value, bold, color, empty }: { label: string; value: number; bold?: boolean; color?: string; empty?: boolean }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: bold ? 600 : 400 }}>
       <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
       <span style={{ color: color || 'var(--text-primary)' }}>
-        {empty ? '—' : `${value < 0 ? '-' : ''}₱${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        {empty ? '—' : formatPeso(value, undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </span>
     </div>
   )
@@ -37,26 +39,38 @@ export default function SalaryCalculator() {
     setInputMode(mode)
   }
 
+  const netHeroValue =
+    inputMode === 'monthly' ? results.netPayMonthly : results.netPayAnnual
+  const netHeroLabel =
+    inputMode === 'monthly' ? 'Net pay (monthly)' : 'Net pay (annual)'
+
   return (
     <div className="tool-page">
-      <header className="page-header">
-        <h1 className="tool-page-title">Salary Calculator Philippines</h1>
-        <p className="tool-page-desc">
-          A salary calculator helps estimate take-home pay after deductions in the Philippines, including government contributions and taxes.
-        </p>
-      </header>
+      <KlaroPageHeader
+        titleAs="h1"
+        title="Salary Calculator"
+        description="Understand your take-home pay."
+      />
       <div className="dash-card" style={{ maxWidth: 560 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
           <div>
-            <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
-                <input type="radio" checked={inputMode === 'monthly'} onChange={() => setInputModeWithConversion('monthly')} />
+            <div className="tool-segmented" role="group" aria-label="Income period">
+              <button
+                type="button"
+                className={`tool-segmented-btn${inputMode === 'monthly' ? ' is-active' : ''}`}
+                onClick={() => setInputModeWithConversion('monthly')}
+                aria-pressed={inputMode === 'monthly'}
+              >
                 Monthly
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
-                <input type="radio" checked={inputMode === 'annual'} onChange={() => setInputModeWithConversion('annual')} />
+              </button>
+              <button
+                type="button"
+                className={`tool-segmented-btn${inputMode === 'annual' ? ' is-active' : ''}`}
+                onClick={() => setInputModeWithConversion('annual')}
+                aria-pressed={inputMode === 'annual'}
+              >
                 Annual
-              </label>
+              </button>
             </div>
             <label style={{ display: 'block', marginBottom: 4, fontSize: 14, fontWeight: 500 }}>Gross taxable income ({inputMode === 'monthly' ? 'monthly' : 'annual'})</label>
             <input type="number" className="login-input" placeholder={inputMode === 'monthly' ? 'e.g. 30000' : 'e.g. 360000'} value={grossInput} onChange={(e) => setGrossInput(e.target.value)} min={0} style={{ width: '100%', boxSizing: 'border-box' }} aria-label={inputMode === 'monthly' ? 'Gross taxable income monthly (PHP)' : 'Gross taxable income annual (PHP)'} />
@@ -66,6 +80,14 @@ export default function SalaryCalculator() {
             <input type="number" className="login-input" placeholder={inputMode === 'monthly' ? 'e.g. 0' : 'e.g. 120000'} value={nonTaxableInput} onChange={(e) => setNonTaxableInput(e.target.value)} min={0} style={{ width: '100%', boxSizing: 'border-box' }} aria-label={inputMode === 'monthly' ? 'Non-taxable income monthly (PHP)' : 'Non-taxable income annual (PHP)'} />
             <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>De minimis, exclusions, or other income not subject to tax (added to take-home).</p>
           </div>
+        </div>
+        <div className="tool-result-hero">
+          <p className="tool-result-hero-label">{netHeroLabel}</p>
+          <p className="tool-result-hero-value">
+            {results.hasInput
+              ? formatPeso(netHeroValue, undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              : '—'}
+          </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {inputMode === 'monthly' ? (

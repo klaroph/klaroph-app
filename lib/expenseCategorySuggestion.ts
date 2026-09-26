@@ -1,31 +1,30 @@
 /**
  * Expense category suggestion from description text.
- * Weighted keyword matching (EN + Filipino). Maps only to existing app categories.
- * Returns up to 3 suggestions with confidence for chip UI. Expandable for AI fallback.
+ * Weighted whole-word keyword matching (EN + Filipino). Maps only to existing app categories.
+ * Returns up to 3 suggestions with confidence for chip UI.
  */
 
 import { EXPENSE_CATEGORIES } from './expenseCategories'
+import { compilePhraseRules, scoreDescription, toSuggestionResult, type SuggestionResult } from './transactionDescription'
 
-export type SuggestionConfidence = 'high' | 'medium' | 'low'
-
-export type CategorySuggestionResult = {
-  suggestions: { category: string }[]
-  confidence: SuggestionConfidence
-}
+export type CategorySuggestionResult = SuggestionResult
 
 /** Valid category values from the app (single source of truth). */
 const VALID_CATEGORIES = new Set(EXPENSE_CATEGORIES.map((c) => c.value))
 
 /**
  * Weighted rules: phrase → category + weight.
- * Longer phrases first (sort by length desc) so "grab food" beats "grab".
+ * Longer phrases consume their words first, so "grab food" beats "grab".
  * Same phrase can appear for multiple categories (ambiguous e.g. "grab" → Transport + Dining).
  */
 const WEIGHTED_RULES: { phrase: string; category: string; weight: number }[] = [
   // Disambiguate: specific phrase → single category (high weight)
   { phrase: 'grab ride', category: 'Transportation', weight: 1 },
   { phrase: 'grab car', category: 'Transportation', weight: 1 },
+  { phrase: 'grabcar', category: 'Transportation', weight: 1 },
   { phrase: 'grab food', category: 'Dining Out', weight: 1 },
+  { phrase: 'grabfood', category: 'Dining Out', weight: 1 },
+  { phrase: 'foodpanda', category: 'Dining Out', weight: 1 },
   { phrase: 'angkas', category: 'Transportation', weight: 1 },
   { phrase: 'joyride', category: 'Transportation', weight: 1 },
   { phrase: 'food panda', category: 'Dining Out', weight: 1 },
@@ -211,6 +210,45 @@ const WEIGHTED_RULES: { phrase: string; category: string; weight: number }[] = [
   { phrase: 'hotel', category: 'Travel', weight: 1 },
   { phrase: 'bakasyon', category: 'Travel', weight: 1 },
   { phrase: 'subscription', category: 'Subscriptions', weight: 0.8 },
+  // Philippine terms: transport, markets, bills, health, school
+  { phrase: 'jeep', category: 'Transportation', weight: 1 },
+  { phrase: 'jeepney', category: 'Transportation', weight: 1 },
+  { phrase: 'trike', category: 'Transportation', weight: 1 },
+  { phrase: 'bus', category: 'Transportation', weight: 0.9 },
+  { phrase: 'parking', category: 'Transportation', weight: 1 },
+  { phrase: 'toll', category: 'Transportation', weight: 1 },
+  { phrase: 'autosweep', category: 'Transportation', weight: 1 },
+  { phrase: 'easytrip', category: 'Transportation', weight: 1 },
+  { phrase: 'diesel', category: 'Transportation', weight: 1 },
+  { phrase: 'sari-sari', category: 'Groceries', weight: 1 },
+  { phrase: 'karinderya', category: 'Dining Out', weight: 1 },
+  { phrase: 'carinderia', category: 'Dining Out', weight: 1 },
+  { phrase: 'canteen', category: 'Dining Out', weight: 0.9 },
+  { phrase: 'kainan', category: 'Dining Out', weight: 0.8 },
+  { phrase: 'internet', category: 'Utilities', weight: 1 },
+  { phrase: 'wifi', category: 'Utilities', weight: 1 },
+  { phrase: 'broadband', category: 'Utilities', weight: 1 },
+  { phrase: 'prepaid load', category: 'Utilities', weight: 1 },
+  { phrase: 'load', category: 'Utilities', weight: 0.7 },
+  { phrase: 'lpg', category: 'Utilities', weight: 0.9 },
+  { phrase: 'medicine', category: 'Health', weight: 1 },
+  { phrase: 'botika', category: 'Health', weight: 1 },
+  { phrase: 'doktor', category: 'Health', weight: 1 },
+  { phrase: 'checkup', category: 'Health', weight: 1 },
+  { phrase: 'check up', category: 'Health', weight: 1 },
+  { phrase: 'laboratory', category: 'Health', weight: 1 },
+  { phrase: 'lab test', category: 'Health', weight: 1 },
+  { phrase: 'dental', category: 'Health', weight: 1 },
+  { phrase: 'dentist', category: 'Health', weight: 1 },
+  { phrase: 'clinic', category: 'Health', weight: 1 },
+  { phrase: 'vitamins', category: 'Health', weight: 0.9 },
+  { phrase: 'matrikula', category: 'Education', weight: 1 },
+  { phrase: 'school supplies', category: 'Education', weight: 1 },
+  { phrase: 'review center', category: 'Education', weight: 1 },
+  { phrase: 'enrolment', category: 'Education', weight: 1 },
+  { phrase: 'uniform', category: 'Education', weight: 0.6 },
+  { phrase: 'allowance', category: 'Family Support', weight: 0.6 },
+  { phrase: 'tiktok shop', category: 'Shopping', weight: 1 },
   // Ambiguous: single word can map to multiple categories (lower weight each)
   { phrase: 'grab', category: 'Transportation', weight: 0.45 },
   { phrase: 'grab', category: 'Dining Out', weight: 0.45 },
@@ -227,7 +265,7 @@ const WEIGHTED_RULES: { phrase: string; category: string; weight: number }[] = [
   { phrase: 'kain', category: 'Dining Out', weight: 0.4 },
   { phrase: 'meal', category: 'Dining Out', weight: 0.3 },
   { phrase: 'market', category: 'Groceries', weight: 0.35 },
-  { phrase: 'groceries', category: 'Groceries', weight: 0.5 },
+  { phrase: 'groceries', category: 'Groceries', weight: 0.9 },
   { phrase: 'health', category: 'Health', weight: 0.4 },
   { phrase: 'medical', category: 'Health', weight: 0.4 },
   { phrase: 'study', category: 'Education', weight: 0.3 },
@@ -246,92 +284,14 @@ const WEIGHTED_RULES: { phrase: string; category: string; weight: number }[] = [
   { phrase: 'personal upgrade', category: 'Personal Upgrade', weight: 0.6 },
 ]
 
-/** Sorted by phrase length descending so longer matches win first. */
-const RULES_BY_LENGTH = [...WEIGHTED_RULES].sort(
-  (a, b) => b.phrase.length - a.phrase.length
+const COMPILED_RULES = compilePhraseRules(
+  WEIGHTED_RULES.filter((r) => VALID_CATEGORIES.has(r.category)).map((r) => ({ phrase: r.phrase, value: r.category, weight: r.weight }))
 )
-
-const HIGH_THRESHOLD = 0.65
-const MEDIUM_THRESHOLD = 0.2
-const LOW_CONFIDENCE_MAX_SUGGESTIONS = 0
-
-/**
- * Aggregate weighted scores per category from description.
- * Only includes categories that exist in EXPENSE_CATEGORIES.
- */
-function getWeightedSuggestions(description: string): { category: string; score: number }[] {
-  const normalized = (description || '').trim().toLowerCase()
-  if (!normalized) return []
-
-  const scores = new Map<string, number>()
-
-  for (const rule of RULES_BY_LENGTH) {
-    if (!normalized.includes(rule.phrase.toLowerCase())) continue
-    if (!VALID_CATEGORIES.has(rule.category)) continue
-    const current = scores.get(rule.category) ?? 0
-    scores.set(rule.category, current + rule.weight)
-  }
-
-  return Array.from(scores.entries())
-    .filter(([, s]) => s > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([category, score]) => ({ category, score }))
-}
 
 /**
  * Returns up to 3 suggestions with confidence.
  * High = 1 chip, medium = 2–3 chips, low = no chips.
  */
-export function suggestCategoriesFromDescription(
-  description: string
-): CategorySuggestionResult {
-  const weighted = getWeightedSuggestions(description)
-  if (weighted.length === 0) {
-    return { suggestions: [], confidence: 'low' }
-  }
-
-  const topScore = weighted[0].score
-  const secondScore = weighted[1]?.score ?? 0
-  const thirdScore = weighted[2]?.score ?? 0
-
-  let confidence: SuggestionConfidence = 'low'
-  let take = 0
-
-  if (topScore >= HIGH_THRESHOLD && secondScore < MEDIUM_THRESHOLD) {
-    confidence = 'high'
-    take = 1
-  } else if (topScore >= MEDIUM_THRESHOLD) {
-    confidence = 'medium'
-    take = Math.min(3, weighted.length)
-  }
-
-  const suggestions = weighted.slice(0, take).map((w) => ({ category: w.category }))
-
-  return { suggestions, confidence }
-}
-
-/**
- * Legacy single-suggestion API for callers that need it.
- * Uses first suggestion from weighted result when confidence is high.
- */
-export function suggestCategoryFromDescription(
-  description: string
-): { category: string; confidence: 'high' | 'weak' } | null {
-  const result = suggestCategoriesFromDescription(description)
-  if (result.confidence === 'high' && result.suggestions.length > 0) {
-    return { category: result.suggestions[0].category, confidence: 'high' }
-  }
-  if (result.confidence === 'medium' && result.suggestions.length > 0) {
-    return { category: result.suggestions[0].category, confidence: 'weak' }
-  }
-  return null
-}
-
-/**
- * Placeholder for future AI fallback.
- */
-export async function suggestCategoryFromDescriptionAsync(
-  _description: string
-): Promise<CategorySuggestionResult | null> {
-  return null
+export function suggestCategoriesFromDescription(description: string): CategorySuggestionResult {
+  return toSuggestionResult(scoreDescription(description, COMPILED_RULES))
 }

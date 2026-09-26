@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatPeso } from '@/lib/format'
 import { getAssessmentText } from '@/lib/financialHealthAssessment'
 
 export default function FinancialHealthCheckPublic() {
@@ -56,7 +57,7 @@ export default function FinancialHealthCheckPublic() {
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Net worth</span>
             <span style={{ fontWeight: 600, color: net >= 0 ? 'var(--color-success)' : 'var(--color-red)' }}>
-              {hasInput ? `₱${net.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
+              {hasInput ? formatPeso(net, undefined, { minimumFractionDigits: 2 }) : '—'}
             </span>
           </div>
         </div>

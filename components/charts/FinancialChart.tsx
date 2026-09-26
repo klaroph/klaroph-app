@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useEffect, useState, useRef } from 'react'
+import { formatWholePeso } from '@/lib/format'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -26,11 +27,8 @@ import {
   type CategoryData,
   type ChartDataInput,
   isProChartType,
-  type ChartTypeTrend,
-  type ChartTypeCategory,
 } from '@/utils/charts/buildChartConfig'
 import { generateCategoryColor } from '@/lib/generateCategoryColor'
-
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -195,7 +193,7 @@ type InnerProps = {
   isMobile: boolean
 }
 
-const chartWrapperStyle: React.CSSProperties = { width: '100%', maxWidth: '100%' }
+const chartWrapperStyle: React.CSSProperties = { width: '100%', maxWidth: '100%', height: '100%' }
 
 /** Stable container for circular charts: deterministic size breaks resize reflow loop */
 const chartStableContainerStyle: React.CSSProperties = {
@@ -246,14 +244,6 @@ const defaultOptions = {
   devicePixelRatio: 1,
 }
 
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
 const categoryTooltipPlugin = {
   tooltip: {
     callbacks: {
@@ -263,7 +253,7 @@ const categoryTooltipPlugin = {
         const dataset = context.dataset?.data ?? []
         const total = (dataset as number[]).reduce((sum, val) => sum + Number(val), 0)
         const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
-        return `${label}: ${formatCurrency(value)} (${percentage}%)`
+        return `${label}: ${formatWholePeso(value)} (${percentage}%)`
       },
     },
   },
@@ -384,6 +374,3 @@ function FinancialChartInner({ config, chartContext, isMobile }: InnerProps) {
     </div>
   )
 }
-
-export { isProChartType }
-export type { ChartTypeTrend, ChartTypeCategory }

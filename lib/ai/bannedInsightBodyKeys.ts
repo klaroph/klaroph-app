@@ -1,0 +1,22 @@
+/** Client must never supply identity, plan, or financial facts to /api/ai/insight. */
+export const BANNED_AI_INSIGHT_BODY_KEYS = [
+  'user_id',
+  'userId',
+  'plan',
+  'plan_name',
+  'isPro',
+  'income',
+  'expenses',
+  'netFlow',
+  'budget',
+  'categories',
+  'topSpendingCategories',
+  'goals',
+  'assets',
+  'liabilities',
+  'netWorth',
+  'context',
+  'financialContext',
+  'observationSeeds',
+  'contextHash',
+] as const

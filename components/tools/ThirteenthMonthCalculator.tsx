@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { formatPeso } from '@/lib/format'
 import ToolSeoFaq from '@/components/tools/ToolSeoFaq'
+import KlaroPageHeader from '@/components/layout/KlaroPageHeader'
 
 const THIRTEENTH_MONTH_TAXABLE_THRESHOLD = 90_000
 type ThirteenthMonthMode = 'simple' | 'exact'
@@ -51,46 +53,25 @@ export default function ThirteenthMonthCalculator() {
 
   return (
     <div className="tool-page">
-      <div className="page-header">
-        <h1 className="tool-page-title">13th Month Pay Calculator Philippines</h1>
-        <p className="tool-page-desc">
-          Compute your estimated 13th month pay based on Philippine labor rules using KlaroPH&apos;s free calculator.
-        </p>
-      </div>
+      <KlaroPageHeader
+        titleAs="h1"
+        title="13th Month Pay Calculator"
+        description="Estimate your 13th month pay."
+      />
 
-      <div style={{ margin: '0 0 18px', display: 'flex', gap: 12, flexWrap: 'wrap' }} aria-label="13th month calculation mode">
+      <div className="tool-segmented" role="group" aria-label="13th month calculation mode">
         <button
           type="button"
+          className={`tool-segmented-btn${mode === 'simple' ? ' is-active' : ''}`}
           onClick={() => setMode('simple')}
-          style={{
-            padding: '10px 16px',
-            fontSize: 14,
-            fontWeight: 600,
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid rgba(0,56,168,0.2)',
-            background: mode === 'simple' ? 'var(--color-blue-muted)' : 'var(--surface)',
-            color: mode === 'simple' ? 'var(--color-primary)' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
           aria-pressed={mode === 'simple'}
         >
           Simple Estimate
         </button>
         <button
           type="button"
+          className={`tool-segmented-btn${mode === 'exact' ? ' is-active' : ''}`}
           onClick={() => setMode('exact')}
-          style={{
-            padding: '10px 16px',
-            fontSize: 14,
-            fontWeight: 600,
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid rgba(0,56,168,0.2)',
-            background: mode === 'exact' ? 'var(--color-blue-muted)' : 'var(--surface)',
-            color: mode === 'exact' ? 'var(--color-primary)' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
           aria-pressed={mode === 'exact'}
         >
           Exact Computation
@@ -151,16 +132,18 @@ export default function ThirteenthMonthCalculator() {
           </div>
         )}
 
-        <div style={{ padding: 20, background: 'var(--color-blue-muted)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(0,56,168,0.12)' }}>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+        <div className="tool-result-hero">
+          <p className="tool-result-hero-label">
             13th Month Pay {result.headerSuffix}
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-blue)', marginBottom: 12 }}>
-            {result.hasInput ? `₱${result.thirteenthMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          </p>
+          <p className="tool-result-hero-value">
             {result.hasInput
-              ? (result.isTaxable ? `Taxable excess above ₱${THIRTEENTH_MONTH_TAXABLE_THRESHOLD.toLocaleString()}: ₱${result.taxableExcess.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : `Non-taxable (within ₱${THIRTEENTH_MONTH_TAXABLE_THRESHOLD.toLocaleString()} threshold)`)
+              ? formatPeso(result.thirteenthMonth, undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              : '—'}
+          </p>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: 8 }}>
+            {result.hasInput
+              ? (result.isTaxable ? `Taxable excess above ${formatPeso(THIRTEENTH_MONTH_TAXABLE_THRESHOLD)}: ${formatPeso(result.taxableExcess, undefined, { minimumFractionDigits: 2 })}` : `Non-taxable (within ${formatPeso(THIRTEENTH_MONTH_TAXABLE_THRESHOLD)} threshold)`)
               : '—'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{result.formulaText}</div>
