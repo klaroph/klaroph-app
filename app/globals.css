@@ -2976,9 +2976,9 @@ html { scroll-behavior: smooth; }
 
 .landing-hero-mock-mobile {
   position: absolute;
-  bottom: -15%;
-  right: -52.5%;
-  width: 105%;
+  bottom: -15.7%;
+  right: -16%;
+  width: 26.9%;
   z-index: 3;
   pointer-events: none;
   border-radius: 0;
@@ -2987,15 +2987,6 @@ html { scroll-behavior: smooth; }
   box-shadow: none;
   background: transparent;
 }
-
-.landing-hero-mock-mobile .landing-hero-mock-image {
-  border-radius: 0;
-  border: 0;
-  outline: none;
-  box-shadow: none;
-  background: transparent;
-}
-
 
 
 /* How it works */
@@ -4350,7 +4341,6 @@ html { scroll-behavior: smooth; }
   .landing-hero-ctas { margin-left: auto; margin-right: auto; }
   .landing-hero-right { order: -1; justify-content: center; }
   .landing-hero-mock-stack { max-width: 580px; margin: 0 auto; }
-  .landing-hero-mock-mobile { width: 30%; }
   .landing-features-responsive { grid-template-columns: repeat(2, 1fr); }
   .landing-how-steps { grid-template-columns: 1fr; }
   .landing-compare-grid { grid-template-columns: 1fr; }
@@ -4472,24 +4462,8 @@ html { scroll-behavior: smooth; }
   }
 
   .landing-hero-mock-mobile {
-    position: absolute;
-    bottom: -5%;
-    right: -37.5%;
-    width: 100%;
-    z-index: 3;
-    border-radius: 0;
-    border: 0;
-    outline: none;
-    box-shadow: none;
-    background: transparent;
-  }
-
-  .landing-hero-mock-mobile .landing-hero-mock-image {
-    border-radius: 0;
-    border: 0;
-    outline: none;
-    box-shadow: none;
-    background: transparent;
+    bottom: -4.1%;
+    right: -1%;
   }
 }
 

@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
-import Image from 'next/image'
+import Image, { getImageProps } from 'next/image'
 import Link from 'next/link'
-import { createPortal } from 'react-dom'
+import { createPortal, preload } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabaseClient'
 import KlaroPHHandLogo from '../../components/ui/KlaroPHHandLogo'
@@ -20,6 +20,8 @@ import {
 import { PRO_ANNUAL_PESOS, PRO_MONTHLY_PESOS, formatPlanPeso } from '@/lib/planPricing'
 import { LandingPromoCodeCapture } from './LandingPromoCodeCapture'
 import PasswordInput from '@/components/auth/PasswordInput'
+import heroWebImage from '@/public/web.png'
+import heroMobileImage from '@/public/mobile.png'
 
 const HowKlaroPHWorksModal = dynamic(
   () => import('../../components/onboarding/HowKlaroPHWorksModal'),
@@ -130,7 +132,25 @@ const HOW_STEPS = [
   { title: 'Track your financial clarity', icon: '📊' },
 ]
 
+/**
+ * Must match what KlaroPHHandLogo renders for the login overlay (size 36, onWhite) so the
+ * preloaded response is the same srcset candidate. The overlay only mounts as sign-in navigates
+ * away, and iOS WebKit shows a broken-image glyph if that first fetch is cancelled mid-flight.
+ */
+const { props: loginOverlayLogo } = getImageProps({
+  src: '/logo-klaroph-blue.png',
+  alt: '',
+  width: 130,
+  height: 36,
+  sizes: '(max-width: 900px) 120px, 202px',
+})
+
 export default function LandingPageClient() {
+  preload(loginOverlayLogo.src, {
+    as: 'image',
+    imageSrcSet: loginOverlayLogo.srcSet,
+    imageSizes: loginOverlayLogo.sizes,
+  })
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -325,20 +345,16 @@ export default function LandingPageClient() {
             <div className="landing-hero-right">
               <div className="landing-hero-mock-stack">
                 <Image
-                  src="/web.png"
+                  src={heroWebImage}
                   alt="KlaroPH web dashboard showing financial overview"
-                  width={1501}
-                  height={1007}
                   sizes="(max-width: 768px) 340px, (max-width: 900px) 580px, 760px"
                   className="landing-hero-mock-image landing-hero-mock-web"
                   priority
                 />
                 <Image
-                  src="/mobile.png"
+                  src={heroMobileImage}
                   alt="KlaroPH mobile app showing financial tracking"
-                  width={1366}
-                  height={768}
-                  sizes="(max-width: 768px) 340px, (max-width: 900px) 174px, 798px"
+                  sizes="(max-width: 768px) 92px, (max-width: 900px) 156px, 205px"
                   className="landing-hero-mock-image landing-hero-mock-mobile"
                   priority
                 />
