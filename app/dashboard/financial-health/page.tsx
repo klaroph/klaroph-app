@@ -78,15 +78,15 @@ export default function FinancialHealthPage() {
         <div className="dash-card">
           <h2 className="dash-card-title" style={{ margin: '0 0 16px' }}>Summary</h2>
           <div className="fh-summary-grid">
-            <div className="fh-summary-tile">
+            <div className="fh-summary-tile klaro-tint klaro-tone-sky">
               <p className="fh-summary-label">Total Assets</p>
               <p className="fh-summary-value">{loading ? '…' : formatPeso(assetsSum)}</p>
             </div>
-            <div className="fh-summary-tile fh-summary-tile--liabilities">
+            <div className="fh-summary-tile klaro-tint klaro-tone-coral">
               <p className="fh-summary-label">Total Liabilities</p>
               <p className="fh-summary-value">{loading ? '…' : formatPeso(liabilitiesSum)}</p>
             </div>
-            <div className="fh-summary-tile fh-summary-tile--net">
+            <div className="fh-summary-tile klaro-tint klaro-tone-lavender">
               <p className="fh-summary-label">Net Worth</p>
               <p
                 className={`fh-summary-value${net > 0 ? ' is-positive' : net < 0 ? ' is-negative' : ''}`}

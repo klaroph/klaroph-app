@@ -161,8 +161,8 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
     <>
       <h3 id="signup-modal-title" className="signup-modal-heading">Create Free Account</h3>
       <form onSubmit={handleSubmit} className="signup-form" noValidate>
-        <div className="signup-field">
-          <label htmlFor="signup-email">Email</label>
+        <div>
+          <label htmlFor="signup-email" className="login-field-label">Email</label>
           <input
             id="signup-email"
             type="email"
@@ -179,8 +179,8 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
             <p id="signup-email-err" role="alert" className="signup-field-error">{emailError}</p>
           )}
         </div>
-        <div className="signup-field">
-          <label htmlFor="signup-password">Password</label>
+        <div>
+          <label htmlFor="signup-password" className="login-field-label">Password</label>
           <PasswordInput
             id="signup-password"
             value={password}
@@ -195,8 +195,8 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
             <p id="signup-password-err" role="alert" className="signup-field-error">{passwordError}</p>
           )}
         </div>
-        <div className="signup-field">
-          <label htmlFor="signup-confirm">Confirm Password</label>
+        <div>
+          <label htmlFor="signup-confirm" className="login-field-label">Confirm Password</label>
           <PasswordInput
             id="signup-confirm"
             value={confirmPassword}
@@ -232,7 +232,7 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
           <p id="signup-terms-err" role="alert" className="signup-field-error">{termsError}</p>
         )}
         {submitError && (
-          <p role="alert" className="signup-submit-error">{submitError}</p>
+          <p role="alert" className="login-alert login-alert--error">{submitError}</p>
         )}
         <button
           type="submit"

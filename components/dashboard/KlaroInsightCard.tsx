@@ -35,7 +35,7 @@ export default function KlaroInsightCard({
 
   return (
     <aside
-      className={`klaro-insight-card klaro-insight-card--${variant} klaro-insight-card--stacked ${className}`.trim()}
+      className={`klaro-insight-card klaro-tint klaro-insight-card--${variant} klaro-insight-card--stacked ${className}`.trim()}
       aria-label={title}
       aria-busy={showAiLoading}
     >

@@ -110,7 +110,7 @@ const PERIOD_LABELS: Record<FilterPeriod, string> = {
 
 /** Periods that require Pro (unlimited history). Free users see lock and open upgrade modal on click. */
 const PREMIUM_PERIODS = new Set<FilterPeriod>(['previous_quarter', 'year', 'previous_year', 'all_time', 'custom'])
-const LOCKED_FILTER_TOOLTIP = 'Available in Pro â€” unlock unlimited history.'
+const LOCKED_FILTER_TOOLTIP = 'Available in Pro — unlock unlimited history.'
 
 function getTrendGrouping(period: FilterPeriod): 'day' | 'month' | 'year' {
   if (period === 'year' || period === 'previous_year') return 'month'
@@ -164,7 +164,6 @@ export default function IncomePage() {
   const [exportLoading, setExportLoading] = useState(false)
   const [allTimeRange, setAllTimeRange] = useState<AllTimeRangeResult | null>(null)
   const [selectedRecord, setSelectedRecord] = useState<IncomeRecord | null>(null)
-  const isMobilePortrait = useMediaQuery('(max-width: 768px) and (orientation: portrait)')
   const compactTable = useMediaQuery('(max-width: 768px)')
 
   const { isPro, features } = useSubscription()
@@ -356,7 +355,7 @@ export default function IncomePage() {
                   }
                 }}
               >
-                {exportLoading ? 'Exportingâ€¦' : 'Export CSV'}
+                {exportLoading ? 'Exporting…' : 'Export CSV'}
               </button>
             ) : (
               <span title="CSV export available in Pro plan." className="premium-btn-disabled">
@@ -388,7 +387,7 @@ export default function IncomePage() {
       <div className="income-expense-page">
       {/* Row 1: Summary Cards (3 columns) */}
       <div className="income-expense-summary-grid">
-        <div className="income-expense-summary-card premium-summary-card premium-summary-card-accent-blue">
+        <div className="income-expense-summary-card premium-summary-card klaro-tint klaro-tone-sky">
           <div style={labelStyle}>Total Income</div>
           <div style={{ ...valueStyle, color: 'var(--color-blue)' }}>
             {loading ? '...' : formatPeso(totalIncome)}
@@ -396,27 +395,20 @@ export default function IncomePage() {
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{PERIOD_LABELS[period]}</div>
         </div>
 
-        <div className="income-expense-summary-card premium-summary-card premium-summary-card-accent-yellow">
+        <div className="income-expense-summary-card premium-summary-card">
           <div style={labelStyle}>Top Category</div>
           <div style={valueStyle}>
-            {loading ? '...' : (topSource?.source ?? 'â€”')}
+            {loading ? '...' : (topSource?.source ?? '—')}
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontWeight: 600 }}>
-            {loading ? '...' : (topSource ? formatPeso(topSource.total) : 'â€”')}
+            {loading ? '...' : (topSource ? formatPeso(topSource.total) : '—')}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-            {loading ? '...' : (topSource ? `${topSourcePct}% of income` : 'â€”')}
+            {loading ? '...' : (topSource ? `${topSourcePct}% of income` : '—')}
           </div>
         </div>
 
         <div className="income-expense-summary-card income-expense-filters-card premium-summary-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {isMobilePortrait && (
-            <div className="rotate-overlay">
-              <div className="rotate-card">
-                <p>For better chart visibility, rotate your device.</p>
-              </div>
-            </div>
-          )}
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Filters
           </div>
@@ -488,7 +480,7 @@ export default function IncomePage() {
 
       {/* Row 2: Two-column layout */}
       <div className="income-expense-two-col">
-        {/* LEFT â€” Trend + Breakdown */}
+        {/* LEFT — Trend + Breakdown */}
         <div className="income-expense-left-col">
           {/* Trend Chart */}
           <div className="income-expense-trend-section premium-section">
@@ -661,7 +653,7 @@ export default function IncomePage() {
                         <div key={s.source}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
                             <span style={{ fontWeight: 500 }}>{s.source}</span>
-                            <span style={{ color: 'var(--text-muted)' }}>{pct.toFixed(0)}% Â· {formatPeso(s.total)}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>{pct.toFixed(0)}% · {formatPeso(s.total)}</span>
                           </div>
                           <div style={{ height: 4, background: 'var(--border-muted)', borderRadius: 2 }}>
                             <div style={{ height: '100%', width: `${(s.total / maxSourceVal) * 100}%`, background: BAR_COLORS[i % BAR_COLORS.length], borderRadius: 2 }} />
@@ -676,7 +668,7 @@ export default function IncomePage() {
           </div>
         </div>
 
-        {/* RIGHT â€” Detailed Table (stable height; only body scrolls) */}
+        {/* RIGHT — Detailed Table (stable height; only body scrolls) */}
         <div className="income-expense-table-card premium-section">
           <CardHeaderWithAction title="Detailed Breakdown" titleAs="h3" />
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -718,7 +710,7 @@ export default function IncomePage() {
                         {...(compactTable ? clickableRowProps(() => setSelectedRecord(r)) : {})}
                       >
                         <td>{compactTable ? formatShortIsoDate(r.date) : r.date}</td>
-                        <td>{r.income_source || 'â€”'}</td>
+                        <td>{r.income_source || '—'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--color-success)', fontVariantNumeric: 'tabular-nums' }}>{formatPeso(Number(r.total_amount))}</td>
                         {!compactTable && (
                           <td style={{ whiteSpace: 'nowrap' }}>
@@ -780,7 +772,7 @@ export default function IncomePage() {
           title="Income record"
           details={[
             { label: 'Date', value: selectedRecord.date },
-            { label: 'Source', value: selectedRecord.income_source || 'â€”' },
+            { label: 'Source', value: selectedRecord.income_source || '—' },
             { label: 'Amount', value: formatPeso(Number(selectedRecord.total_amount)) },
           ]}
           deleteWarning="Delete this income record? This can't be undone."

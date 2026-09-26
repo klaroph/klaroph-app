@@ -58,13 +58,13 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
         <p className="login-subtitle">Enter your email and we&apos;ll send you a secure reset link.</p>
 
         {success ? (
-          <p role="status" className="forgot-success-msg">
+          <p role="status" className="login-alert login-alert--success">
             If an account exists for this email, a reset link has been sent.
           </p>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <form onSubmit={handleSubmit} className="login-form">
             <div>
-              <label htmlFor="forgot-email" style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
+              <label htmlFor="forgot-email" className="login-field-label">
                 Email
               </label>
               <input
@@ -80,7 +80,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
               />
             </div>
             {error && (
-              <p role="alert" className="forgot-error-msg">{error}</p>
+              <p role="alert" className="login-alert login-alert--error">{error}</p>
             )}
             <button type="submit" disabled={loading} className="login-btn-primary">
               {loading ? 'Sending...' : 'Send reset link'}

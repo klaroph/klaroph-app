@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import Sidebar from '../../components/layout/Sidebar'
 import MobileBottomNav from '../../components/layout/MobileBottomNav'
-import HowKlaroPHWorksModal, { hasSeenOnboarding } from '../../components/onboarding/HowKlaroPHWorksModal'
+import HowKlaroPHWorksModal, { hasSeenOnboarding, markOnboardingSeen } from '../../components/onboarding/HowKlaroPHWorksModal'
 import GraceBanner from '../../components/dashboard/GraceBanner'
 import NewGoalModal from '../../components/dashboard/NewGoalModal'
 import IncomeAllocationModal from '../../components/dashboard/IncomeAllocationModal'
@@ -182,6 +182,7 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
   }, [])
 
   const handleOnboardingClose = () => {
+    markOnboardingSeen()
     setShowOnboarding(false)
   }
 
@@ -323,7 +324,6 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
             <HowKlaroPHWorksModal
               isOpen={showOnboarding}
               onClose={handleOnboardingClose}
-              markSeenOnAccept
             />
             <UpgradeModalGate />
             <NewGoalModal

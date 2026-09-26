@@ -1182,17 +1182,23 @@ select:focus-visible {
     line-height: 1.3;
   }
 
-  /* Header logo: scaled up visually; 40×40 box unchanged so header spacing/row height unchanged */
+  /* Header logo: 40px tall row, scaled 2× from the right; box width = scaled footprint so the title never runs under it */
   .dashboard-page .dashboard-page-header {
     overflow: visible;
   }
 
   .dashboard-page-header .dashboard-header-logo-mobile,
   .page-header .dashboard-header-logo-mobile {
-    width: 40px;
+    width: 80px;
     height: 40px;
     align-items: center;
     justify-content: flex-end;
+  }
+
+  .dashboard-page-header .dashboard-greeting-title,
+  .dashboard-page-header .klaro-page-header-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   /* Hand logo — layout box 40px; visual scale */
@@ -1218,6 +1224,11 @@ select:focus-visible {
   .dashboard-page-header .dashboard-header-logo-scale {
     transform: scale(1.65);
     transform-origin: center right;
+  }
+
+  .dashboard-page-header .dashboard-header-logo-mobile,
+  .page-header .dashboard-header-logo-mobile {
+    width: 66px;
   }
 }
 
@@ -1552,15 +1563,6 @@ select:focus-visible {
   .financial-chart-container { overflow: visible !important; }
 }
 
-/* Landscape suggestion for mobile (Income / Expenses) — lives inside filters card */
-.rotate-overlay {
-  margin-bottom: 16px;
-}
-
-.income-expense-filters-card .rotate-overlay {
-  margin-bottom: 0;
-}
-
 /* Monthly Budget Overview: financial health dashboard widget */
 .budget-overview-card {
   padding: 23px; /* p-6 */
@@ -1624,11 +1626,11 @@ select:focus-visible {
 
 /* Left: Budget Health — inner card */
 .budget-health-card {
-  background: linear-gradient(160deg, var(--surface) 0%, var(--color-blue-muted) 35%, var(--surface) 100%);
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
   padding: 20px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1911,15 +1913,6 @@ select:focus-visible {
   transition: width 200ms ease;
 }
 
-.rotate-card {
-  padding: 12px 16px;
-  background: var(--color-blue-muted);
-  border: 1px solid rgba(0, 56, 168, 0.2);
-  border-radius: 8px;
-  font-size: 14px;
-  text-align: center;
-}
-
 /* Page header */
 .page-header {
   margin-bottom: var(--space-5);
@@ -2007,51 +2000,22 @@ select:focus-visible {
   line-height: 1.6;
 }
 
+/* Surface, border, radius and shadow come from the flat V2 card rule in klaroph-v2.css. */
 .premium-card {
   padding: var(--space-5);
-  background: linear-gradient(160deg, var(--surface) 0%, var(--color-blue-muted) 45%, var(--surface) 100%);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: box-shadow var(--motion-fast) ease;
-}
-
-.premium-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
 .premium-summary-card {
   padding: var(--space-5);
-  background: linear-gradient(160deg, var(--surface) 0%, var(--color-blue-muted) 45%, var(--surface) 100%);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+  transition: transform var(--motion-fast) ease;
 }
 
 .premium-summary-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-}
-
-.premium-summary-card-accent-blue {
-  border-left: 4px solid var(--color-blue);
-}
-
-.premium-summary-card-accent-yellow {
-  border-left: 4px solid var(--color-yellow);
-}
-
-.premium-summary-card-accent-red {
-  border-left: 4px solid var(--color-danger);
 }
 
 .premium-section {
   padding: var(--space-5);
-  background: linear-gradient(160deg, var(--surface) 0%, var(--color-blue-muted) 45%, var(--surface) 100%);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
 }
@@ -2411,7 +2375,12 @@ select:focus-visible {
   margin: 0;
   padding: 12px;
   font-size: 14px;
+  line-height: 1.45;
   border-radius: var(--radius-sm);
+}
+.reset-password-card > .login-alert,
+.forgot-password-modal > .login-alert {
+  margin-bottom: 16px;
 }
 .login-alert--error {
   color: var(--color-error);
@@ -2853,6 +2822,9 @@ html { scroll-behavior: smooth; }
   z-index: 1;
 }
 .landing-hero-left {
+  --sun-x: 40px;
+  --sun-y: 24px;
+  --sun-size: 180px;
   max-width: 520px;
   padding-left: 16px;
 }
@@ -2891,11 +2863,15 @@ html { scroll-behavior: smooth; }
   text-decoration-skip-ink: none;
 }
 .landing-hero-subheadline {
-  margin: 0 0 28px;
+  margin: 0 0 20px;
   font-size: 18px;
   color: var(--text-secondary);
   line-height: 1.55;
-  max-width: 420px;
+  max-width: 440px;
+}
+.landing-hero-left .landing-hero-flow {
+  justify-content: flex-start;
+  margin-bottom: 28px;
 }
 /* Match both buttons to the wider primary label: column + stretch to widest row */
 .landing-hero-ctas {
@@ -2989,64 +2965,35 @@ html { scroll-behavior: smooth; }
 }
 
 
-/* How it works */
+/* How KlaroPH works: Income → Plan → Spend → Grow */
 .landing-how {
-  padding: 64px 48px;
+  padding: 72px 48px;
   background: var(--surface);
   border-top: 1px solid var(--border);
+  text-align: center;
 }
 .landing-how-title {
-  text-align: center;
   font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 40px;
+  margin: 0 0 12px;
 }
-.landing-how-steps {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
-  max-width: 800px;
-  margin: 0 auto;
-  text-align: center;
-}
-.landing-how-step {
-  position: relative;
-  padding: 24px 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--background);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-.landing-how-step:hover {
-  box-shadow: var(--shadow-sm);
-  border-color: var(--color-blue-muted);
-}
-.landing-how-icon {
-  display: block;
-  font-size: 32px;
-  margin-bottom: 8px;
-}
-.landing-how-num {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--color-blue-muted);
-  color: var(--color-primary);
-  font-size: 12px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.landing-how-step h3 {
-  margin: 0;
+.landing-how-subtitle {
   font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 520px;
+  margin: 0 auto 40px;
+}
+.landing-how-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  text-align: left;
 }
 
 /* Free vs Pro */
@@ -3597,23 +3544,6 @@ html { scroll-behavior: smooth; }
   font-size: 15px;
   color: var(--text-secondary);
 }
-.forgot-success-msg,
-.forgot-error-msg {
-  margin: 0 0 16px;
-  padding: 12px;
-  font-size: 14px;
-  border-radius: var(--radius-sm);
-  line-height: 1.45;
-}
-.forgot-success-msg {
-  color: var(--color-success);
-  background: var(--color-primary-muted);
-}
-.forgot-error-msg {
-  color: var(--color-error);
-  background: var(--color-error-bg);
-}
-
 /* Reset password page (matches login card) */
 .reset-password-wrap {
   min-height: 100vh;
@@ -3868,13 +3798,6 @@ html { scroll-behavior: smooth; }
   flex-direction: column;
   gap: 16px;
 }
-.signup-field label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
 .signup-field-error {
   margin: 6px 0 0;
   font-size: 13px;
@@ -3882,14 +3805,6 @@ html { scroll-behavior: smooth; }
 }
 .signup-terms {
   margin-top: 4px;
-}
-.signup-submit-error {
-  margin: 0;
-  padding: 12px;
-  font-size: 14px;
-  color: var(--color-error);
-  background: var(--color-error-bg);
-  border-radius: var(--radius-sm);
 }
 .signup-success {
   text-align: center;
@@ -3968,47 +3883,54 @@ html { scroll-behavior: smooth; }
 
 .landing-features-grid {
   display: grid;
-  gap: var(--space-5);
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
   max-width: 1100px;
   margin: 0 auto;
-}
-.landing-features-responsive {
-  grid-template-columns: repeat(3, 1fr);
-}
-.landing-features-responsive .landing-feature-icon {
-  background: var(--color-blue-muted);
-  color: var(--color-blue);
 }
 
 .landing-feature-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  padding: var(--space-6);
-  text-align: center;
-  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-card);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .landing-feature-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
+.landing-feature-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
 .landing-feature-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 20px;
+  background: var(--tone);
+  color: var(--tone-ink);
+}
+
+.landing-feature-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 .landing-feature-card h3 {
-  margin: 0 0 8px;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
@@ -4341,8 +4263,10 @@ html { scroll-behavior: smooth; }
   .landing-hero-ctas { margin-left: auto; margin-right: auto; }
   .landing-hero-right { order: -1; justify-content: center; }
   .landing-hero-mock-stack { max-width: 580px; margin: 0 auto; }
-  .landing-features-responsive { grid-template-columns: repeat(2, 1fr); }
-  .landing-how-steps { grid-template-columns: 1fr; }
+  .landing-hero-left { --sun-x: 50%; }
+  .landing-hero-left .landing-hero-flow { justify-content: center; }
+  .landing-features-grid,
+  .landing-how-grid { grid-template-columns: repeat(2, 1fr); }
   .landing-compare-grid { grid-template-columns: 1fr; }
   .landing-nav { padding: var(--space-3) var(--space-5); }
   .landing-nav-links,
@@ -4506,7 +4430,9 @@ html { scroll-behavior: smooth; }
   .landing-hero-subheadline { font-size: 16px; max-width: 100%; }
   .landing-hero-ctas { width: 100%; gap: 12px; }
   .landing-hero-ctas .landing-cta-btn { min-height: 48px; padding: 14px 20px; }
-  .landing-features-responsive { grid-template-columns: 1fr; }
+  .landing-features-grid,
+  .landing-how-grid { grid-template-columns: 1fr; }
+  .landing-how { padding-top: 56px; padding-bottom: 56px; }
   .landing-final-checks { flex-direction: column; align-items: center; gap: var(--space-2); }
 }
 
@@ -5067,10 +4993,9 @@ html { scroll-behavior: smooth; }
   display: flex;
   flex-direction: column;
   padding: var(--space-4);
-  background: linear-gradient(160deg, var(--surface) 0%, var(--color-blue-muted) 45%, var(--surface) 100%);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-card);
 }
 
 /* Dashboard donut ring — same feel as Goals page hero */
@@ -5180,10 +5105,9 @@ html { scroll-behavior: smooth; }
 .goal-momentum-hero {
   margin-bottom: var(--space-6);
   padding: var(--space-6);
-  background: linear-gradient(160deg, var(--surface) 0%, var(--color-blue-muted) 45%, var(--surface) 100%);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
 .goal-momentum-hero-inner {
@@ -5348,16 +5272,15 @@ html { scroll-behavior: smooth; }
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-5);
-  background: linear-gradient(160deg, var(--surface) 0%, var(--color-blue-muted) 45%, var(--surface) 100%);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--motion-fast) ease;
 }
 
 .goal-card-premium:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  border-color: var(--border);
+  box-shadow: var(--shadow-md);
 }
 
 .goal-card-premium-head {
@@ -5637,76 +5560,298 @@ html { scroll-behavior: smooth; }
 }
 
 /* ================================================
+   KLAROPH BRAND PRIMITIVES — sun, principle cards, flow
+   (components/brand/KlaroBrand.tsx; used by the modal and landing)
+   ================================================ */
+
+/* Faint Philippine sun rays. Position with --sun-x / --sun-y / --sun-size. */
+.klaro-sun {
+  position: relative;
+  isolation: isolate;
+}
+.klaro-sun::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: var(--sun-x, 0);
+  top: var(--sun-y, 50%);
+  width: var(--sun-size, 112px);
+  height: var(--sun-size, 112px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(252, 209, 22, 0.16) 0%, transparent 42%),
+    repeating-conic-gradient(rgba(252, 209, 22, 0.1) 0deg 6deg, transparent 6deg 45deg);
+  -webkit-mask-image: radial-gradient(circle, #000 28%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 28%, transparent 70%);
+  pointer-events: none;
+  animation: klaro-sun-fade 0.6s ease both;
+}
+
+.klaro-principle-card {
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.klaro-principle-card-step {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tone-ink);
+}
+
+.klaro-principle-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.klaro-principle-card-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--tone);
+  color: var(--tone-ink);
+}
+
+.klaro-principle-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.klaro-principle-card-copy {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.klaro-flow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.klaro-flow li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.klaro-flow li:not(:last-child)::after {
+  content: '→';
+  content: '→' / '';
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.klaro-flow-step {
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.klaro-flow li:last-child .klaro-flow-step {
+  background: var(--color-yellow-soft);
+  color: #854d0e;
+}
+
+@keyframes klaro-sun-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .klaro-sun::before {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .klaro-flow,
+  .klaro-flow li {
+    gap: 4px;
+  }
+
+  .klaro-flow-step {
+    padding: 4px 7px;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* ================================================
    ONBOARDING MODAL - HOW KLAROPH WORKS
    ================================================ */
 
-.onboarding-content {
-  max-height: 65vh;
+/* Cards scroll; actions stay pinned below. 265px = Modal header + inline body padding + actions. */
+.onboarding-scroll {
+  max-height: calc(90vh - 265px);
+  overflow-x: hidden;
   overflow-y: auto;
-  padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
-.onboarding-section {
-  margin-bottom: 24px;
+.onboarding-hero {
+  --sun-x: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: var(--space-5);
 }
 
-.onboarding-section:last-of-type {
-  margin-bottom: 28px;
+.onboarding-hero-mark {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
 }
 
-.onboarding-heading {
-  margin: 0 0 8px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-blue);
-}
-
-.onboarding-section p {
+.onboarding-hero-title {
   margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--color-primary);
+}
+
+.onboarding-hero-lead {
+  margin: 4px 0 0;
   font-size: 14px;
   color: var(--text-secondary);
-  line-height: 1.6;
+}
+
+.onboarding-principles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-principles .klaro-principle-card {
+  animation: onboarding-rise 0.35s ease both;
+  animation-delay: calc(var(--i, 0) * 60ms + 80ms);
+}
+
+.onboarding-flow {
+  margin: var(--space-5) 0 var(--space-1);
 }
 
 .onboarding-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+  gap: 4px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-soft);
 }
 
-.onboarding-cta {
-  width: 100%;
-  padding: 14px 20px;
+.onboarding-actions .onboarding-cta {
+  min-width: 260px;
+  min-height: 48px;
   font-size: 15px;
-  font-weight: 600;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-primary);
-  color: var(--text-inverse);
-  cursor: pointer;
-  font-family: inherit;
-  transition: background-color 0.15s ease;
-}
-
-.onboarding-cta:hover {
-  background: var(--color-primary-hover);
 }
 
 .onboarding-close-link {
+  min-height: 44px;
+  padding: 0 16px;
   background: none;
   border: none;
   font-size: 13px;
   color: var(--text-muted);
   cursor: pointer;
   font-family: inherit;
+}
+
+.onboarding-close-link:hover,
+.onboarding-close-link:focus-visible {
+  color: var(--text-secondary);
   text-decoration: underline;
 }
 
-.onboarding-close-link:hover {
-  color: var(--text-secondary);
+@keyframes onboarding-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-principles .klaro-principle-card {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .onboarding-principles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .onboarding-principles .klaro-principle-card {
+    padding: 10px 12px;
+  }
+
+  .onboarding-principles .klaro-principle-card-head {
+    margin-bottom: 4px;
+  }
+
+  .onboarding-principles .klaro-principle-card-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .onboarding-principles .klaro-principle-card-copy {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .onboarding-hero {
+    gap: 12px;
+    margin-bottom: var(--space-3);
+  }
+
+  .onboarding-hero-lead {
+    margin-top: 2px;
+  }
+
+  .onboarding-hero-title {
+    font-size: 20px;
+  }
+
+  .onboarding-flow {
+    margin: 14px 0 var(--space-2);
+  }
+
+  .onboarding-actions .onboarding-cta {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .onboarding-scroll {
+    max-height: calc(min(90vh, 100dvh - 16px) - 265px);
+  }
 }
 
 /* Public tools pages (no dashboard shell) */

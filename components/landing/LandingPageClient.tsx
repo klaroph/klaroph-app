@@ -20,6 +20,7 @@ import {
 import { PRO_ANNUAL_PESOS, PRO_MONTHLY_PESOS, formatPlanPeso } from '@/lib/planPricing'
 import { LandingPromoCodeCapture } from './LandingPromoCodeCapture'
 import PasswordInput from '@/components/auth/PasswordInput'
+import { KLARO_ICONS, KlaroFlow, PrincipleCard, type KlaroTone } from '../brand/KlaroBrand'
 import heroWebImage from '@/public/web.png'
 import heroMobileImage from '@/public/mobile.png'
 
@@ -44,12 +45,13 @@ const ForgotPasswordModal = dynamic(
 
 const HERO_EYEBROW = 'Financial clarity for Filipinos'
 const HERO_SUBHEADLINE =
-  'Track expenses, plan ahead, and see the full picture—in one calm dashboard built around how Filipinos earn and spend.'
+  'Track expenses, plan ahead, and see the full picture — in one calm dashboard built around how Filipinos earn, spend, save, and grow.'
 const EMOTIONAL_TAGLINE = 'Finally understand where your money goes.'
 
-const FEATURES = [
+const FEATURES: { title: string; desc: string; tone: KlaroTone; icon: React.ReactNode }[] = [
   {
     title: 'Budget Clarity',
+    tone: 'sun',
     desc: 'Set a monthly spending plan and see what is left in each category at a glance.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
@@ -60,6 +62,7 @@ const FEATURES = [
   },
   {
     title: 'Income & Expense Tracking',
+    tone: 'lavender',
     desc: 'Record where your money comes from and where it goes, with clear monthly trends.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
@@ -69,6 +72,7 @@ const FEATURES = [
   },
   {
     title: 'Goal Tracking That Motivates',
+    tone: 'mint',
     desc: 'Set financial goals and watch your progress build momentum.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
@@ -78,6 +82,7 @@ const FEATURES = [
   },
   {
     title: 'Essential Financial Calculators (Free)',
+    tone: 'sky',
     desc: 'Salary calculator, 13th month pay and Loan estimator.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
@@ -87,6 +92,7 @@ const FEATURES = [
   },
   {
     title: 'Financial Health',
+    tone: 'mint',
     desc: 'A simple check-in on how your savings, spending, and cash flow are holding up.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
@@ -96,6 +102,7 @@ const FEATURES = [
   },
   {
     title: 'Klaro Insight',
+    tone: 'sky',
     desc: 'A short, plain-language observation about your month, based on your KlaroPH numbers.',
     icon: (
       <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width={28} height={28}>
@@ -126,10 +133,35 @@ const TRUST_POINTS = [
   },
 ]
 
-const HOW_STEPS = [
-  { title: 'Add income & expenses', icon: '📥' },
-  { title: 'Set your goals', icon: '🎯' },
-  { title: 'Track your financial clarity', icon: '📊' },
+const HOW_PRINCIPLES: { step: string; tone: KlaroTone; title: string; copy: string; icon: React.ReactNode }[] = [
+  {
+    step: 'Earn',
+    tone: 'sky',
+    title: 'Know what comes in.',
+    copy: 'Salary, side hustle, business, or allowance — log all the money coming in, so your plan starts from real numbers.',
+    icon: KLARO_ICONS.earn,
+  },
+  {
+    step: 'Plan',
+    tone: 'sun',
+    title: 'Give every peso a purpose.',
+    copy: 'Set a monthly spending plan and goals before the money slips away — savings first, not leftovers.',
+    icon: KLARO_ICONS.purpose,
+  },
+  {
+    step: 'Spend',
+    tone: 'lavender',
+    title: 'Track without the guilt.',
+    copy: 'See where your money goes, spot patterns, and stay within your plan. Clarity, not judgment.',
+    icon: KLARO_ICONS.spend,
+  },
+  {
+    step: 'Grow',
+    tone: 'mint',
+    title: 'Build momentum.',
+    copy: 'Watch goals, savings, and financial health improve month after month.',
+    icon: KLARO_ICONS.grow,
+  },
 ]
 
 /**
@@ -325,13 +357,14 @@ export default function LandingPageClient() {
         {/* Hero: two-column */}
         <section className="landing-hero landing-hero-saas">
           <div className="landing-hero-inner">
-            <div className="landing-hero-left">
+            <div className="landing-hero-left klaro-sun">
               <p className="landing-hero-eyebrow">{HERO_EYEBROW}</p>
               <h1 className="landing-hero-headline" id="landing-hero-heading">
-                <span className="landing-hero-headline-line1">Clarity for your</span>
-                <span className="landing-hero-headline-line2">budget.</span>
+                <span className="landing-hero-headline-line1">Your money,</span>
+                <span className="landing-hero-headline-line2">made Klaro.</span>
               </h1>
               <p className="landing-hero-subheadline">{HERO_SUBHEADLINE}</p>
+              <KlaroFlow className="landing-hero-flow" />
               <div className="landing-hero-ctas">
                 <button type="button" className="landing-cta-btn landing-cta-primary" onClick={openSignUp}>
                   Create Free Account
@@ -375,17 +408,31 @@ export default function LandingPageClient() {
           </div>
         </section>
 
-        {/* Features: 4 blocks — 3 cols desktop, 2 tablet, 1 mobile */}
+        <section id="how" className="landing-how" aria-labelledby="landing-how-title">
+          <p className="landing-section-eyebrow">How KlaroPH works</p>
+          <h2 id="landing-how-title" className="landing-how-title">One simple flow for your money.</h2>
+          <p className="landing-how-subtitle">
+            Every part of KlaroPH follows the same four steps, so each peso always has a direction.
+          </p>
+          <ol className="landing-how-grid">
+            {HOW_PRINCIPLES.map((p) => (
+              <PrincipleCard key={p.step} {...p} />
+            ))}
+          </ol>
+        </section>
+
         <section id="features" className="landing-features">
           <h2 className="landing-features-title">Everything you need for financial clarity</h2>
           <p className="landing-features-subtitle">
             Simple, powerful tools designed for every Filipino to track, plan, and grow.
           </p>
-          <div className="landing-features-grid landing-features-responsive">
-            {FEATURES.map((f, i) => (
-              <div key={i} className="landing-feature-card">
-                <div className="landing-feature-icon">{f.icon}</div>
-                <h3>{f.title}</h3>
+          <div className="landing-features-grid">
+            {FEATURES.map((f) => (
+              <div key={f.title} className={`landing-feature-card klaro-tone-${f.tone}`}>
+                <div className="landing-feature-head">
+                  <span className="landing-feature-icon">{f.icon}</span>
+                  <h3>{f.title}</h3>
+                </div>
                 <p>{f.desc}</p>
               </div>
             ))}
@@ -479,20 +526,6 @@ export default function LandingPageClient() {
             </a>
           </div>
           <p className="landing-tools-cta">No signup required</p>
-        </section>
-
-        {/* How it works: 3 steps */}
-        <section id="how" className="landing-how">
-          <h2 className="landing-how-title">How it works</h2>
-          <div className="landing-how-steps">
-            {HOW_STEPS.map((step, i) => (
-              <div key={i} className="landing-how-step">
-                <span className="landing-how-icon" aria-hidden="true">{step.icon}</span>
-                <span className="landing-how-num">{i + 1}</span>
-                <h3>{step.title}</h3>
-              </div>
-            ))}
-          </div>
         </section>
 
         {/* Free vs Pro — consistent with Upgrade modal */}
@@ -671,7 +704,6 @@ export default function LandingPageClient() {
         <HowKlaroPHWorksModal
           isOpen={showHowItWorks}
           onClose={() => setShowHowItWorks(false)}
-          markSeenOnAccept={false}
         />
       )}
       {showSignUpModal && (

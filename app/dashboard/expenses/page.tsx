@@ -121,7 +121,7 @@ const PERIOD_LABELS: Record<FilterPeriod, string> = {
 
 /** Periods that require Pro (unlimited history). Free users see lock and open upgrade modal on click. */
 const PREMIUM_PERIODS = new Set<FilterPeriod>(['previous_quarter', 'year', 'previous_year', 'all_time', 'custom'])
-const LOCKED_FILTER_TOOLTIP = 'Available in Pro â€” unlock unlimited history.'
+const LOCKED_FILTER_TOOLTIP = 'Available in Pro — unlock unlimited history.'
 
 function getTrendGrouping(period: FilterPeriod): 'day' | 'month' | 'year' {
   if (period === 'year' || period === 'previous_year') return 'month'
@@ -181,7 +181,6 @@ export default function ExpensesPage() {
   const [exportLoading, setExportLoading] = useState(false)
   const [allTimeRange, setAllTimeRange] = useState<AllTimeRangeResult | null>(null)
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null)
-  const isMobilePortrait = useMediaQuery('(max-width: 768px) and (orientation: portrait)')
   const compactTable = useMediaQuery('(max-width: 768px)')
   const [budgetRefreshKey, setBudgetRefreshKey] = useState(0)
   const [budgetPlannerOpen, setBudgetPlannerOpen] = useState(false)
@@ -410,7 +409,7 @@ export default function ExpensesPage() {
                   }
                 }}
               >
-                {exportLoading ? 'Exportingâ€¦' : 'Export CSV'}
+                {exportLoading ? 'Exporting…' : 'Export CSV'}
               </button>
             ) : (
               <span title="CSV export available in Pro plan." className="premium-btn-disabled">
@@ -460,7 +459,7 @@ export default function ExpensesPage() {
 
       {/* Row 1: Summary Cards (3 columns) */}
       <div className="income-expense-summary-grid">
-        <div className="income-expense-summary-card premium-summary-card premium-summary-card-accent-red">
+        <div className="income-expense-summary-card premium-summary-card klaro-tint klaro-tone-coral">
           <div style={labelStyle}>Total Expenses</div>
           <div style={{ ...valueStyle, color: 'var(--color-danger)' }}>
             {loading ? '...' : formatPeso(totalExpenses)}
@@ -468,27 +467,20 @@ export default function ExpensesPage() {
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{syncFromBudget ? formatMonthLabel(budgetSelectedMonth) : PERIOD_LABELS[period]}</div>
         </div>
 
-        <div className="income-expense-summary-card premium-summary-card premium-summary-card-accent-yellow">
+        <div className="income-expense-summary-card premium-summary-card">
           <div style={labelStyle}>Top Category</div>
           <div style={valueStyle}>
-            {loading ? '...' : (topCategory?.category ?? 'â€”')}
+            {loading ? '...' : (topCategory?.category ?? '—')}
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontWeight: 600 }}>
-            {loading ? '...' : (topCategory ? formatPeso(topCategory.total) : 'â€”')}
+            {loading ? '...' : (topCategory ? formatPeso(topCategory.total) : '—')}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-            {loading ? '...' : (topCategory ? `${topCategoryPct}% of expenses` : 'â€”')}
+            {loading ? '...' : (topCategory ? `${topCategoryPct}% of expenses` : '—')}
           </div>
         </div>
 
         <div className="income-expense-summary-card income-expense-filters-card premium-summary-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {isMobilePortrait && (
-            <div className="rotate-overlay">
-              <div className="rotate-card">
-                <p>For better chart visibility, rotate your device.</p>
-              </div>
-            </div>
-          )}
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Filters
           </div>
@@ -575,7 +567,7 @@ export default function ExpensesPage() {
 
       {/* Row 2: Two-column layout */}
       <div className="income-expense-two-col">
-        {/* LEFT â€” Trend + Breakdown */}
+        {/* LEFT — Trend + Breakdown */}
         <div className="income-expense-left-col">
           {/* Trend Chart */}
           <div className="income-expense-trend-section premium-section">
@@ -748,7 +740,7 @@ export default function ExpensesPage() {
                         <div key={c.category}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
                             <span style={{ fontWeight: 500 }}>{c.category}</span>
-                            <span style={{ color: 'var(--text-muted)' }}>{pct.toFixed(0)}% Â· {formatPeso(c.total)}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>{pct.toFixed(0)}% · {formatPeso(c.total)}</span>
                           </div>
                           <div style={{ height: 4, background: 'var(--border-muted)', borderRadius: 2 }}>
                             <div style={{ height: '100%', width: `${(c.total / maxCatVal) * 100}%`, background: BAR_COLORS[i % BAR_COLORS.length], borderRadius: 2 }} />
@@ -763,7 +755,7 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        {/* RIGHT â€” Detailed Table (stable height; only body scrolls) */}
+        {/* RIGHT — Detailed Table (stable height; only body scrolls) */}
         <div className="income-expense-table-card premium-section">
           <CardHeaderWithAction title="Detailed Breakdown" titleAs="h3" />
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -809,13 +801,13 @@ export default function ExpensesPage() {
                         <td>{compactTable ? formatShortIsoDate(r.date) : r.date}</td>
                         {compactTable ? (
                           <td>
-                            {r.category || 'â€”'}
+                            {r.category || '—'}
                             {r.description && <span className="income-expense-cell-subtext">{r.description}</span>}
                           </td>
                         ) : (
                           <>
-                            <td>{r.category || 'â€”'}</td>
-                            <td>{r.description || 'â€”'}</td>
+                            <td>{r.category || '—'}</td>
+                            <td>{r.description || '—'}</td>
                             <td style={{ textTransform: 'capitalize' }}>{r.type}</td>
                           </>
                         )}
@@ -887,8 +879,8 @@ export default function ExpensesPage() {
           title="Expense"
           details={[
             { label: 'Date', value: selectedExpense.date },
-            { label: 'Category', value: selectedExpense.category || 'â€”' },
-            { label: 'Description', value: selectedExpense.description || 'â€”' },
+            { label: 'Category', value: selectedExpense.category || '—' },
+            { label: 'Description', value: selectedExpense.description || '—' },
             { label: 'Type', value: <span style={{ textTransform: 'capitalize' }}>{selectedExpense.type}</span> },
             { label: 'Amount', value: formatPeso(Number(selectedExpense.amount)) },
           ]}

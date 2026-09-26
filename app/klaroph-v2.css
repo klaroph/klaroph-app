@@ -179,12 +179,14 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  background: var(--tone);
+  color: var(--tone-ink);
 }
-.dash-stat-card--income .dash-stat-icon { background: var(--pastel-sky); color: var(--color-primary); }
-.dash-stat-card--expense .dash-stat-icon { background: var(--pastel-coral); color: #be123c; }
-.dash-stat-card--net .dash-stat-icon { background: var(--pastel-lavender); color: #6d28d9; }
-.dash-stat-card--goals .dash-stat-icon { background: var(--pastel-peach); color: #b45309; }
-.dash-stat-body { min-width: 0; flex: 1; }
+.dash-stat-card--income { --tone: var(--pastel-sky); --tone-ink: var(--color-primary); }
+.dash-stat-card--expense { --tone: var(--pastel-coral); --tone-ink: #be123c; }
+.dash-stat-card--net { --tone: var(--pastel-lavender); --tone-ink: #6d28d9; }
+.dash-stat-card--goals { --tone: var(--pastel-peach); --tone-ink: #b45309; }
+.dash-stat-body { position: relative; min-width: 0; flex: 1; }
 .dash-stat-label {
   margin: 0 0 4px;
   font-size: var(--text-small);
@@ -198,13 +200,17 @@
   color: var(--text-primary);
   letter-spacing: -0.02em;
   line-height: 1.25;
-  overflow-wrap: break-word;
 }
 .dash-stat-value--neg { color: #be123c; }
 .dash-stat-value--pos { color: var(--color-success); }
+/* Goals bar hangs in the card's bottom padding so all four cards keep the same title/value block. */
 .dash-stat-progress {
-  margin-top: 8px;
-  height: 6px;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  margin-top: 4px;
   border-radius: 999px;
   background: var(--border-muted);
   overflow: hidden;
@@ -217,23 +223,41 @@
 @media (max-width: 1279px) {
   .dash-stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
     gap: var(--space-2);
     margin-bottom: var(--space-3);
   }
-  .dash-stat-card { padding: var(--space-3); }
-  .dash-stat-value { font-size: 16px; }
+  .dash-stat-card {
+    gap: 8px;
+    padding: var(--space-3) 10px;
+  }
+  /* Top-aligned so a wrapped amount never moves the title/value zones; offset centres it on a one-line block. */
+  .dash-stat-icon {
+    width: 32px;
+    height: 32px;
+    margin-top: 3px;
+    border-radius: 10px;
+  }
+  /* Value scales with the text column beside the icon. */
+  .dash-stat-body { container-type: inline-size; }
+  .dash-stat-label { margin: 0 0 2px; line-height: 1.3; }
+  .dash-stat-value {
+    font-size: clamp(14px, 16cqi, 20px);
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+  }
 }
 
 /* Insight */
 .klaro-insight-card {
+  --tone: var(--pastel-sky);
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: var(--space-4);
-  background: var(--pastel-sky);
-  border: 1px solid rgba(59, 130, 246, 0.18);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
 }
 .klaro-insight-header {
   display: flex;
@@ -254,7 +278,7 @@
 }
 .klaro-insight-refresh:hover:not(:disabled) {
   color: var(--color-primary);
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--border-muted);
 }
 .klaro-insight-refresh:disabled {
   opacity: 0.5;
@@ -268,7 +292,7 @@
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--tone);
   color: var(--color-primary);
   display: flex;
   align-items: center;
@@ -321,27 +345,15 @@
   font-weight: 700;
 }
 .klaro-insight-action:hover { text-decoration: underline; }
-.klaro-insight-card--warning {
-  background: var(--pastel-coral);
-  border-color: rgba(248, 113, 113, 0.28);
-}
+.klaro-insight-card--warning { --tone: var(--pastel-coral); }
 .klaro-insight-card--warning .klaro-insight-title,
-.klaro-insight-card--warning .klaro-insight-icon { color: #be123c; }
+.klaro-insight-card--warning .klaro-insight-icon,
 .klaro-insight-card--warning .klaro-insight-action { color: #be123c; }
-.klaro-insight-card--positive {
-  background: var(--pastel-mint);
-  border-color: rgba(5, 150, 105, 0.22);
-}
+.klaro-insight-card--positive { --tone: var(--pastel-mint); }
 .klaro-insight-card--positive .klaro-insight-title { color: var(--color-success); }
-.klaro-insight-card--goal {
-  background: var(--pastel-peach);
-  border-color: rgba(251, 146, 60, 0.28);
-}
+.klaro-insight-card--goal { --tone: var(--pastel-peach); }
 .klaro-insight-card--goal .klaro-insight-title { color: #b45309; }
-.klaro-insight-card--budget {
-  background: var(--pastel-periwinkle);
-  border-color: rgba(99, 102, 241, 0.22);
-}
+.klaro-insight-card--budget { --tone: var(--pastel-periwinkle); }
 .klaro-insight-source {
   margin: 2px 0 0;
   font-size: 11px;
@@ -1834,7 +1846,7 @@
   }
 
   .dashboard-page--one-glance .dash-stat-card {
-    padding: 10px 12px;
+    padding: 12px;
     align-items: center;
   }
 
@@ -1851,11 +1863,6 @@
 
   .dashboard-page--one-glance .dash-stat-value {
     font-size: 17px;
-  }
-
-  .dashboard-page--one-glance .dash-stat-progress {
-    margin-top: 6px;
-    height: 4px;
   }
 
   .dash-one-glance-row {
@@ -2671,6 +2678,23 @@
   box-shadow: var(--shadow-card) !important;
 }
 
+/* ========== V2 CARD LANGUAGE ==========
+ * Tones: sky = clarity, sun = planning/action, lavender = spending/insight,
+ * mint = progress (semantic only), coral = expenses/liabilities.
+ * Tint = primary/summary surfaces only; secondary and dense surfaces stay white.
+ */
+.klaro-tone-sky { --tone: var(--pastel-sky); --tone-ink: var(--color-primary); }
+.klaro-tone-sun { --tone: var(--color-yellow-soft); --tone-ink: #a16207; }
+.klaro-tone-lavender { --tone: var(--pastel-lavender); --tone-ink: #5b4bb7; }
+.klaro-tone-mint { --tone: var(--pastel-mint); --tone-ink: var(--color-success); }
+.klaro-tone-coral { --tone: var(--pastel-coral); --tone-ink: #be123c; }
+
+/* !important: must win over the flat .card / .premium-* surfaces above. */
+.klaro-tint,
+.card.klaro-tint {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone, var(--pastel-sky)) 45%, var(--surface)) 0%, var(--surface) 72%) !important;
+}
+
 .premium-banner-message {
   background: var(--pastel-sky) !important;
   border: 1px solid rgba(59, 130, 246, 0.18) !important;
@@ -2803,19 +2827,8 @@
 
 .fh-summary-tile {
   padding: 14px 16px;
-  background: var(--pastel-sky);
-  border: 1px solid rgba(59, 130, 246, 0.14);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-}
-
-.fh-summary-tile--liabilities {
-  background: var(--pastel-coral);
-  border-color: rgba(248, 113, 113, 0.22);
-}
-
-.fh-summary-tile--net {
-  background: var(--pastel-lavender);
-  border-color: rgba(109, 40, 217, 0.16);
 }
 
 .fh-summary-label {

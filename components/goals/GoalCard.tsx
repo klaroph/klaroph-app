@@ -74,7 +74,9 @@ export default function GoalCard({
   const canAct = goal && (onEdit || onDelete)
 
   return (
-    <article className="goal-card-premium" aria-labelledby={goal ? `goal-name-${goal.id}` : undefined}>
+    <article
+      className={isComplete ? 'goal-card-premium klaro-tint klaro-tone-mint' : 'goal-card-premium'}
+      aria-labelledby={goal ? `goal-name-${goal.id}` : undefined}>
       <div className="goal-card-premium-head">
         <div className="goal-card-premium-icon-wrap" aria-hidden>
           <GoalIcon iconKey={iconKey} />

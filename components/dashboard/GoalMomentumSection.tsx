@@ -30,7 +30,7 @@ export default function GoalMomentumSection({
 
   return (
     <section
-      className="goal-momentum-executive goal-momentum-compact"
+      className="goal-momentum-executive goal-momentum-compact klaro-tint klaro-tone-mint"
       aria-labelledby="goal-momentum-heading"
     >
       <div className="goal-momentum-compact-header">

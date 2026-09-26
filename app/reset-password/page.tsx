@@ -74,7 +74,7 @@ export default function ResetPasswordPage() {
         <div className="reset-password-card">
           <h1 className="login-title">Create a new password</h1>
           <p className="login-subtitle">Enter a new password for your KlaroPH account.</p>
-          <p role="alert" className="forgot-error-msg">This reset link is invalid or has expired.</p>
+          <p role="alert" className="login-alert login-alert--error">This reset link is invalid or has expired.</p>
           <Link href="/#login" className="login-btn-primary" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
             Back to sign in
           </Link>
@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
         </header>
         <div className="reset-password-card">
           <h1 className="login-title">Create a new password</h1>
-          <p role="status" className="forgot-success-msg">Your password has been updated successfully.</p>
+          <p role="status" className="login-alert login-alert--success">Your password has been updated successfully.</p>
           <button
             type="button"
             onClick={() => router.push('/dashboard')}
@@ -118,9 +118,9 @@ export default function ResetPasswordPage() {
       <div className="reset-password-card">
         <h1 className="login-title">Create a new password</h1>
         <p className="login-subtitle">Enter a new password for your KlaroPH account.</p>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <form onSubmit={handleSubmit} className="login-form">
           <div>
-            <label htmlFor="reset-new-password" style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
+            <label htmlFor="reset-new-password" className="login-field-label">
               New password
             </label>
             <input
@@ -137,7 +137,7 @@ export default function ResetPasswordPage() {
             />
           </div>
           <div>
-            <label htmlFor="reset-confirm-password" style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
+            <label htmlFor="reset-confirm-password" className="login-field-label">
               Confirm password
             </label>
             <input
@@ -154,7 +154,7 @@ export default function ResetPasswordPage() {
             />
           </div>
           {error && (
-            <p role="alert" className="forgot-error-msg">{error}</p>
+            <p role="alert" className="login-alert login-alert--error">{error}</p>
           )}
           <button type="submit" disabled={loading} className="login-btn-primary">
             {loading ? 'Updating...' : 'Update password'}

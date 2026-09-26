@@ -39,7 +39,7 @@ export default function GoalMomentumHero({
 
   return (
     <section
-      className="goal-momentum-hero"
+      className="goal-momentum-hero klaro-tint klaro-tone-mint"
       aria-labelledby="goal-momentum-hero-heading"
       aria-busy={loading || undefined}
     >

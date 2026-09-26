@@ -1,6 +1,10 @@
 'use client'
 
+import type { CSSProperties, ReactNode } from 'react'
+import Image from 'next/image'
 import Modal from '../ui/Modal'
+import { KLARO_ICONS, KlaroFlow, PrincipleCard, type KlaroTone } from '../brand/KlaroBrand'
+import handMark from '@/public/logo-klaroph-hand.png'
 
 const STORAGE_KEY = 'klaroph_onboarding_seen'
 
@@ -16,59 +20,63 @@ export function markOnboardingSeen(): void {
 type HowKlaroPHWorksModalProps = {
   isOpen: boolean
   onClose: () => void
-  /** When true, closing (or CTA) also marks onboarding as seen so it won't auto-show again. */
-  markSeenOnAccept?: boolean
 }
 
-export default function HowKlaroPHWorksModal({
-  isOpen,
-  onClose,
-  markSeenOnAccept = false,
-}: HowKlaroPHWorksModalProps) {
-  const handleAccept = () => {
-    if (markSeenOnAccept) markOnboardingSeen()
-    onClose()
-  }
+const PRINCIPLES: { tone: KlaroTone; title: string; copy: string; icon: ReactNode }[] = [
+  {
+    tone: 'sky',
+    title: 'Start With Clarity',
+    copy: 'KlaroPH helps you see where your money is going, what you can safely spend, and what you’re building toward. Your income, expenses, budget, and goals work together so you can make clearer decisions.',
+    icon: KLARO_ICONS.clarity,
+  },
+  {
+    tone: 'sun',
+    title: 'Give Every Peso a Purpose',
+    copy: 'When income comes in, decide what matters first. Build your emergency fund, save for a goal, invest, or set aside money for something important to you. KlaroPH helps turn intentions into a plan.',
+    icon: KLARO_ICONS.purpose,
+  },
+  {
+    tone: 'lavender',
+    title: 'Track Without the Guilt',
+    copy: 'Expenses aren’t about judging every purchase. They’re there to help you understand your habits, spot patterns, and see whether your spending is supporting the things that matter to you.',
+    icon: KLARO_ICONS.spend,
+  },
+  {
+    tone: 'mint',
+    title: 'Build Momentum',
+    copy: 'Good finances aren’t built in one perfect month. KlaroPH helps you see your progress over time — from staying within your budget to reaching goals and building financial health.',
+    icon: KLARO_ICONS.grow,
+  },
+]
 
+export default function HowKlaroPHWorksModal({ isOpen, onClose }: HowKlaroPHWorksModalProps) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="How KlaroPH Works" contentMaxWidth={560}>
-      <div className="onboarding-content">
-        <section className="onboarding-section">
-          <h4 className="onboarding-heading">The Purpose</h4>
-          <p>
-            KlaroPH exists to help Filipinos gain financial clarity and build discipline. It is not just a tracker—it is a <strong>savings-first</strong> system. You decide where your money goes before it slips away.
-          </p>
-        </section>
+    <Modal isOpen={isOpen} onClose={onClose} title="How KlaroPH Works" contentMaxWidth={720}>
+      <div className="onboarding-scroll">
+        <header className="onboarding-hero klaro-sun">
+          <Image src={handMark} alt="" width={36} height={36} className="onboarding-hero-mark" />
+          <div>
+            <h4 className="onboarding-hero-title">Your money, made Klaro.</h4>
+            <p className="onboarding-hero-lead">Here&apos;s the simple idea behind KlaroPH.</p>
+          </div>
+        </header>
 
-        <section className="onboarding-section">
-          <h4 className="onboarding-heading">Savings Comes First</h4>
-          <p>
-            When you receive income, you allocate to your goals first. Goals may include your emergency fund, retirement fund, MP2, investments, stocks, business capital, or any future target. Savings is intentional. Savings is not leftover.
-          </p>
-        </section>
+        <ul className="onboarding-principles">
+          {PRINCIPLES.map((p, i) => (
+            <PrincipleCard key={p.title} {...p} heading="h5" style={{ '--i': i } as CSSProperties} />
+          ))}
+        </ul>
 
-        <section className="onboarding-section">
-          <h4 className="onboarding-heading">What Expenses Tracking Is For</h4>
-          <p>
-            Expenses are tracked from residual income. The purpose is to understand stability, observe spending habits, see needs vs wants, and identify areas for improvement. It is not about guilt—it is about clarity.
-          </p>
-        </section>
+        <KlaroFlow className="onboarding-flow" />
+      </div>
 
-        <section className="onboarding-section">
-          <h4 className="onboarding-heading">The Philosophy</h4>
-          <p>
-            Money without direction disappears. Money with direction builds freedom. Every peso should have a purpose.
-          </p>
-        </section>
-
-        <div className="onboarding-actions">
-          <button type="button" className="onboarding-cta" onClick={handleAccept}>
-            I Understand — Let&apos;s Build
-          </button>
-          <button type="button" className="onboarding-close-link" onClick={onClose}>
-            Close
-          </button>
-        </div>
+      <div className="onboarding-actions">
+        <button type="button" className="klaro-upgrade-cta onboarding-cta" onClick={onClose}>
+          Let&apos;s Get Klaro <span aria-hidden>→</span>
+        </button>
+        <button type="button" className="onboarding-close-link" onClick={onClose}>
+          Maybe later
+        </button>
       </div>
     </Modal>
   )
