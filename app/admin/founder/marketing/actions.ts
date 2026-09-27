@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { getFounderUser } from '@/lib/founder/access'
 import { getMarketingCampaign, type MarketingCampaign } from '@/lib/email/campaigns'
 import { sendCampaignLive, sendCampaignTest, type CampaignActionResult } from '@/lib/email/campaignActions'
+import { sendProEmailSample } from '@/lib/email/proEmailSamples'
+import { getResendConfig, sendTransactionalEmail } from '@/lib/email/resend'
 
 export type CampaignActionState = { ok: boolean; message: string }
 
@@ -27,6 +29,23 @@ export async function sendTestEmailAction(campaignId: string): Promise<CampaignA
   const auth = await authorizedCampaign(campaignId)
   if (!auth.ok) return auth.state
   return toState(await sendCampaignTest(auth.campaign), 'Test email accepted by Resend. Check the test inbox.')
+}
+
+/** The browser picks only which sample; content is fixture data and the recipient is the configured test inbox. */
+export async function sendProEmailSampleAction(kind: string): Promise<CampaignActionState> {
+  if (!(await getFounderUser())) return { ok: false, message: 'Not authorized.' }
+  const config = getResendConfig()
+  if (!config.ok) return { ok: false, message: config.error }
+  const result = await sendProEmailSample(
+    {
+      recipient: process.env.MARKETING_TEST_EMAIL,
+      send: (message, key) => sendTransactionalEmail(config.config, message, key),
+      now: new Date(),
+    },
+    kind
+  )
+  if (!result.ok) return { ok: false, message: result.error }
+  return { ok: true, message: `Sample accepted by Resend (${result.id}). Check the test inbox.` }
 }
 
 export async function sendCampaignAction(

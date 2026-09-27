@@ -3,6 +3,7 @@ import type { CampaignStatus } from '@/lib/founder/metrics'
 import { formatCount, formatDateTime } from '@/lib/founder/format'
 import { DockHeader, DockSection, Pill, UnavailableNote } from '@/components/founder/DockUI'
 import CampaignActions from '@/components/founder/CampaignActions'
+import ProEmailSamples from '@/components/founder/ProEmailSamples'
 
 const STATUS: Record<CampaignStatus, { label: string; tone: 'ok' | 'warn' | 'info' }> = {
   draft: { label: 'Draft', tone: 'info' },
@@ -79,6 +80,13 @@ export default async function FounderMarketingPage() {
           </div>
         </DockSection>
       ))}
+
+      <DockSection
+        title="Account email samples"
+        hint="Sends a [TEST] Pro email to the test inbox using sample data. No account, subscription or payment is changed."
+      >
+        <ProEmailSamples testEmailConfigured={config.testEmailConfigured} />
+      </DockSection>
 
       <p className="fd-footnote">
         Safeguards: founder-only, kill switch (MARKETING_CAMPAIGN_SENDS_ENABLED), typed campaign confirmation, exact recipient

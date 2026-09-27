@@ -90,7 +90,8 @@ describe('grantComplimentaryPro', () => {
     const [message, key] = mail.mock.calls[0]
     expect(message.to).toBe('juan@example.com')
     expect(message.text).toContain('Hi Juan,')
-    expect(message.text).toContain('active until December 26, 2026')
+    expect(message.text).toContain('Active until: December 26, 2026')
+    expect(message.subject).not.toMatch(/\[TEST\]/)
     expect(key).toBe(`complimentary-pro-${TARGET}-${NOW.toISOString()}`)
   })
 

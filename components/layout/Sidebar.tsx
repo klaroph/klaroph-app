@@ -11,7 +11,7 @@ import KlaroPHHandLogo from '../ui/KlaroPHHandLogo'
 import UpgradeCTA from '../ui/UpgradeCTA'
 import SupportModal from '../support/SupportModal'
 
-function formatRenewalDate(iso: string | null): string {
+function formatActiveUntilDate(iso: string | null): string {
   if (!iso) return ''
   try {
     const d = new Date(iso)
@@ -169,7 +169,7 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
 
   const userName = (profile?.profile?.nickname?.trim() || profile?.profile?.full_name?.trim()) || 'You'
   const clarityLevel = profile?.clarity_level ?? 1
-  const renewDate = formatRenewalDate(currentPeriodEnd ?? null)
+  const activeUntil = formatActiveUntilDate(currentPeriodEnd ?? null)
 
   return (
     <aside
@@ -243,9 +243,9 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
                     <div className="sidebar-plan-status">
                       <strong>Pro Plan – Active</strong>
                       {isLifetime ? (
-                        <span>Lifetime Access</span>
+                        <span>Lifetime Pro</span>
                       ) : (
-                        renewDate && <span>Renews on {renewDate}</span>
+                        activeUntil && <span>Active until {activeUntil}</span>
                       )}
                     </div>
                   </div>

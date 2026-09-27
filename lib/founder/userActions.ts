@@ -5,7 +5,7 @@
  */
 
 import type { SendResult, TransactionalMessage } from '@/lib/email/resend'
-import { renderComplimentaryProEmail } from '@/lib/email/complimentaryProTemplate'
+import { renderComplimentaryProEmail } from '@/lib/email/proEmails'
 import { getFirstName } from '@/lib/email/campaignTemplate'
 import { isValidMarketingEmail } from '@/lib/email/marketingAudience'
 import { formatFullDate } from '@/lib/founder/format'
@@ -102,7 +102,7 @@ export async function grantComplimentaryPro(
   const to = normalizeEmail(account.email)
   if (!isValidMarketingEmail(to)) return { ok: true, warning: true, message: `${granted} No valid email on file, so no notification was sent.` }
 
-  const email = renderComplimentaryProEmail({ firstName: getFirstName(account.nickname, account.full_name), validUntil })
+  const email = renderComplimentaryProEmail({ firstName: getFirstName(account.nickname, account.full_name), validUntil: row.current_period_end })
   const sent = await deps.mail({ to, ...email }, `complimentary-pro-${account.id}-${row.current_period_start}`)
   if (!sent.ok) {
     console.error(`[founder-users] complimentary Pro email failed: ${sent.error}`)
