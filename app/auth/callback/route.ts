@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legalVersions'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { postAuthPath } from '@/lib/founderDashboardAuth'
 import { sendWelcomeEmail } from '@/lib/welcomeEmail'
 
 /**
@@ -82,6 +83,7 @@ export async function GET(request: Request) {
   }
 
   if (data?.session?.user?.id) {
+    response.headers.set('location', new URL(postAuthPath(data.session.user, process.env.FOUNDER_EMAIL), baseUrl).toString())
     const userId = data.session.user.id
     // Use admin client so we're not subject to RLS/session timing; profile may have just been created by trigger.
     let profile: ProfileRow | null = null

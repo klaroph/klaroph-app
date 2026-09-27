@@ -1,5 +1,5 @@
 /**
- * Server-only Resend delivery for marketing campaigns.
+ * Server-only Resend delivery for marketing campaigns and founder support replies.
  * RESEND_API_KEY must never be read by client code, prefixed NEXT_PUBLIC_, or logged.
  */
 
@@ -25,6 +25,10 @@ export type CampaignMessage = {
 }
 
 export type BatchSendResult = { ok: true; ids: string[] } | { ok: false; error: string }
+
+export type TransactionalMessage = { to: string; subject: string; html: string; text: string }
+
+export type SendResult = { ok: true; id: string } | { ok: false; error: string }
 
 export function getResendConfig(env: Record<string, string | undefined> = process.env): ResendConfigResult {
   const apiKey = env.RESEND_API_KEY?.trim()
@@ -54,6 +58,22 @@ export async function sendCampaignBatch(
     )
     if (error) return { ok: false, error: error.message || 'Resend rejected the batch.' }
     return { ok: true, ids: data?.data.map((d) => d.id) ?? [] }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Resend request failed.' }
+  }
+}
+
+/** Sends one transactional email. A retry with the same idempotency key is a no-op on Resend's side. */
+export async function sendTransactionalEmail(
+  config: ResendConfig,
+  message: TransactionalMessage,
+  idempotencyKey: string
+): Promise<SendResult> {
+  try {
+    const resend = new Resend(config.apiKey)
+    const { data, error } = await resend.emails.send({ from: config.from, ...message }, { idempotencyKey })
+    if (error || !data?.id) return { ok: false, error: error?.message || 'Resend rejected the email.' }
+    return { ok: true, id: data.id }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Resend request failed.' }
   }

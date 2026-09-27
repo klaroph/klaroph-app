@@ -36,7 +36,7 @@ export type CampaignRenderContext = {
 
 export type RenderedCampaignEmail = { subject: string; html: string; text: string }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

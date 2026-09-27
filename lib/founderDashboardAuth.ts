@@ -39,3 +39,11 @@ export function isFounderUser(
   if (!expected || !email || !user?.email_confirmed_at) return false
   return timingSafeEqual(digest(email), digest(expected))
 }
+
+/** Where a verified session lands after sign-in: the founder in Mission Control, everyone else on their dashboard. */
+export function postAuthPath(
+  user: { email?: string | null; email_confirmed_at?: string | null } | null | undefined,
+  founderEmail: string | undefined | null
+): '/admin/founder' | '/dashboard' {
+  return isFounderUser(user, founderEmail) ? '/admin/founder' : '/dashboard'
+}

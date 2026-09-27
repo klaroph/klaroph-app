@@ -1,12 +1,23 @@
 import Link from 'next/link'
 import type { AttentionItem, HealthSignal, HealthTone } from '@/lib/founder/metrics'
 
-export function DockHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: React.ReactNode }) {
+export function DockHeader({
+  eyebrow,
+  title,
+  subtitle,
+  meta,
+}: {
+  eyebrow: string
+  title: string
+  subtitle?: React.ReactNode
+  meta?: React.ReactNode
+}) {
   return (
     <header className="fd-header">
       <p className="fd-eyebrow">{eyebrow}</p>
       <h1 className="fd-title">{title}</h1>
       {subtitle && <p className="fd-subtitle">{subtitle}</p>}
+      {meta && <p className="fd-header-meta">{meta}</p>}
     </header>
   )
 }
@@ -104,6 +115,19 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
         )
       })}
     </ul>
+  )
+}
+
+/** Outcome of a founder action. `warning` = it succeeded but something secondary (like an email) did not. */
+export type ActionResult = { ok: boolean; message: string; warning?: boolean }
+
+export function ActionResultNote({ result }: { result: ActionResult | null }) {
+  if (!result) return null
+  const tone = !result.ok ? 'is-error' : result.warning ? 'is-warn' : 'is-ok'
+  return (
+    <p className={`fd-action-result ${tone}`} role="status">
+      {result.message}
+    </p>
   )
 }
 

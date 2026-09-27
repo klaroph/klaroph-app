@@ -283,7 +283,8 @@ export default function LandingPageClient() {
       return
     }
     setLoginPhase('welcome')
-    router.replace('/dashboard')
+    // The server (proxy) picks the landing page for a signed-in session: Mission Control for the founder, the dashboard otherwise.
+    window.location.replace('/')
   }
 
   const triggerGoogleOAuth = () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authorizeFounderDashboardRequest, isFounderUser } from './founderDashboardAuth'
+import { authorizeFounderDashboardRequest, isFounderUser, postAuthPath } from './founderDashboardAuth'
 
 describe('authorizeFounderDashboardRequest', () => {
   it('requires a configured secret — missing secret is not public access', () => {
@@ -35,5 +35,19 @@ describe('isFounderUser', () => {
     expect(isFounderUser({ email: 'someone@klaroph.com', email_confirmed_at: confirmed }, 'founder@klaroph.com')).toBe(false)
     expect(isFounderUser({ email: 'founder@klaroph.com', email_confirmed_at: null }, 'founder@klaroph.com')).toBe(false)
     expect(isFounderUser(null, 'founder@klaroph.com')).toBe(false)
+  })
+})
+
+describe('postAuthPath', () => {
+  const confirmed = '2026-01-01T00:00:00Z'
+
+  it('lands the verified founder in Mission Control', () => {
+    expect(postAuthPath({ email: 'Founder@KlaroPH.com', email_confirmed_at: confirmed }, 'founder@klaroph.com')).toBe('/admin/founder')
+  })
+
+  it('lands everyone else — including an unconfirmed founder email or an unset FOUNDER_EMAIL — on the dashboard', () => {
+    expect(postAuthPath({ email: 'user@klaroph.com', email_confirmed_at: confirmed }, 'founder@klaroph.com')).toBe('/dashboard')
+    expect(postAuthPath({ email: 'founder@klaroph.com', email_confirmed_at: null }, 'founder@klaroph.com')).toBe('/dashboard')
+    expect(postAuthPath({ email: 'founder@klaroph.com', email_confirmed_at: confirmed }, undefined)).toBe('/dashboard')
   })
 })

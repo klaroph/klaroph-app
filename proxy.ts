@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { postAuthPath } from '@/lib/founderDashboardAuth'
 
 function redirectWithCookies(request: NextRequest, pathname: string, from: NextResponse) {
   const url = request.nextUrl.clone()
@@ -51,7 +52,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && (pathname === '/' || pathname === '/login')) {
-    return redirectWithCookies(request, '/dashboard', response)
+    return redirectWithCookies(request, postAuthPath(user, process.env.FOUNDER_EMAIL), response)
   }
 
   return response

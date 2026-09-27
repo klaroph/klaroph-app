@@ -20,6 +20,10 @@ export function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString('en-PH', { timeZone: TIME_ZONE, month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+export function formatFullDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-PH', { timeZone: TIME_ZONE, month: 'long', day: 'numeric', year: 'numeric' })
+}
+
 export function formatDateTime(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('en-PH', {

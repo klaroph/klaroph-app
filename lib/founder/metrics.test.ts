@@ -6,16 +6,17 @@ import {
   campaignStatus,
   databaseHealth,
   expiringPaidPro,
-  filterUsers,
   planKind,
   summarizeAiUsage,
   summarizeCampaignSends,
+  summarizeOpenSupport,
   summarizeRevenue,
   summarizeUsers,
   type AttentionInput,
   type FounderSubscription,
   type PaymentEventRow,
 } from './metrics'
+import { filterUsers } from './userList'
 
 const NOW = new Date('2026-09-26T12:00:00Z')
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString()
@@ -94,6 +95,21 @@ describe('founder users', () => {
     expect(filterUsers(users, 'pro').map((u) => u.id)).toEqual(['a'])
     expect(filterUsers(users, 'dormant').map((u) => u.id)).toEqual(['b'])
     expect(filterUsers(users, 'all', 'A@X').map((u) => u.id)).toEqual(['a'])
+  })
+
+  it('searches display name, full name and email, composed with the segment filter', () => {
+    const [nick] = buildFounderUsers({
+      authUsers: [{ id: 'n', email: 'n@x.com', email_confirmed_at: daysAgo(1) }],
+      profiles: [{ ...profile('n', 'user', 1), nickname: 'Pau', full_name: 'Paulina Reyes' }],
+      subscriptions: [sub({ user_id: 'n', payment_provider: 'manual' })],
+      now: NOW,
+    })
+    expect(nick).toMatchObject({ name: 'Pau', fullName: 'Paulina Reyes', plan: 'complimentary', proEndsAt: daysAhead(10) })
+    const all = [...users, nick]
+    expect(filterUsers(all, 'all', 'reyes').map((u) => u.id)).toEqual(['n'])
+    expect(filterUsers(all, 'pro', 'pau').map((u) => u.id)).toEqual(['n'])
+    expect(filterUsers(all, 'free', 'pau')).toEqual([])
+    expect(filterUsers(all, 'all', '  ').map((u) => u.id)).toEqual(['b', 'a', 'n'])
   })
 
   it('never uses an email address as a display name', () => {
@@ -187,6 +203,23 @@ describe('summarizeAiUsage', () => {
   })
 })
 
+describe('summarizeOpenSupport', () => {
+  it('counts real-customer and anonymous requests only, oldest first', () => {
+    const testers = new Set(['t1'])
+    expect(
+      summarizeOpenSupport(
+        [
+          { user_id: 't1', created_at: daysAgo(30) },
+          { user_id: 'u1', created_at: daysAgo(2) },
+          { user_id: null, created_at: daysAgo(5) },
+        ],
+        testers
+      )
+    ).toEqual({ count: 2, oldestAt: daysAgo(5) })
+    expect(summarizeOpenSupport([{ user_id: 't1', created_at: daysAgo(3) }], testers)).toEqual({ count: 0, oldestAt: null })
+  })
+})
+
 describe('buildAttention', () => {
   const calm: AttentionInput = {
     now: NOW,
@@ -214,6 +247,14 @@ describe('buildAttention', () => {
     })
     expect(items.map((i) => i.id)).toEqual(['database', 'campaign-pending-c', 'failed-payments', 'support', 'kill-switch'])
     expect(items.find((i) => i.id === 'support')?.detail).toBe('Oldest waiting 5 days.')
+  })
+
+  it('links open support to the inbox and follows the live open count', () => {
+    const support = (count: number) => buildAttention({ ...calm, openSupport: { count, oldestAt: count ? daysAgo(209) : null } }).find((i) => i.id === 'support')
+    expect(support(3)).toMatchObject({ title: '3 open support requests', detail: 'Oldest waiting 209 days.', href: '/admin/founder/support' })
+    expect(support(2)?.title).toBe('2 open support requests')
+    expect(support(1)?.title).toBe('1 open support request')
+    expect(support(0)).toBeUndefined()
   })
 
   it('announces a ready draft and does not nag about the kill switch while there is something to send', () => {

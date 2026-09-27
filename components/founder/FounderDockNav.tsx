@@ -7,6 +7,7 @@ import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 const NAV = [
   { href: '/admin/founder', label: 'Overview' },
   { href: '/admin/founder/users', label: 'Users' },
+  { href: '/admin/founder/support', label: 'Support' },
   { href: '/admin/founder/marketing', label: 'Marketing' },
   { href: '/admin/founder/revenue', label: 'Revenue' },
   { href: '/admin/founder/health', label: 'Health' },

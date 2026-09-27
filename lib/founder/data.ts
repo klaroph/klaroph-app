@@ -22,6 +22,7 @@ import {
   expiringPaidPro,
   summarizeAiUsage,
   summarizeCampaignSends,
+  summarizeOpenSupport,
   summarizeRevenue,
   summarizeUsers,
   type ActivityEvent,
@@ -33,11 +34,11 @@ import {
   type CampaignStatus,
   type FounderProfile,
   type FounderSubscription,
-  type FounderUser,
   type PaymentEventRow,
   type RevenueSummary,
   type UserSummary,
 } from '@/lib/founder/metrics'
+import type { FounderUser } from '@/lib/founder/userList'
 
 const PAGE_SIZE = 1000
 const PAYMENT_FIELDS = 'payload->data->attributes->data->attributes'
@@ -179,14 +180,10 @@ export const loadFounderSnapshot = cache(async (): Promise<FounderSnapshot> => {
       if (error) throw new Error(error.message)
       return (data ?? []) as AiUsageRow[]
     }),
-    settle('Support requests', [] as { created_at: string }[], async () => {
-      const { data, error } = await supabaseAdmin
-        .from('support_requests')
-        .select('created_at')
-        .eq('status', 'open')
-        .order('created_at')
+    settle('Support requests', [] as { user_id: string | null; created_at: string }[], async () => {
+      const { data, error } = await supabaseAdmin.from('support_requests').select('user_id, created_at').eq('status', 'open')
       if (error) throw new Error(error.message)
-      return (data ?? []) as { created_at: string }[]
+      return (data ?? []) as { user_id: string | null; created_at: string }[]
     }),
     settle('Activity metrics', { activity: null, authWithoutProfile: null } as Awaited<ReturnType<typeof loadActivityMetrics>>, loadActivityMetrics),
     checkDatabase().catch(() => ({ ok: false, latencyMs: 0 })),
@@ -218,7 +215,7 @@ export const loadFounderSnapshot = cache(async (): Promise<FounderSnapshot> => {
     aiConfigured: Boolean(process.env.GEMINI_API_KEY),
   }
 
-  const openSupport = { count: support.data.length, oldestAt: support.data[0]?.created_at ?? null }
+  const openSupport = summarizeOpenSupport(support.data, new Set(users.filter((u) => u.isTester).map((u) => u.id)))
 
   return {
     now: now.toISOString(),

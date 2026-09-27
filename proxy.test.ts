@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import type { CookieMethodsServer, CookieOptions } from '@supabase/ssr'
 import { AuthApiError, AuthRetryableFetchError, AuthSessionMissingError } from '@supabase/supabase-js'
 
-type GetUserResult = { data: { user: { id: string } | null }; error: Error | null }
+type SessionUser = { id: string; email?: string; email_confirmed_at?: string | null }
+type GetUserResult = { data: { user: SessionUser | null }; error: Error | null }
 type GetUserImpl = (cookies: CookieMethodsServer) => Promise<GetUserResult>
 
 const state: { getUser: GetUserImpl } = {
@@ -31,8 +32,8 @@ function requestFor(path: string, cookie = `${AUTH_COOKIE}=old-session`) {
   return new NextRequest(`https://klaroph.test${path}`, { headers: { cookie } })
 }
 
-function validSession(): GetUserImpl {
-  return async () => ({ data: { user: USER }, error: null })
+function validSession(user: SessionUser = USER): GetUserImpl {
+  return async () => ({ data: { user }, error: null })
 }
 
 function refreshedSession(): GetUserImpl {
@@ -145,6 +146,42 @@ describe('proxy — no redirect loops', () => {
     const dashboard = await proxy(requestFor('/dashboard'))
     expect(new URL(login.headers.get('location')!).pathname).toBe('/dashboard')
     expect(dashboard.headers.get('location')).toBeNull()
+  })
+})
+
+describe('proxy — founder landing', () => {
+  const FOUNDER_EMAIL = 'founder@klaroph.test'
+  const founder: SessionUser = { id: 'founder-1', email: FOUNDER_EMAIL, email_confirmed_at: '2026-01-01T00:00:00Z' }
+
+  afterEach(() => vi.unstubAllEnvs())
+
+  it.each(['/', '/login'])('sends the verified founder from %s to Mission Control', async (path) => {
+    vi.stubEnv('FOUNDER_EMAIL', FOUNDER_EMAIL)
+    state.getUser = validSession(founder)
+    const res = await proxy(requestFor(path))
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/admin/founder')
+  })
+
+  it('sends everyone else to the dashboard, including an unconfirmed founder email', async () => {
+    vi.stubEnv('FOUNDER_EMAIL', FOUNDER_EMAIL)
+    state.getUser = validSession({ id: 'user-2', email: 'user@klaroph.test', email_confirmed_at: '2026-01-01T00:00:00Z' })
+    expect(new URL((await proxy(requestFor('/'))).headers.get('location')!).pathname).toBe('/dashboard')
+    state.getUser = validSession({ ...founder, email_confirmed_at: null })
+    expect(new URL((await proxy(requestFor('/'))).headers.get('location')!).pathname).toBe('/dashboard')
+  })
+
+  it('never redirects the founder away from /dashboard or /admin/founder (no loops)', async () => {
+    vi.stubEnv('FOUNDER_EMAIL', FOUNDER_EMAIL)
+    state.getUser = validSession(founder)
+    expect((await proxy(requestFor('/dashboard'))).headers.get('location')).toBeNull()
+    expect((await proxy(requestFor('/admin/founder'))).headers.get('location')).toBeNull()
+  })
+
+  it('ignores query parameters when deciding who is the founder', async () => {
+    vi.stubEnv('FOUNDER_EMAIL', FOUNDER_EMAIL)
+    state.getUser = validSession()
+    const res = await proxy(requestFor(`/?founder=1&email=${FOUNDER_EMAIL}&next=/admin/founder`))
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard')
   })
 })
 

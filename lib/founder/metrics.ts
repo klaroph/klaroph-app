@@ -7,6 +7,7 @@ import { normalizeSubscriptionFromRow, type SubscriptionStateRow } from '@/lib/s
 import { ACTIVE_WINDOW_DAYS } from '@/lib/email/marketingAudience'
 import { dailyLimitForPlan } from '@/lib/ai/limits'
 import { chatDailyLimitForPlan } from '@/lib/ai/chatLimits'
+import { isPro, type AccountStatus, type FounderUser, type PlanKind } from '@/lib/founder/userList'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 export const NEW_USER_DAYS = 7
@@ -41,36 +42,6 @@ export type FounderSubscription = SubscriptionStateRow & {
   plan_type: string | null
 }
 
-export type PlanKind = 'free' | 'paid' | 'lifetime' | 'complimentary'
-export type AccountStatus = 'active' | 'dormant' | 'unconfirmed' | 'banned'
-
-export type FounderUser = {
-  id: string
-  /** Null when the profile has no real name (signup can store the email as full_name). */
-  name: string | null
-  email: string
-  isTester: boolean
-  plan: PlanKind
-  planType: 'monthly' | 'annual' | null
-  proEndsAt: string | null
-  signedUpAt: string
-  lastSignInAt: string | null
-  status: AccountStatus
-  isNew: boolean
-  unsubscribed: boolean
-}
-
-export const PLAN_LABELS: Record<PlanKind, string> = {
-  free: 'Free',
-  paid: 'Pro',
-  lifetime: 'Lifetime Pro',
-  complimentary: 'Pro (complimentary)',
-}
-
-export function isPro(plan: PlanKind): boolean {
-  return plan !== 'free'
-}
-
 /** Same entitlement rule as the app (lifetime ignores period end; grace still counts as Pro). */
 export function planKind(sub: FounderSubscription | undefined, now: Date): PlanKind {
   if (!sub || !sub.plan_name || !PRO_PLAN_NAMES.has(sub.plan_name)) return 'free'
@@ -80,12 +51,13 @@ export function planKind(sub: FounderSubscription | undefined, now: Date): PlanK
   return sub.payment_provider === 'paymongo' ? 'paid' : 'complimentary'
 }
 
-function displayName(profile: FounderProfile): string | null {
-  for (const candidate of [profile.nickname, profile.full_name]) {
-    const value = candidate?.trim()
-    if (value && !value.includes('@')) return value
-  }
-  return null
+function realName(value: string | null): string | null {
+  const trimmed = value?.trim()
+  return trimmed && !trimmed.includes('@') ? trimmed : null
+}
+
+export function displayName(profile: Pick<FounderProfile, 'nickname' | 'full_name'>): string | null {
+  return realName(profile.nickname) ?? realName(profile.full_name)
 }
 
 function accountStatus(user: FounderAuthUser, now: Date): AccountStatus {
@@ -113,14 +85,18 @@ export function buildFounderUsers(input: {
     const sub = subByUser.get(profile.id)
     const plan = planKind(sub, input.now)
     const planType = sub?.plan_type === 'monthly' || sub?.plan_type === 'annual' ? sub.plan_type : null
+    const name = displayName(profile)
+    const fullName = realName(profile.full_name)
+    const timeLimited = plan === 'paid' || plan === 'complimentary'
     users.push({
       id: profile.id,
-      name: displayName(profile),
+      name,
+      fullName: fullName !== name ? fullName : null,
       email: auth.email ?? '',
       isTester: profile.user_type !== 'user',
       plan,
       planType: plan === 'paid' ? planType : null,
-      proEndsAt: plan === 'paid' ? sub?.current_period_end ?? null : null,
+      proEndsAt: timeLimited ? sub?.current_period_end ?? null : null,
       signedUpAt: profile.created_at,
       lastSignInAt: auth.last_sign_in_at ?? null,
       status: accountStatus(auth, input.now),
@@ -161,26 +137,6 @@ export function summarizeUsers(users: FounderUser[]): UserSummary {
     }
   }
   return summary
-}
-
-export const USER_FILTERS = ['all', 'free', 'pro', 'new', 'active', 'dormant', 'testers'] as const
-export type UserFilter = (typeof USER_FILTERS)[number]
-
-export function isUserFilter(value: unknown): value is UserFilter {
-  return typeof value === 'string' && (USER_FILTERS as readonly string[]).includes(value)
-}
-
-export function filterUsers(users: FounderUser[], filter: UserFilter, query = ''): FounderUser[] {
-  const q = query.trim().toLowerCase()
-  return users.filter((u) => {
-    if (filter === 'testers' ? !u.isTester : u.isTester) return false
-    if (filter === 'free' && u.plan !== 'free') return false
-    if (filter === 'pro' && !isPro(u.plan)) return false
-    if (filter === 'new' && !u.isNew) return false
-    if (filter === 'active' && u.status !== 'active') return false
-    if (filter === 'dormant' && u.status !== 'dormant') return false
-    return !q || Boolean(u.name?.toLowerCase().includes(q)) || u.email.toLowerCase().includes(q)
-  })
 }
 
 export function expiringPaidPro(users: FounderUser[], now: Date): FounderUser[] {
@@ -333,6 +289,17 @@ export function summarizeAiUsage(
 
 // ---------------------------------------------------------------- Attention
 
+/** Real customers only: tester requests stay in the Support Inbox but never count toward Attention. */
+export function summarizeOpenSupport(
+  openRequests: { user_id: string | null; created_at: string }[],
+  testerIds: ReadonlySet<string>
+): { count: number; oldestAt: string | null } {
+  const real = openRequests
+    .filter((r) => !(r.user_id && testerIds.has(r.user_id)))
+    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+  return { count: real.length, oldestAt: real[0]?.created_at ?? null }
+}
+
 export type AttentionTone = 'critical' | 'warning' | 'info'
 export type AttentionItem = { id: string; tone: AttentionTone; title: string; detail: string; href?: string }
 
@@ -382,6 +349,7 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
       tone: 'warning',
       title: `${plural(input.openSupport.count, 'open support request')}`,
       detail: days != null ? `Oldest waiting ${plural(days, 'day')}.` : 'Waiting for a reply.',
+      href: '/admin/founder/support',
     })
   }
 
