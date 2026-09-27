@@ -49,7 +49,7 @@ export function formatPaidAmount(amount: PaidAmount | null): string | null {
   }
 }
 
-/** Amount actually charged, read from a stored PayMongo payment.paid or checkout_session.payment.paid event. */
+/** Payment amount from a PayMongo payment.paid, payment.failed or checkout_session.payment.paid event. */
 export function extractPaidAmount(payload: unknown): PaidAmount | null {
   const resource = (payload as { data?: { attributes?: { data?: { attributes?: Record<string, unknown> } } } } | null)?.data
     ?.attributes?.data?.attributes

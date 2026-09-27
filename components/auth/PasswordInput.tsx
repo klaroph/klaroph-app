@@ -43,6 +43,9 @@ export type PasswordInputProps = Omit<ComponentPropsWithoutRef<'input'>, 'type'>
 
 /**
  * Password field with inline show/hide toggle. Keeps `login-input` styling; add extra classes via `className`.
+ * The toggle is out of the TAB sequence so keyboard users move field-to-field; it stays in the
+ * accessibility tree and works by pointer, touch, and screen-reader activation. Pressing it keeps
+ * focus in the field so the caret (and mobile keyboard) stay put.
  */
 export default function PasswordInput({ className, id, ...rest }: PasswordInputProps) {
   const [visible, setVisible] = useState(false)
@@ -58,7 +61,9 @@ export default function PasswordInput({ className, id, ...rest }: PasswordInputP
       />
       <button
         type="button"
+        tabIndex={-1}
         className="password-input-toggle"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => setVisible((v) => !v)}
         aria-label={toggleLabel}
         aria-pressed={visible}

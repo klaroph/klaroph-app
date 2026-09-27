@@ -172,6 +172,8 @@ export type RevenueSummary = {
   last30: RevenueTotals
   recent: RevenuePurchase[]
   failedLast7: number
+  /** processed_at of every counted payment failure (newest first). */
+  failures: string[]
   lastWebhookAt: string | null
 }
 
@@ -185,16 +187,30 @@ function addTo(totals: RevenueTotals, e: PaymentEventRow) {
   totals.count++
 }
 
+/** A live payment failure counts unless it belongs to a known tester account (unknown payers still count). */
+export function isCountedPaymentFailure(
+  e: { livemode: string | boolean | null; user_id: string | null },
+  testerIds: ReadonlySet<string>
+): boolean {
+  return String(e.livemode) === 'true' && !(e.user_id && testerIds.has(e.user_id))
+}
+
 /**
  * Collected revenue = live PayMongo payment.paid events for KlaroPH Pro, paid by real
  * (non-tester) accounts. Test-mode events and founder test payments are excluded.
  */
-export function summarizeRevenue(events: PaymentEventRow[], realUserIds: ReadonlySet<string>, now: Date): RevenueSummary {
+export function summarizeRevenue(
+  events: PaymentEventRow[],
+  realUserIds: ReadonlySet<string>,
+  testerIds: ReadonlySet<string>,
+  now: Date
+): RevenueSummary {
   const summary: RevenueSummary = {
     allTime: emptyTotals(),
     last30: emptyTotals(),
     recent: [],
     failedLast7: 0,
+    failures: [],
     lastWebhookAt: null,
   }
   const since30 = now.getTime() - REVENUE_WINDOW_DAYS * DAY_MS
@@ -204,7 +220,10 @@ export function summarizeRevenue(events: PaymentEventRow[], realUserIds: Readonl
     const at = Date.parse(e.processed_at)
     if (!summary.lastWebhookAt || at > Date.parse(summary.lastWebhookAt)) summary.lastWebhookAt = e.processed_at
     if (e.livemode !== 'true') continue
-    if (e.event_type === 'payment.failed' && at >= since7) summary.failedLast7++
+    if (e.event_type === 'payment.failed' && isCountedPaymentFailure(e, testerIds)) {
+      summary.failures.push(e.processed_at)
+      if (at >= since7) summary.failedLast7++
+    }
     if (e.event_type !== 'payment.paid' || e.plan !== 'pro' || !e.user_id || !realUserIds.has(e.user_id)) continue
 
     addTo(summary.allTime, e)
@@ -218,6 +237,7 @@ export function summarizeRevenue(events: PaymentEventRow[], realUserIds: Readonl
   }
 
   summary.recent.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+  summary.failures.sort((a, b) => Date.parse(b) - Date.parse(a))
   return summary
 }
 
@@ -337,7 +357,7 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
   }
 
   if (input.failedPaymentsLast7 > 0) {
-    items.push({ id: 'failed-payments', tone: 'warning', title: `${plural(input.failedPaymentsLast7, 'failed payment')} this week`, detail: 'Live PayMongo payment.failed events in the last 7 days.', href: '/admin/founder/revenue' })
+    items.push({ id: 'failed-payments', tone: 'warning', title: `${plural(input.failedPaymentsLast7, 'failed payment')} this week`, detail: 'Live PayMongo payment.failed events in the last 7 days (tester accounts excluded).', href: '/admin/founder/revenue' })
   }
 
   if (input.openSupport.count > 0) {

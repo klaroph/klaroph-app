@@ -3,6 +3,7 @@
  * Required event subscriptions in PayMongo Dashboard:
  * - checkout_session.payment.paid (redirect checkout)
  * - payment.paid (QRPH / payment intent flow) — see https://developers.paymongo.com/docs/qr-ph-api
+ * - payment.failed (founder payment-failed alert only; no access changes)
  */
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -12,6 +13,8 @@ import { runClaimedWebhookHandler } from '@/lib/paymentEventIdempotency'
 import { sendPremiumConfirmationIfNew } from '@/lib/premiumConfirmationEmail'
 import { tryIncrementVoucherUsedCountFromMetadata } from '@/lib/voucherWebhookIncrement'
 import { FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
+import { extractPaidAmount } from '@/lib/email/proEmails'
+import { notifyFounderOfPayment } from '@/lib/founder/alertsServer'
 
 type WebhookEvent = {
   data: {
@@ -116,7 +119,7 @@ export async function POST(request: Request) {
             break
 
           case 'payment.failed':
-            console.warn('[Webhook] payment.failed event_id=', eventId)
+            await handlePaymentFailed(event)
             break
 
           default:
@@ -326,6 +329,55 @@ async function handlePaymentPaid(event: WebhookEvent) {
   } catch {
     // Email failure must never block payment fulfillment
   }
+
+  try {
+    await notifyFounderOfPayment({
+      kind: 'paid',
+      eventId: event.data.id,
+      livemode: event.data.attributes.livemode === true,
+      userId,
+      planLabel: isFounderLifetime ? 'Lifetime' : planType === 'annual' ? 'Annual' : 'Monthly',
+      amount: extractPaidAmount(event),
+      reason: null,
+      occurredAt: eventTime(event),
+    })
+  } catch {
+    // Founder alert failure must never block payment fulfillment
+  }
+}
+
+/**
+ * payment.failed: no access changes. Alerts the founder using the payment's own metadata —
+ * the same attribution the Founder Dock uses for failed-payment counts.
+ */
+async function handlePaymentFailed(event: WebhookEvent) {
+  const paymentData = event.data.attributes.data
+  console.warn('[Webhook] payment.failed event_id=', event.data.id)
+  if (paymentData.type !== 'payment') return
+
+  const attrs = paymentData.attributes
+  const metadata = (attrs.metadata ?? {}) as Record<string, string>
+  const planType = metadata.plan === 'pro' ? metadata.plan_type : undefined
+
+  try {
+    await notifyFounderOfPayment({
+      kind: 'failed',
+      eventId: event.data.id,
+      livemode: event.data.attributes.livemode === true,
+      userId: metadata.user_id ?? null,
+      planLabel: planType === 'annual' ? 'Annual' : planType === 'monthly' ? 'Monthly' : null,
+      amount: extractPaidAmount(event),
+      reason: (attrs.failed_message ?? attrs.failed_code ?? null) as string | null,
+      occurredAt: eventTime(event),
+    })
+  } catch {
+    // Founder alert failure must never fail webhook processing
+  }
+}
+
+function eventTime(event: WebhookEvent): string {
+  const seconds = event.data.attributes.created_at
+  return new Date(Number.isFinite(seconds) ? seconds * 1000 : Date.now()).toISOString()
 }
 
 async function handleSubscriptionActivated(event: WebhookEvent) {

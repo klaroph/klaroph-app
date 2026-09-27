@@ -632,17 +632,7 @@ export default function LandingPageClient() {
                 />
               </div>
               <div>
-                <div className="login-field-label-row">
-                  <label htmlFor="login-password" className="login-field-label">Password</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotPasswordModal(true)}
-                    className="login-forgot-link"
-                    aria-label="Reset your password"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
+                <label htmlFor="login-password" className="login-field-label">Password</label>
                 <PasswordInput
                   id="login-password"
                   placeholder="••••••••"
@@ -664,6 +654,14 @@ export default function LandingPageClient() {
               )}
               <button type="submit" disabled={loginPhase !== 'idle'} className="login-btn-primary">
                 {loginPhase !== 'idle' ? 'Signing in...' : 'Sign in'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowForgotPasswordModal(true)}
+                className="login-forgot-link"
+                aria-label="Reset your password"
+              >
+                Forgot password?
               </button>
             </form>
 

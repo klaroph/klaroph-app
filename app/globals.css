@@ -2413,15 +2413,6 @@ select:focus-visible {
   font-weight: 500;
   color: var(--text-primary);
 }
-.login-field-label-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.login-field-label-row .login-field-label {
-  margin-bottom: 0;
-}
 .login-alert {
   margin: 0;
   padding: 12px;
@@ -2486,6 +2477,8 @@ select:focus-visible {
 }
 
 .login-forgot-link {
+  align-self: center;
+  margin-top: -8px;
   padding: 0;
   border: none;
   background: none;

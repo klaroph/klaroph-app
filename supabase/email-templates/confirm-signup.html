@@ -1,52 +1,63 @@
 <!--
-  Supabase: Confirm sign up (Manual Create / Email signup)
-  Paste this into: Dashboard → Authentication → Email Templates → Confirm sign up → Body (Source)
-  Subject suggestion: "Confirm your KlaroPH signup"
-  Style: Google-like — clean, minimal, one primary CTA.
-  Variables: {{ .ConfirmationURL }} (required), {{ .SiteURL }}, {{ .Email }}
+  Supabase: Confirm sign up (Email signup)
+  Paste into: Dashboard → Authentication → Email Templates → Confirm sign up → Body (Source)
+  Subject: Confirm your email for KlaroPH
+  Style: KlaroPH V2 transactional family (matches lib/email/transactionalLayout.ts).
+  Variables: {{ .ConfirmationURL }} (required), {{ .Email }}
 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Confirm your signup</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="x-apple-disable-message-reformatting">
+<title>Confirm your email</title>
 </head>
-<body style="margin:0; padding:0; background-color:#f8f9fa; font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #202124;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa; padding: 40px 20px;">
+<body style="margin:0; padding:0; background-color:#eef5ff; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-text-size-adjust:100%;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">One quick step and your KlaroPH account is ready.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef5ff;">
     <tr>
-      <td align="center">
-        <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 480px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+      <td align="center" style="padding:32px 12px 40px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%; max-width:600px;">
           <tr>
-            <td align="center" style="padding: 40px 40px 24px 40px;">
-              <img src="{{ .SiteURL }}/logo-klaroph-blue.png" alt="KlaroPH" width="112" height="auto" style="display:block; max-width:112px; height:auto;" />
+            <td align="center" style="padding:0 0 22px;">
+              <a href="https://klaroph.com" style="text-decoration:none;"><img src="https://klaroph.com/logo-klaroph-blue.png" alt="KlaroPH" width="132" style="display:block; width:132px; max-width:132px; height:auto; border:0;" /></a>
             </td>
           </tr>
           <tr>
-            <td style="padding: 0 40px 24px 40px;">
-              <h1 style="margin:0 0 8px; font-size: 24px; font-weight: 400; color: #202124; letter-spacing: -0.5px;">Confirm your email address</h1>
-              <p style="margin:0; font-size: 15px; color: #5f6368;">You signed up for KlaroPH with {{ .Email }}. Click the button below to confirm and get started.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 0 40px 32px 40px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+            <td style="background-color:#ffffff; border:1px solid #dfeafc; border-radius:16px; box-shadow:0 1px 3px rgba(11,31,77,0.06); padding:36px 28px 32px;">
+              <p style="margin:0 0 10px; font-size:12px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#0038A8;">Account</p>
+              <h1 style="margin:0 0 20px; font-size:26px; line-height:1.25; font-weight:800; color:#0b1f4d;">Confirm your email</h1>
+              <p style="margin:0 0 12px; font-size:16px; line-height:1.6; color:#334155;">Welcome to KlaroPH!</p>
+              <p style="margin:0 0 24px; font-size:16px; line-height:1.6; color:#334155;">You signed up with <strong style="color:#0b1f4d;">{{ .Email }}</strong>. Confirm your email and you&rsquo;re ready to start building clearer money habits.</p>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
-                  <td style="border-radius: 4px; background-color: #1a73e8;">
-                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display: inline-block; padding: 10px 24px; font-size: 14px; font-weight: 500; color: #ffffff; text-decoration: none;">Confirm email address</a>
+                  <td style="border-radius:10px; background-color:#FCD116;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block; padding:14px 28px; border-radius:10px; font-size:16px; font-weight:700; color:#0b1f4d; text-decoration:none;">Confirm your email</a>
                   </td>
                 </tr>
               </table>
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; background-color:#f5f9ff; border:1px solid #dfeafc; border-radius:12px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 8px; font-size:14px; line-height:1.5; color:#334155;">Button not working? Copy and paste this link into your browser:</p>
+                    <p style="margin:0; font-size:13px; line-height:1.5; word-break:break-all;"><a href="{{ .ConfirmationURL }}" target="_blank" style="color:#0038A8;">{{ .ConfirmationURL }}</a></p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0; font-size:14px; line-height:1.55; color:#64748b;">If you didn&rsquo;t create a KlaroPH account, you can safely ignore this email.</p>
             </td>
           </tr>
           <tr>
-            <td style="padding: 0 40px 32px 40px; border-top: 1px solid #e8eaed;">
-              <p style="margin:0; font-size: 12px; color: #5f6368; line-height: 1.5;">If you didn’t create a KlaroPH account, you can ignore this email.</p>
-              <p style="margin:12px 0 0; font-size: 12px; color: #5f6368; word-break: break-all;">Or copy this link: <a href="{{ .ConfirmationURL }}" style="color: #1a73e8;">{{ .ConfirmationURL }}</a></p>
+            <td align="center" style="padding:24px 16px 0;">
+              <p style="margin:0 0 8px; font-size:13px; line-height:1.5; color:#64748b;"><strong style="color:#0b1f4d;">KlaroPH</strong> &middot; Clearer money habits start here. &middot; <a href="https://klaroph.com" style="color:#0038A8; text-decoration:none;">klaroph.com</a></p>
+              <p style="margin:0; font-size:12px; line-height:1.5; color:#64748b;">You&rsquo;re receiving this because this email was used to sign up for KlaroPH.</p>
             </td>
           </tr>
         </table>
-        <p style="margin:24px 0 0; font-size: 12px; color: #5f6368;">— KlaroPH · Clearer money habits start here</p>
       </td>
     </tr>
   </table>

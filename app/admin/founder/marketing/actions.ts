@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { getFounderUser } from '@/lib/founder/access'
 import { getMarketingCampaign, type MarketingCampaign } from '@/lib/email/campaigns'
 import { sendCampaignLive, sendCampaignTest, type CampaignActionResult } from '@/lib/email/campaignActions'
-import { sendProEmailSample } from '@/lib/email/proEmailSamples'
+import { sendEmailSample } from '@/lib/email/emailSamples'
 import { getResendConfig, sendTransactionalEmail } from '@/lib/email/resend'
 
 export type CampaignActionState = { ok: boolean; message: string }
@@ -32,11 +32,11 @@ export async function sendTestEmailAction(campaignId: string): Promise<CampaignA
 }
 
 /** The browser picks only which sample; content is fixture data and the recipient is the configured test inbox. */
-export async function sendProEmailSampleAction(kind: string): Promise<CampaignActionState> {
+export async function sendEmailSampleAction(kind: string): Promise<CampaignActionState> {
   if (!(await getFounderUser())) return { ok: false, message: 'Not authorized.' }
   const config = getResendConfig()
   if (!config.ok) return { ok: false, message: config.error }
-  const result = await sendProEmailSample(
+  const result = await sendEmailSample(
     {
       recipient: process.env.MARKETING_TEST_EMAIL,
       send: (message, key) => sendTransactionalEmail(config.config, message, key),

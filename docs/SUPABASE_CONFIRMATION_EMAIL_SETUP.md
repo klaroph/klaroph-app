@@ -43,4 +43,4 @@ The “Confirm sign up” body is in:
 
 `supabase/email-templates/confirm-signup.html`
 
-Paste it in: **Authentication** → **Email Templates** → **Confirm sign up** → **Body** (Source). Set **Subject** to e.g. `Confirm your email for KlaroPH`. The logo loads from `{{ .SiteURL }}/logo-klaroph-blue.png`; ensure **Site URL** is correct and the image is available at that path.
+Paste it in: **Authentication** → **Email Templates** → **Confirm sign up** → **Body** (Source). Set **Subject** to `Confirm your email for KlaroPH`. The logo loads from `https://klaroph.com/logo-klaroph-blue.png`, the same asset the other transactional emails use.

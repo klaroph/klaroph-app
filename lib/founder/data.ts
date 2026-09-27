@@ -191,7 +191,8 @@ export const loadFounderSnapshot = cache(async (): Promise<FounderSnapshot> => {
 
   const users = buildFounderUsers({ authUsers: authUsers.data, profiles: profiles.data, subscriptions: subscriptions.data, now })
   const realUserIds = new Set(users.filter((u) => !u.isTester).map((u) => u.id))
-  const revenue = summarizeRevenue(payments.data, realUserIds, now)
+  const testerIds = new Set(users.filter((u) => u.isTester).map((u) => u.id))
+  const revenue = summarizeRevenue(payments.data, realUserIds, testerIds, now)
   const expiringPro = expiringPaidPro(users, now)
 
   const campaigns: FounderCampaign[] = listMarketingCampaigns().map((c) => {
@@ -215,7 +216,7 @@ export const loadFounderSnapshot = cache(async (): Promise<FounderSnapshot> => {
     aiConfigured: Boolean(process.env.GEMINI_API_KEY),
   }
 
-  const openSupport = summarizeOpenSupport(support.data, new Set(users.filter((u) => u.isTester).map((u) => u.id)))
+  const openSupport = summarizeOpenSupport(support.data, testerIds)
 
   return {
     now: now.toISOString(),

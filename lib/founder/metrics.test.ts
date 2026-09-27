@@ -155,13 +155,31 @@ describe('summarizeRevenue', () => {
         event({ event_type: 'payment.failed', processed_at: daysAgo(10) }),
       ],
       new Set(['real']),
+      new Set(['tester']),
       NOW
     )
     expect(summary.allTime).toEqual({ gross: 1098, net: 1077.5, fees: 20.5, count: 2 })
     expect(summary.last30).toEqual({ gross: 99, net: 97.5, fees: 1.5, count: 1 })
     expect(summary.failedLast7).toBe(1)
+    expect(summary.failures).toEqual([daysAgo(2), daysAgo(10)])
     expect(summary.recent.map((p) => p.planType)).toEqual(['monthly', 'annual'])
     expect(summary.lastWebhookAt).toBe(daysAgo(1))
+  })
+
+  it('counts live failures from real or unknown payers but not testers or test mode', () => {
+    const summary = summarizeRevenue(
+      [
+        event({ event_type: 'payment.failed', user_id: 'real' }),
+        event({ event_type: 'payment.failed', user_id: null }),
+        event({ event_type: 'payment.failed', user_id: 'tester' }),
+        event({ event_type: 'payment.failed', livemode: 'false' }),
+      ],
+      new Set(['real']),
+      new Set(['tester']),
+      NOW
+    )
+    expect(summary.failedLast7).toBe(2)
+    expect(summary.failures).toHaveLength(2)
   })
 })
 

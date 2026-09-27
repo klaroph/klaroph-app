@@ -1,15 +1,19 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { sendProEmailSampleAction } from '@/app/admin/founder/marketing/actions'
+import { sendEmailSampleAction } from '@/app/admin/founder/marketing/actions'
 import { ActionResultNote, type ActionResult } from '@/components/founder/DockUI'
 
 const SAMPLES = [
-  { kind: 'paid', label: 'Send paid Pro sample' },
-  { kind: 'complimentary', label: 'Send complimentary Pro sample' },
+  { kind: 'paid', label: 'Paid Pro' },
+  { kind: 'complimentary', label: 'Complimentary Pro' },
+  { kind: 'founder-report', label: 'Founder report' },
+  { kind: 'support-alert', label: 'Support alert' },
+  { kind: 'payment-received', label: 'Payment received' },
+  { kind: 'payment-failed', label: 'Payment failed' },
 ] as const
 
-export default function ProEmailSamples({ testEmailConfigured }: { testEmailConfigured: boolean }) {
+export default function EmailSamples({ testEmailConfigured }: { testEmailConfigured: boolean }) {
   const [pending, startTransition] = useTransition()
   const [result, setResult] = useState<ActionResult | null>(null)
 
@@ -26,7 +30,7 @@ export default function ProEmailSamples({ testEmailConfigured }: { testEmailConf
             onClick={() =>
               startTransition(async () => {
                 setResult(null)
-                setResult(await sendProEmailSampleAction(sample.kind))
+                setResult(await sendEmailSampleAction(sample.kind))
               })
             }
           >

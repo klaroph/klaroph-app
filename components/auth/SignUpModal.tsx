@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabasePublic } from '@/lib/supabasePublicClient'
 import PasswordInput from '@/components/auth/PasswordInput'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -24,6 +25,9 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
+  useDialogFocus(dialogRef, emailRef, isOpen)
 
   const emailValid = email.trim() !== '' && isValidEmail(email)
   const passwordValid = password.length >= MIN_PASSWORD_LENGTH
@@ -149,7 +153,7 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
 
   const content = success ? (
     <div className="signup-success">
-      <h3 className="signup-success-title">Check your email</h3>
+      <h3 id="signup-success-title" className="signup-success-title">Check your email</h3>
       <p className="signup-success-message">
         We&apos;ve sent a confirmation link to your email address. Please verify your account before signing in.
       </p>
@@ -164,6 +168,7 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
         <div>
           <label htmlFor="signup-email" className="login-field-label">Email</label>
           <input
+            ref={emailRef}
             id="signup-email"
             type="email"
             value={email}
@@ -250,10 +255,10 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
       className="consent-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-labelledby={success ? undefined : 'signup-modal-title'}
+      aria-labelledby={success ? 'signup-success-title' : 'signup-modal-title'}
       onClick={handleClose}
     >
-      <div className="consent-modal signup-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} className="consent-modal signup-modal" onClick={(e) => e.stopPropagation()}>
         {!success && (
           <button
             type="button"

@@ -5,8 +5,8 @@ function digest(value: string): Buffer {
 }
 
 /**
- * Founder metrics use the service role. Require a configured shared secret
- * and a matching Bearer token. Never treat a missing secret as public access.
+ * Server-to-server Bearer check for service-role endpoints (founder metrics, Vercel Cron).
+ * Requires a configured shared secret and a matching token. Never treat a missing secret as public access.
  */
 export function authorizeFounderDashboardRequest(
   authorizationHeader: string | null | undefined,
