@@ -384,7 +384,7 @@ export default function ExpensesPage() {
         title="Expenses"
         description="Understand where your money goes."
         actions={
-          <div className="income-expenses-page-header-actions">
+          <div className="klaro-header-toolbar">
             {isPro ? (
               <button
                 type="button"

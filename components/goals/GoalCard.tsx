@@ -56,6 +56,7 @@ type GoalCardProps = {
   goal?: GoalForActions
   onEdit?: (goal: GoalForActions) => void
   onDelete?: (goal: GoalForActions) => void
+  onManageAllocations?: (goal: GoalForActions) => void
 }
 
 export default function GoalCard({
@@ -67,11 +68,13 @@ export default function GoalCard({
   goal,
   onEdit,
   onDelete,
+  onManageAllocations,
 }: GoalCardProps) {
   const pct = targetAmount > 0 ? Math.min(100, (allocatedAmount / targetAmount) * 100) : 0
   const isComplete = pct >= 100
   const iconKey = getIconKeyForGoalName(name)
-  const canAct = goal && (onEdit || onDelete)
+  const showAllocations = Boolean(onManageAllocations) && allocatedAmount > 0
+  const canAct = goal && (onEdit || onDelete || showAllocations)
 
   return (
     <article
@@ -116,6 +119,16 @@ export default function GoalCard({
           </span>
           {canAct && (
             <div className="goal-card-premium-actions">
+              {showAllocations && (
+                <button
+                  type="button"
+                  className="goal-card-premium-btn goal-card-premium-btn-edit"
+                  onClick={() => onManageAllocations?.(goal)}
+                  aria-label={`View allocations for ${name}`}
+                >
+                  Allocations
+                </button>
+              )}
               {onEdit && (
                 <button
                   type="button"

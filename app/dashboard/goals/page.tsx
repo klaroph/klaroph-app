@@ -6,6 +6,8 @@ import GoalMomentumHero from '../../../components/goals/GoalMomentumHero'
 import NewGoalModal from '../../../components/dashboard/NewGoalModal'
 import type { GoalForEdit } from '../../../components/dashboard/NewGoalModal'
 import AllocateToGoalModal from '../../../components/goals/AllocateToGoalModal'
+import GoalAllocationsModal from '../../../components/goals/GoalAllocationsModal'
+import type { GoalForActions } from '../../../components/goals/GoalList'
 import UpgradeCTA from '../../../components/ui/UpgradeCTA'
 import PremiumBadge from '../../../components/ui/PremiumBadge'
 import { useSubscription } from '@/contexts/SubscriptionContext'
@@ -20,6 +22,7 @@ export default function GoalsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [allocateOpen, setAllocateOpen] = useState(false)
   const [editingGoal, setEditingGoal] = useState<GoalForEdit | null>(null)
+  const [allocationsGoal, setAllocationsGoal] = useState<GoalForActions | null>(null)
   const goalsData = useGoalsData(refreshTrigger)
   const goalCount = goalsData.goals.length
   const momentumSummary = goalsData.summary
@@ -56,6 +59,12 @@ export default function GoalsPage() {
     return () => cancelAnimationFrame(frame)
   }, [atLimit])
 
+  /** Goal totals are derived from allocation rows, so any allocation change re-reads them. */
+  const refreshGoals = () => {
+    setRefreshTrigger((n) => n + 1)
+    dispatchDashboardGoalsRefresh()
+  }
+
   const handleGoalCreated = () => {
     setModalOpen(false)
     setEditingGoal(null)
@@ -75,16 +84,15 @@ export default function GoalsPage() {
       alert((data?.error as string) ?? 'Could not delete goal.')
       return
     }
-    setRefreshTrigger((n) => n + 1)
-    dispatchDashboardGoalsRefresh()
+    refreshGoals()
   }
 
   const headerActions = (
-    <>
+    <div className="klaro-header-toolbar">
       {goalCount > 0 && (
         <button
           type="button"
-          className="btn-secondary header-add-btn-desktop-only"
+          className="btn-secondary"
           onClick={() => setAllocateOpen(true)}
         >
           Allocate to goal
@@ -106,7 +114,7 @@ export default function GoalsPage() {
       ) : (
         <button
           type="button"
-          className="btn-primary header-add-btn-desktop-only"
+          className="btn-primary"
           onClick={() => {
             setEditingGoal(null)
             setModalOpen(true)
@@ -115,7 +123,7 @@ export default function GoalsPage() {
           + Add Goal
         </button>
       )}
-    </>
+    </div>
   )
 
   return (
@@ -164,6 +172,7 @@ export default function GoalsPage() {
             error={goalsData.error}
             onEdit={handleEditGoal}
             onDelete={handleDeleteGoal}
+            onManageAllocations={setAllocationsGoal}
             onAddClick={
               atLimit
                 ? undefined
@@ -186,11 +195,17 @@ export default function GoalsPage() {
       <AllocateToGoalModal
         isOpen={allocateOpen}
         onClose={() => setAllocateOpen(false)}
-        onSaved={() => {
-          setRefreshTrigger((n) => n + 1)
-          dispatchDashboardGoalsRefresh()
-        }}
+        onSaved={refreshGoals}
       />
+
+      {allocationsGoal && (
+        <GoalAllocationsModal
+          key={allocationsGoal.id}
+          goal={allocationsGoal}
+          onClose={() => setAllocationsGoal(null)}
+          onChanged={refreshGoals}
+        />
+      )}
     </div>
   )
 }

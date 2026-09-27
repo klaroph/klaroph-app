@@ -4677,41 +4677,32 @@ html { scroll-behavior: smooth; }
   margin-bottom: var(--space-3);
 }
 
-/* Toolbar under title block on small screens: tidy grid, no overlap with scaled logo */
+/* Page toolbar (Income / Expenses / Goals): tidy two-up grid under the title on small screens */
 @media (max-width: 1023px) {
-  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions,
-  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions {
+  .page-header .klaro-header-toolbar {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
     align-items: stretch;
+    width: 100%;
     margin-top: 2px;
   }
 
-  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions > *,
-  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions > * {
+  .page-header .klaro-header-toolbar > * {
+    width: 100%;
     min-width: 0;
+    box-sizing: border-box;
     justify-content: center;
     text-align: center;
   }
 
-  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions .btn-secondary,
-  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions .btn-secondary {
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions .premium-btn-disabled,
-  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions .premium-btn-disabled {
-    width: 100%;
-    justify-content: center;
-    box-sizing: border-box;
+  .page-header .klaro-header-toolbar > :only-child {
+    grid-column: 1 / -1;
   }
 }
 
 @media (min-width: 1024px) {
-  .income-page .page-header.dashboard-page-header .income-expenses-page-header-actions,
-  .expenses-page .page-header.dashboard-page-header .income-expenses-page-header-actions {
+  .page-header .klaro-header-toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -4731,7 +4722,7 @@ html { scroll-behavior: smooth; }
   }
 }
 
-/* Add Income / Add Expense / Add Goal buttons — hidden on mobile (use FAB instead) */
+/* Add Income / Add Expense buttons — hidden on mobile (use FAB instead) */
 @media (max-width: 1279px) {
   .header-add-btn-desktop-only {
     display: none !important;
@@ -5490,6 +5481,100 @@ html { scroll-behavior: smooth; }
   border-color: transparent;
 }
 
+/* Goal allocations modal */
+.goal-alloc-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 var(--space-3);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.goal-alloc-total strong {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.goal-alloc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.goal-alloc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: 8px 12px;
+}
+
+.goal-alloc-row + .goal-alloc-row {
+  border-top: 1px solid var(--border-soft);
+}
+
+.goal-alloc-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.goal-alloc-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.goal-alloc-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.goal-alloc-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.goal-alloc-edit .klaro-field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.goal-alloc-error {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--color-danger, #be123c);
+}
+
+.goal-alloc-confirm-title {
+  margin: 0 0 var(--space-2);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.goal-alloc-confirm-copy {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.goal-alloc-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: var(--space-5);
+}
+
 /* Goals page: limit banner & add button */
 .goals-page-limit-banner {
   margin-bottom: var(--space-5);
@@ -5544,11 +5629,6 @@ html { scroll-behavior: smooth; }
   .goals-page .goals-page-cards-wrap .dash-card-header {
     flex-wrap: wrap;
     gap: var(--space-2);
-  }
-
-  .goals-page .goals-page-add-disabled {
-    width: 100%;
-    justify-content: center;
   }
 }
 

@@ -330,7 +330,7 @@ export default function IncomePage() {
         title="Income"
         description="Track where your money comes from."
         actions={
-          <div className="income-expenses-page-header-actions">
+          <div className="klaro-header-toolbar">
             {isPro ? (
               <button
                 type="button"

@@ -19,6 +19,7 @@ type GoalListProps = {
   error: string | null
   onEdit?: (goal: GoalForActions) => void
   onDelete?: (goal: GoalForActions) => void
+  onManageAllocations?: (goal: GoalForActions) => void
   onAddClick?: () => void
 }
 
@@ -30,6 +31,7 @@ export default function GoalList({
   error,
   onEdit,
   onDelete,
+  onManageAllocations,
   onAddClick,
 }: GoalListProps) {
   if (loading) {
@@ -68,6 +70,7 @@ export default function GoalList({
             goal={goalForActions}
             onEdit={onEdit}
             onDelete={onDelete}
+            onManageAllocations={onManageAllocations}
           />
         )
       })}
