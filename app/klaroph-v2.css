@@ -155,7 +155,7 @@
 /* Snapshot strip */
 .dash-stat-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-3);
   width: 100%;
   margin-bottom: var(--space-5);
@@ -164,7 +164,8 @@
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-4);
+  /* Extra bottom padding holds the Net Flow note and goals bar without shifting values. */
+  padding: var(--space-4) var(--space-4) 22px;
   background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
@@ -185,6 +186,7 @@
 .dash-stat-card--income { --tone: var(--pastel-sky); --tone-ink: var(--color-primary); }
 .dash-stat-card--expense { --tone: var(--pastel-coral); --tone-ink: #be123c; }
 .dash-stat-card--net { --tone: var(--pastel-lavender); --tone-ink: #6d28d9; }
+.dash-stat-card--left { --tone: var(--pastel-mint); --tone-ink: #047857; }
 .dash-stat-card--goals { --tone: var(--pastel-peach); --tone-ink: #b45309; }
 .dash-stat-body { position: relative; min-width: 0; flex: 1; }
 .dash-stat-label {
@@ -203,7 +205,22 @@
 }
 .dash-stat-value--neg { color: #be123c; }
 .dash-stat-value--pos { color: var(--color-success); }
-/* Goals bar hangs in the card's bottom padding so all four cards keep the same title/value block. */
+/* Hangs in the card's bottom padding so every card keeps the same title/value block. */
+.dash-stat-note {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-helper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Goals bar hangs in the card's bottom padding so all cards keep the same title/value block. */
 .dash-stat-progress {
   position: absolute;
   top: 100%;
@@ -229,7 +246,7 @@
   }
   .dash-stat-card {
     gap: 8px;
-    padding: var(--space-3) 10px;
+    padding: var(--space-3) 10px 20px;
   }
   /* Top-aligned so a wrapped amount never moves the title/value zones; offset centres it on a one-line block. */
   .dash-stat-icon {
@@ -241,6 +258,7 @@
   /* Value scales with the text column beside the icon. */
   .dash-stat-body { container-type: inline-size; }
   .dash-stat-label { margin: 0 0 2px; line-height: 1.3; }
+  .dash-stat-note { font-size: 10px; }
   .dash-stat-value {
     font-size: clamp(14px, 16cqi, 20px);
     letter-spacing: -0.03em;
@@ -1877,7 +1895,7 @@
   }
 
   .dashboard-page--one-glance .dash-stat-card {
-    padding: 12px;
+    padding: 12px 12px 22px;
     align-items: center;
   }
 

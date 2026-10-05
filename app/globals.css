@@ -1726,6 +1726,14 @@ select:focus-visible {
   justify-content: space-between;
   align-items: baseline;
 }
+.budget-health-row--money-left {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+.budget-money-left-standalone {
+  margin: 0 0 12px;
+}
 .budget-health-label {
   font-size: 14px;
   color: var(--text-secondary, #64748b);

@@ -20,6 +20,7 @@ describe('summarizeDashboardMonth', () => {
       ]
     )
     expect(result.income).toBeCloseTo(31500.5)
+    expect(result.allocated).toBe(0)
     expect(result.expenses).toBeCloseTo(2000.25)
     expect(result.spendingByCategory).toEqual({ food: 1500.25, transport: 500 })
     const categoryTotal = Object.values(result.spendingByCategory).reduce((s, v) => s + v, 0)
@@ -34,10 +35,26 @@ describe('summarizeDashboardMonth', () => {
         { category: '', amount: null },
       ]
     )
-    expect(result).toEqual({ income: 0, expenses: 250, spendingByCategory: { Other: 250 } })
+    expect(result).toEqual({ income: 0, allocated: 0, expenses: 250, spendingByCategory: { Other: 250 } })
   })
 
   it('returns zeros for an empty month', () => {
-    expect(summarizeDashboardMonth([], [])).toEqual({ income: 0, expenses: 0, spendingByCategory: {} })
+    expect(summarizeDashboardMonth([], [])).toEqual({
+      income: 0,
+      allocated: 0,
+      expenses: 0,
+      spendingByCategory: {},
+    })
+  })
+
+  it('sums allocations on this month’s income without adding them to expenses', () => {
+    const result = summarizeDashboardMonth(
+      [{ total_amount: 30000 }],
+      [{ category: 'food', amount: 12000 }],
+      [{ amount: 5000 }, { amount: '2500.5' }, { amount: null }]
+    )
+    expect(result.income).toBe(30000)
+    expect(result.allocated).toBeCloseTo(7500.5)
+    expect(result.expenses).toBe(12000)
   })
 })

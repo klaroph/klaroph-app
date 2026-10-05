@@ -9,8 +9,18 @@ describe('dashboard data ownership', () => {
   it('fetches the selected month once in the page and shares it with the snapshot strip and budget card', () => {
     const page = read('app/dashboard/page.tsx')
     expect(page).toContain('useDashboardMonthMoney(budgetMonth, refreshTrigger)')
+    expect(page).toContain('computeMonthMoneySummary({')
+    expect(page.match(/moneyLeft=\{monthSummary\.moneyLeft\}/g)).toHaveLength(2)
     expect(page).toMatch(/<BudgetOverview\s+spendingByCategory=\{monthMoney\?\.spendingByCategory \?\? null\}/)
-    expect(read('components/dashboard/DashboardMonthStatStrip.tsx')).not.toMatch(/supabase|fetch\(/)
+    const strip = read('components/dashboard/DashboardMonthStatStrip.tsx')
+    expect(strip).not.toMatch(/supabase|fetch\(/)
+    expect(strip).toContain('const netFlow = income - expenses')
+    expect(strip).toContain('Income − expenses')
+    expect(strip).toContain('Money left')
+    const budget = read('components/dashboard/BudgetOverview.tsx')
+    expect(budget).toContain('const remaining = totalBudget - totalSpent')
+    expect(budget).toContain('>Remaining<')
+    expect(budget).toContain('Money left')
   })
 
   it('derives the goals page count from the goal list instead of a second goals query', () => {

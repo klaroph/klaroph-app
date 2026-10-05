@@ -16,6 +16,8 @@ function StatAmount({ value }: { value: number }) {
 type DashboardMonthStatStripProps = {
   income: number
   expenses: number
+  /** Same `computeMonthMoneySummary.moneyLeft` the budget card shows for this month. */
+  moneyLeft: number
   loading: boolean
   goalsCount: number
   goalsOnTrack: number
@@ -25,6 +27,7 @@ type DashboardMonthStatStripProps = {
 export default function DashboardMonthStatStrip({
   income,
   expenses,
+  moneyLeft,
   loading,
   goalsCount,
   goalsOnTrack,
@@ -63,7 +66,7 @@ export default function DashboardMonthStatStrip({
         </div>
       </article>
 
-      <article className="dash-stat-card klaro-tint dash-stat-card--net">
+      <article className="dash-stat-card klaro-tint dash-stat-card--net" aria-label="Net Flow, income minus expenses">
         <div className="dash-stat-icon" aria-hidden>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 3v18h18" />
@@ -74,6 +77,23 @@ export default function DashboardMonthStatStrip({
           <p className="dash-stat-label">Net Flow</p>
           <p className={`dash-stat-value tabular-nums${netFlow < 0 ? ' dash-stat-value--neg' : netFlow > 0 ? ' dash-stat-value--pos' : ''}`}>
             <StatAmount value={netFlow} />
+          </p>
+          <p className="dash-stat-note">Income − expenses</p>
+        </div>
+      </article>
+
+      <article className="dash-stat-card klaro-tint dash-stat-card--left">
+        <div className="dash-stat-icon" aria-hidden>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 7V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" />
+            <path d="M3 10h18" />
+            <path d="M16 14h.01" />
+          </svg>
+        </div>
+        <div className="dash-stat-body">
+          <p className="dash-stat-label">Money left</p>
+          <p className={`dash-stat-value tabular-nums${moneyLeft < 0 ? ' dash-stat-value--neg' : moneyLeft > 0 ? ' dash-stat-value--pos' : ''}`}>
+            <StatAmount value={moneyLeft} />
           </p>
         </div>
       </article>
