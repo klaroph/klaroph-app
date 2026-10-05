@@ -45,6 +45,23 @@ type BudgetOverviewProps = {
   showBudgetEditorButtons?: boolean
   /** Hide the in-card month picker when the page owns month selection */
   showMonthPicker?: boolean
+  /**
+   * Money left for the selected month (`computeMonthMoneySummary.moneyLeft`).
+   * Omit when this card is not given the shared month summary (does not invent a formula).
+   */
+  moneyLeft?: number
+}
+
+function MoneyLeftRow({ moneyLeft, separated = false }: { moneyLeft?: number; separated?: boolean }) {
+  if (typeof moneyLeft !== 'number' || !Number.isFinite(moneyLeft)) return null
+  return (
+    <div className={`budget-health-row${separated ? ' budget-health-row--money-left' : ''}`}>
+      <span className="budget-health-label">Money left</span>
+      <span className={`budget-health-value${moneyLeft < 0 ? ' budget-health-value-over' : ''}`}>
+        {formatWholePeso(moneyLeft)}
+      </span>
+    </div>
+  )
 }
 
 function getCurrentMonthFirst(): string {
@@ -129,6 +146,7 @@ export default function BudgetOverview({
   breakdownAction,
   showBudgetEditorButtons = true,
   showMonthPicker = true,
+  moneyLeft,
 }: BudgetOverviewProps) {
   const [internalMonth, setInternalMonth] = useState(currentMonthFirst)
   const isControlled = selectedMonthProp !== undefined
@@ -302,6 +320,11 @@ export default function BudgetOverview({
             </div>
           )}
         </div>
+        {typeof moneyLeft === 'number' && (
+          <div className="budget-health-numbers budget-money-left-standalone">
+            <MoneyLeftRow moneyLeft={moneyLeft} />
+          </div>
+        )}
         <div className="budget-empty-body">
           <Image
             src="/illustrations/budget-empty-state.png"
@@ -463,6 +486,7 @@ export default function BudgetOverview({
                   <span className="budget-health-label">Remaining</span>
                   <span className="budget-health-value">{formatWholePeso(0)}</span>
                 </div>
+                <MoneyLeftRow moneyLeft={moneyLeft} separated />
               </div>
               <div className="budget-burn-indicator">
                 <div className="budget-burn-row">
@@ -545,6 +569,7 @@ export default function BudgetOverview({
                     {formatWholePeso(summary.remaining)}
                   </span>
                 </div>
+                <MoneyLeftRow moneyLeft={moneyLeft} separated />
               </div>
 
               <div className="budget-burn-indicator">
