@@ -8,7 +8,11 @@ import { useSubscriptionOptional } from '@/contexts/SubscriptionContext'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
 import { formatWholePeso, toLocalDateString } from '@/lib/format'
 import { getMonthDateRange } from '@/lib/dashboardMonthMoney'
-import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
+import {
+  BUDGET_LOCK_STILL_FREE_LINE,
+  BUDGET_LOCK_UPGRADE_MESSAGE,
+  budgetTrialFreedomNotice,
+} from '@/lib/budgetLockMessage'
 import LockIcon from '@/components/ui/LockIcon'
 import MonthPicker, { formatMonthLabel } from '@/components/dashboard/MonthPicker'
 import {
@@ -61,6 +65,24 @@ function MoneyLeftRow({ moneyLeft, separated = false }: { moneyLeft?: number; se
         {formatWholePeso(moneyLeft)}
       </span>
     </div>
+  )
+}
+
+function BudgetFreedomNotes({
+  showTrial,
+  daysLeft,
+  showLockLine,
+}: {
+  showTrial: boolean
+  daysLeft: number | null | undefined
+  showLockLine: boolean
+}) {
+  if (!showTrial && !showLockLine) return null
+  return (
+    <>
+      {showTrial && <p className="budget-freedom-note">{budgetTrialFreedomNotice(daysLeft)}</p>}
+      {showLockLine && <p className="budget-lock-still-free">{BUDGET_LOCK_STILL_FREE_LINE}</p>}
+    </>
   )
 }
 
@@ -287,6 +309,15 @@ export default function BudgetOverview({
   const features = useSubscriptionOptional()?.features ?? null
   const canEditBudget = features?.has_budget_editing ?? true
   const openUpgrade = useUpgradeTriggerOptional()?.openUpgradeModal
+  const inFreeBudgetTrial =
+    features != null && features.isPro === false && features.has_budget_editing === true
+  const budgetEditingLocked = features != null && features.has_budget_editing === false
+  const trialDaysLeft = features?.budget_trial_days_left
+  /** Expenses (and any card that still renders edit actions). Home hides these. */
+  const showsBudgetEditorCta =
+    showBudgetEditorButtons && (onSetBudget != null || onEditThisMonth != null)
+  /** Empty-state "Set Up Monthly Budget", including Home. */
+  const showsEmptyBudgetCta = onSetBudget != null
 
   const sectionTitle = breakdownTitleProp ?? 'Category Breakdown'
   const sectionTitleMobile = breakdownTitleMobileProp ?? sectionTitle
@@ -319,6 +350,11 @@ export default function BudgetOverview({
               {headerAction}
             </div>
           )}
+          <BudgetFreedomNotes
+            showTrial={inFreeBudgetTrial && showsEmptyBudgetCta}
+            daysLeft={trialDaysLeft}
+            showLockLine={budgetEditingLocked && showsEmptyBudgetCta}
+          />
         </div>
         {typeof moneyLeft === 'number' && (
           <div className="budget-health-numbers budget-money-left-standalone">
@@ -453,6 +489,11 @@ export default function BudgetOverview({
             {headerAction}
           </div>
         )}
+        <BudgetFreedomNotes
+          showTrial={inFreeBudgetTrial && showsBudgetEditorCta}
+          daysLeft={trialDaysLeft}
+          showLockLine={budgetEditingLocked && showsBudgetEditorCta}
+        />
       </div>
 
       {/* 2 nested sections: Budget Health card (left) | Category Breakdown card (right) */}

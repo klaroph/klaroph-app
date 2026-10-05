@@ -1603,6 +1603,27 @@ select:focus-visible {
   align-items: center;
 }
 
+.budget-freedom-note,
+.budget-lock-still-free {
+  flex: 1 0 100%;
+  width: 100%;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.budget-freedom-note {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(0, 56, 168, 0.06);
+  border: 1px solid rgba(0, 56, 168, 0.14);
+  color: var(--text-secondary);
+}
+
+.budget-lock-still-free {
+  color: var(--text-muted);
+}
+
 /* 2-column: Budget Health card (left) | Category Breakdown card (right) */
 .budget-overview-two-col {
   display: grid;

@@ -9,6 +9,12 @@ export interface UserFeatures {
   has_analytics: boolean
   /** Monthly budgeting: Pro always; Free only during first 30 days after account creation */
   has_budget_editing: boolean
+  /**
+   * Free plan: whole days of budget editing left in the 30-day window.
+   * null when budgeting is not on a trial clock (Pro) or the clock is unknown.
+   * 0 after the free window ends.
+   */
+  budget_trial_days_left: number | null
   /** True when in 3-day grace after payment failure; full access but cannot create goals */
   is_grace?: boolean
   /** False when is_grace or at goal limit */
