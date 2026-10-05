@@ -129,23 +129,16 @@ export default function AllocateToGoalModal({
     }
 
     setLoading(true)
-    const { error: allocErr } = await supabase.from('income_allocations').insert({
-      income_record_id: incomeId,
-      goal_id: goalId,
-      amount: amountNum,
+    const { error: allocErr } = await supabase.rpc('allocate_income_to_goal', {
+      p_income_id: incomeId,
+      p_goal_id: goalId,
+      p_amount: amountNum,
     })
     if (allocErr) {
       setError(allocErr.message || 'Could not save allocation.')
       setLoading(false)
       return
     }
-
-    const newAllocated = selectedIncome.allocated + amountNum
-    const disposable = Math.max(0, selectedIncome.total_amount - newAllocated)
-    await supabase
-      .from('income_records')
-      .update({ disposable_amount: disposable })
-      .eq('id', incomeId)
 
     setLoading(false)
     handleClose()
