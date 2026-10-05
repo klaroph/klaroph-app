@@ -5,9 +5,14 @@ import { validateExpensesCsv, validateImportRows, getTypeForCategoryValue, VALID
 
 const FREE_IMPORT_LIMIT = 2
 
+const IMPORT_QUOTA_EXCEEDED_BODY = {
+  error: 'You’ve used your 2 free imports. Explore KlaroPH Pro for unlimited CSV imports.',
+  code: 'IMPORT_QUOTA_EXCEEDED',
+}
+
 /**
  * POST /api/expenses/import/confirm
- * After client validation: re-validate, check quota, insert rows, increment import_count.
+ * After client validation: re-validate, check quota, insert rows, consume import quota.
  * Body: { rows: ExpenseImportRow[] } (from validation response) or { csv: string } to re-validate.
  * Only increments on full success.
  */
@@ -34,13 +39,7 @@ export async function POST(request: Request) {
       : 0
 
     if (plan.plan_name !== 'pro' && importCount >= FREE_IMPORT_LIMIT) {
-      return NextResponse.json(
-        {
-          error: 'You’ve used your 2 free imports. Explore KlaroPH Pro for unlimited CSV imports.',
-          code: 'IMPORT_QUOTA_EXCEEDED',
-        },
-        { status: 403 }
-      )
+      return NextResponse.json(IMPORT_QUOTA_EXCEEDED_BODY, { status: 403 })
     }
 
     const body = (await request.json()) as { rows?: unknown; csv?: string }
@@ -84,13 +83,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ import_count: importCount + 1 })
-      .eq('id', user.id)
+    const { error: quotaError } = await supabase.rpc('consume_import_quota')
 
-    if (updateError) {
-      console.error('POST /api/expenses/import/confirm profile update error:', updateError.message)
+    if (quotaError) {
+      if ((quotaError.message ?? '').includes('IMPORT_QUOTA_EXCEEDED')) {
+        return NextResponse.json(IMPORT_QUOTA_EXCEEDED_BODY, { status: 403 })
+      }
+      console.error('POST /api/expenses/import/confirm quota error:', quotaError.message)
       return NextResponse.json(
         { error: 'Imports saved but usage count could not be updated.' },
         { status: 500 }
