@@ -104,31 +104,17 @@ export async function POST(request: Request) {
       )
     }
 
-    const { error: delErr } = await supabase
-      .from('budget_plans')
-      .delete()
-      .eq('user_id', user.id)
-    if (delErr) {
-      console.error('POST /api/budget-plan delete error:', delErr.message)
-      return NextResponse.json(
-        { error: delErr.message },
-        { status: 500 }
-      )
-    }
-
-    const { data, error } = await supabase
-      .from('budget_plans')
-      .insert(rows)
-      .select('id, user_id, category, amount, note, created_at')
-
+    const { data, error } = await supabase.rpc('replace_budget_plan', {
+      p_items: rows.map(({ category, amount, note }) => ({ category, amount, note })),
+    })
     if (error) {
-      console.error('POST /api/budget-plan insert error:', error.message)
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
+      console.error('POST /api/budget-plan replace error:', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
-    return NextResponse.json({ ok: true, data: (data as PlanRow[]) ?? [] })
+    const saved = ((data as PlanRow[] | null) ?? []).map(
+      ({ id, user_id, category, amount, note, created_at }) => ({ id, user_id, category, amount, note, created_at })
+    )
+    return NextResponse.json({ ok: true, data: saved })
   } catch (e) {
     console.error('POST /api/budget-plan', e)
     return NextResponse.json(
