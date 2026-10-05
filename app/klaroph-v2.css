@@ -248,6 +248,37 @@
   }
 }
 
+/* First unallocated income after onboarding */
+.first-income-allocate {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.first-income-allocate h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+.first-income-allocate p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.first-income-allocate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 /* Insight */
 .klaro-insight-card {
   --tone: var(--pastel-sky);

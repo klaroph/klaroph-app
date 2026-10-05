@@ -28,6 +28,7 @@ import DashboardFinancialTrend from '@/components/dashboard/DashboardFinancialTr
 import DashboardProCard from '@/components/dashboard/DashboardProCard'
 import GoalMomentumSection from '@/components/dashboard/GoalMomentumSection'
 import KlaroInsightCard from '@/components/dashboard/KlaroInsightCard'
+import FirstIncomeAllocateCard from '@/components/dashboard/FirstIncomeAllocateCard'
 import { deriveMonthInsights } from '@/lib/dashboardInsight'
 import { useDashboardMonthMoney } from '@/hooks/useDashboardMonthMoney'
 import { useDashboardProfile } from '@/contexts/DashboardProfileContext'
@@ -270,6 +271,8 @@ export default function DashboardPage() {
       <div className="w-full max-lg:order-1">
         <ActivationCelebration isPro={isPro} />
       </div>
+
+      <FirstIncomeAllocateCard refreshTrigger={refreshTrigger} />
 
       {/* ROW 1 — Snapshot */}
       <div className="w-full max-lg:order-2">
