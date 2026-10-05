@@ -286,6 +286,16 @@ describe('deleteUserAccount', () => {
     expect(order[0]).toBeLessThan(order[1])
   })
 
+  it('stops before the auth user when unlinked cleanup fails, and does not send the deleted email', async () => {
+    const db = fakeDatabase()
+    const notifyDeleted = vi.fn(async () => true)
+    vi.mocked(db.store.deleteUnlinkedRows).mockRejectedValueOnce(new Error('premium_confirmation_emails: timeout'))
+    await expect(deleteUserAccount(deps(db.store, notifyDeleted), confirm())).rejects.toThrow(/premium_confirmation_emails/)
+    expect(db.store.deleteAuthUser).not.toHaveBeenCalled()
+    expect(notifyDeleted).not.toHaveBeenCalled()
+    expect(db.auth.has(TARGET)).toBe(true)
+  })
+
   it('removes the user from Founder Users data and counts, leaving testers separate', async () => {
     const db = fakeDatabase()
     expect(summarizeUsers(db.founderUsers()).total).toBe(3)
