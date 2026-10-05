@@ -1,6 +1,6 @@
 -- Enforce plan max_goals at the goals insert, including direct client inserts that skip POST /api/goals.
--- Locks the user's subscriptions row (user_id is unique) so two concurrent creates cannot both
--- observe count = max_goals - 1 and both succeed.
+-- Advisory lock serializes every insert for that user, including accounts with no subscriptions row.
+-- The subscriptions FOR UPDATE lock stays so two creates that share a row still queue on it.
 -- SECURITY DEFINER is required: SELECT ... FOR UPDATE also applies UPDATE row policies, and the
 -- only UPDATE policy on subscriptions is for service_role. An invoker lock would match zero rows.
 -- Reads subscriptions/plans as the owner; does not grant those tables to anon.
@@ -18,6 +18,9 @@ declare
   v_plan_max int;
   v_max_goals int := 2;
 begin
+  -- Serialize this user even when they have no subscriptions row (FOR UPDATE would match nothing).
+  perform pg_advisory_xact_lock(hashtextextended(new.user_id::text, 0));
+
   -- A signed-in user inserting another user's id cannot pass RLS. Do not lock that row.
   -- service_role (auth.uid() null), including onboarding, is still enforced below.
   if auth.uid() is not null and auth.uid() is distinct from new.user_id then
