@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { isImportQuotaExceededError, plainDbError } from '@/lib/apiError'
 import { resolveUserPlan } from '@/lib/resolveUserPlan'
 import { validateIncomeCsv, validateImportRows, INCOME_SOURCES_SET, type ImportRow } from '@/lib/expensesImport'
 
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     const { error: quotaError } = await supabase.rpc('consume_import_quota')
 
     if (quotaError) {
-      if ((quotaError.message ?? '').includes('IMPORT_QUOTA_EXCEEDED')) {
+      if (isImportQuotaExceededError(quotaError)) {
         return NextResponse.json(IMPORT_QUOTA_EXCEEDED_BODY, { status: 403 })
       }
       console.error('POST /api/income/import/confirm quota error:', quotaError.message)
@@ -89,7 +90,6 @@ export async function POST(request: Request) {
     const { error: insertError } = await supabase.from('income_records').insert(inserts)
 
     if (insertError) {
-      console.error('POST /api/income/import/confirm insert error:', insertError.message)
       const { error: refundError } = await supabaseAdmin.rpc('refund_import_quota', {
         p_user_id: user.id,
       })
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
         console.error('POST /api/income/import/confirm refund error:', refundError.message)
       }
       return NextResponse.json(
-        { error: insertError.message || 'Failed to save income records.' },
+        { error: plainDbError(insertError, 'save', 'POST /api/income/import/confirm insert error:') },
         { status: 500 }
       )
     }

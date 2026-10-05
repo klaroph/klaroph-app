@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { plainDbError } from '@/lib/apiError'
 import { resolveUserPlan } from '@/lib/resolveUserPlan'
 
 const GOAL_LIMIT_MESSAGE =
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
         )
       }
       return NextResponse.json(
-        { error: insertError.message },
+        { error: plainDbError(insertError, 'save', 'POST /api/goals insert error:') },
         { status: 500 }
       )
     }

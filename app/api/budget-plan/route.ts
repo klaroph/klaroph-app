@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { plainDbError } from '@/lib/apiError'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -32,9 +33,8 @@ export async function GET() {
       .order('category')
 
     if (error) {
-      console.error('GET /api/budget-plan error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'load', 'GET /api/budget-plan error:') },
         { status: 500 }
       )
     }
@@ -108,8 +108,10 @@ export async function POST(request: Request) {
       p_items: rows.map(({ category, amount, note }) => ({ category, amount, note })),
     })
     if (error) {
-      console.error('POST /api/budget-plan replace error:', error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(
+        { error: plainDbError(error, 'save', 'POST /api/budget-plan replace error:') },
+        { status: 500 }
+      )
     }
     const saved = ((data as PlanRow[] | null) ?? []).map(
       ({ id, user_id, category, amount, note, created_at }) => ({ id, user_id, category, amount, note, created_at })

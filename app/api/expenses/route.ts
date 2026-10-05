@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { plainDbError } from '@/lib/apiError'
 import { getTypeForCategory } from '@/lib/expenseCategories'
 import { toLocalDateString } from '@/lib/format'
 
@@ -56,9 +57,8 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
-      console.error('POST /api/expenses insert error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'save', 'POST /api/expenses insert error:') },
         { status: 500 }
       )
     }
