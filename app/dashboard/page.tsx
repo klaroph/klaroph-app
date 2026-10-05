@@ -180,7 +180,7 @@ export default function DashboardPage() {
 
   const totalSaved = goals.reduce((sum, g) => sum + g.saved, 0)
   const totalTarget = goals.reduce((sum, g) => sum + Number(g.target_amount || 0), 0)
-  const goalsOnTrack = goals.filter((g) => {
+  const goalsWithSavings = goals.filter((g) => {
     const target = Number(g.target_amount || 0)
     if (target <= 0) return false
     return g.saved > 0
@@ -295,7 +295,7 @@ export default function DashboardPage() {
           moneyLeft={monthSummary.moneyLeft}
           loading={monthMoneyLoading}
           goalsCount={goals.length}
-          goalsOnTrack={goalsOnTrack}
+          goalsWithSavings={goalsWithSavings}
           goalsProgressPct={goalsProgressPct}
         />
       </div>

@@ -20,7 +20,7 @@ type DashboardMonthStatStripProps = {
   moneyLeft: number
   loading: boolean
   goalsCount: number
-  goalsOnTrack: number
+  goalsWithSavings: number
   goalsProgressPct: number
 }
 
@@ -30,7 +30,7 @@ export default function DashboardMonthStatStrip({
   moneyLeft,
   loading,
   goalsCount,
-  goalsOnTrack,
+  goalsWithSavings,
   goalsProgressPct,
 }: DashboardMonthStatStripProps) {
   const netFlow = income - expenses
@@ -110,7 +110,7 @@ export default function DashboardMonthStatStrip({
           <p className="dash-stat-value">
             {goalsCount === 0
               ? 'None yet'
-              : `${goalsOnTrack} / ${goalsCount} on track`}
+              : `${goalsWithSavings} / ${goalsCount} with savings`}
           </p>
           {/* Track always occupies its row so the strip height does not change when goals load. */}
           {goalsCount > 0 ? (
