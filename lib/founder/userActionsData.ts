@@ -1,6 +1,7 @@
 /**
  * Server-only Supabase access for founder user actions (service role).
  * The account, its email and its subscription are always read here — never taken from the browser.
+ * Self-serve delete uses the same `deleteUnlinkedRows` + `deleteAuthUser` pair via `wipeUserAccount`.
  */
 
 import { supabaseAdmin } from '@/lib/supabaseAdmin'

@@ -4,6 +4,7 @@
  * they arrive from the browser, which supplies only the target user id and confirmation data.
  */
 
+import { wipeUserAccount } from '@/lib/accountWipe'
 import type { SendResult, TransactionalMessage } from '@/lib/email/resend'
 import { renderComplimentaryProEmail } from '@/lib/email/proEmails'
 import { getFirstName } from '@/lib/email/campaignTemplate'
@@ -112,9 +113,9 @@ export async function grantComplimentaryPro(
 }
 
 /**
- * Deletes the account the way KlaroPH's own deletion does: every user table with an auth.users
- * foreign key cascades from the auth user; rows keyed by user_id without one are removed first.
- * payment_events is not user-keyed and stays as the payment ledger, as with self-service deletion.
+ * Deletes the account through the shared wipe used by self-serve delete: unlinked rows first,
+ * then the auth user, whose foreign keys cascade inside that single delete.
+ * payment_events is not user-keyed and stays as the payment ledger.
  */
 export async function deleteUserAccount(
   deps: {
@@ -143,8 +144,7 @@ export async function deleteUserAccount(
     return { ok: false, message: "The email you typed does not match this user's account." }
   }
 
-  await deps.store.deleteUnlinkedRows(account.id)
-  await deps.store.deleteAuthUser(account.id)
+  await wipeUserAccount(deps.store, account.id)
   const deleted = `${email} and their KlaroPH data were permanently deleted.`
   const notified = await deps.notifyDeleted(email).catch(() => false)
   return notified
