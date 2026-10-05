@@ -47,7 +47,7 @@ const STEP_LABELS: Record<number, string> = {
   8: 'Your plan',
 }
 
-const SETUP_PREVIEW = ['Your income', 'A simple spending plan', 'Your first goal', 'How much to save first']
+const SETUP_PREVIEW = ['Your income', 'A simple spending plan', 'Your first goal', 'A savings preference']
 
 export default function OnboardingFlow() {
   const router = useRouter()
@@ -86,6 +86,7 @@ export default function OnboardingFlow() {
         credentials: 'include',
         body: JSON.stringify({
           monthly_income: monthlyIncome > 0 ? monthlyIncome : null,
+          pay_period_income: incomeNum,
           income_frequency: frequency,
           primary_goal_category,
           savings_percent: savingsPercent,
@@ -318,9 +319,12 @@ export default function OnboardingFlow() {
                 <p className="onb-range-value">{savingsPercent}%</p>
               </div>
               <p className="onb-callout">
-                You will save <strong>{formatWholePeso(savingsPerMonth)}</strong> per month.
+                Suggested savings: <strong>{formatWholePeso(savingsPerMonth)}</strong> per month.
               </p>
-              <p className="onb-hint">Savings is not what&apos;s left. It comes first.</p>
+              <p className="onb-hint">
+                Savings is not what&apos;s left — it comes first. This {savingsPercent}% stays a preference
+                on your profile. Nothing moves to your goal until you allocate it.
+              </p>
               <div className="onb-actions">
                 {backButton}
                 <button type="button" onClick={() => setStep(6)} className="btn-primary onb-btn">
@@ -417,17 +421,21 @@ export default function OnboardingFlow() {
               <h2 className="onb-title">Your plan is ready! 🎯</h2>
               <p className="onb-lead">
                 {monthsToGoal > 0
-                  ? `You can reach your goal in ${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}.`
-                  : 'Adjust your savings % or target to see your timeline.'}
+                  ? `If you later allocate ${savingsPercent}% of your income, you could reach your goal in about ${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}.`
+                  : 'Adjust your savings % or target to see a timeline.'}
               </p>
               <dl className="onb-summary">
+                <div>
+                  <dt>This pay period</dt>
+                  <dd>{formatWholePeso(incomeNum)}</dd>
+                </div>
                 <div>
                   <dt>Income</dt>
                   <dd>{formatWholePeso(monthlyIncome)}/month</dd>
                 </div>
                 <div>
-                  <dt>Monthly savings</dt>
-                  <dd>{formatWholePeso(savingsPerMonth)}</dd>
+                  <dt>Savings preference</dt>
+                  <dd>{savingsPercent}% · {formatWholePeso(savingsPerMonth)}/month</dd>
                 </div>
                 <div>
                   <dt>Goal</dt>
@@ -438,13 +446,13 @@ export default function OnboardingFlow() {
                   <dd>{formatWholePeso(targetNum)}</dd>
                 </div>
                 <div className="onb-summary-wide">
-                  <dt>Projected completion</dt>
+                  <dt>If you allocate later</dt>
                   <dd>{monthsToGoal > 0 ? `~${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}` : '—'}</dd>
                 </div>
               </dl>
               <p className="onb-hint">
-                Next: your dashboard, where you can add expenses, track your goal, and ask Klaro about
-                your numbers.
+                We&apos;ll save this pay period&apos;s income today. Nothing moves to your goal until you
+                allocate it later — your savings % stays a preference only.
               </p>
               {errorLine}
               <div className="onb-actions">

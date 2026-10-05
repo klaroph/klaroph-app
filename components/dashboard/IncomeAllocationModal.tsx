@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { formatPeso, toLocalDateString } from '@/lib/format'
 import { supabase, getBrowserUser } from '../../lib/supabaseClient'
 import Modal from '../ui/Modal'
@@ -29,6 +29,11 @@ type IncomeAllocationModalProps = {
   onSaved: (options?: IncomeSavedOptions) => void
   /** When set, modal is in edit mode: title "Edit income", pre-fill, submit = PUT */
   initialRecord?: IncomeRecordForEdit | null
+  /**
+   * Edit mode only. Prefills the add-allocation amount (and the only goal, when there is one).
+   * Not added to the allocation list and not saved until the user chooses to add it.
+   */
+  suggestedAllocateAmount?: number | null
 }
 
 export default function IncomeAllocationModal({
@@ -36,6 +41,7 @@ export default function IncomeAllocationModal({
   onClose,
   onSaved,
   initialRecord = null,
+  suggestedAllocateAmount = null,
 }: IncomeAllocationModalProps) {
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(() => toLocalDateString(new Date()))
@@ -51,6 +57,9 @@ export default function IncomeAllocationModal({
   const [addAmount, setAddAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showSuggestionHint, setShowSuggestionHint] = useState(false)
+  /** Avoid re-applying the suggestion after the user edits the add-allocation fields. */
+  const prefillKeyRef = useRef<string | null>(null)
 
   const isEditMode = Boolean(initialRecord?.id)
 
@@ -67,6 +76,8 @@ export default function IncomeAllocationModal({
       setAllocationsEdit([])
       setAddGoalId('')
       setAddAmount('')
+      setShowSuggestionHint(false)
+      prefillKeyRef.current = null
     }
   }, [isOpen, initialRecord])
 
@@ -81,14 +92,19 @@ export default function IncomeAllocationModal({
 
   useEffect(() => {
     if (!isOpen || !initialRecord?.id || goals.length === 0) {
-      if (!isOpen || !initialRecord) setAllocationsEdit([])
+      if (!isOpen || !initialRecord) {
+        setAllocationsEdit([])
+        prefillKeyRef.current = null
+      }
       return
     }
+    let cancelled = false
     const loadAllocations = async () => {
       const { data } = await supabase
         .from('income_allocations')
         .select('goal_id, amount')
         .eq('income_record_id', initialRecord.id)
+      if (cancelled) return
       const rows = (data ?? []) as { goal_id: string; amount: number }[]
       const goalMap = new Map(goals.map((g) => [g.id, g.name]))
       setAllocationsEdit(
@@ -98,9 +114,31 @@ export default function IncomeAllocationModal({
           amount: String(r.amount),
         }))
       )
+      if (rows.length > 0 || prefillKeyRef.current === initialRecord.id) return
+      if (
+        typeof suggestedAllocateAmount !== 'number' ||
+        !Number.isFinite(suggestedAllocateAmount) ||
+        suggestedAllocateAmount <= 0
+      ) {
+        return
+      }
+      const total = Number(initialRecord.total_amount)
+      const capped =
+        Number.isFinite(total) && total > 0
+          ? Math.min(suggestedAllocateAmount, total)
+          : suggestedAllocateAmount
+      const rounded = Math.round(capped * 100) / 100
+      if (rounded <= 0) return
+      prefillKeyRef.current = initialRecord.id
+      setAddAmount(Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2))
+      setShowSuggestionHint(true)
+      if (goals.length === 1) setAddGoalId(goals[0].id)
     }
     loadAllocations()
-  }, [isOpen, initialRecord?.id, goals])
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, initialRecord, goals, suggestedAllocateAmount])
 
   const handleClose = () => {
     setAmount('')
@@ -112,6 +150,8 @@ export default function IncomeAllocationModal({
     setAllocationsEdit([])
     setAddGoalId('')
     setAddAmount('')
+    setShowSuggestionHint(false)
+    prefillKeyRef.current = null
     setError(null)
     onClose()
   }
@@ -355,6 +395,11 @@ export default function IncomeAllocationModal({
               Remaining unallocated: {formatPeso(remaining, 'en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               {allocationExceedsIncome && ' — Total allocations exceed income amount.'}
             </p>
+            {showSuggestionHint && (
+              <p style={{ margin: '0 0 12px', fontSize: 13, color: '#6b7280' }}>
+                Suggested from your savings preference. Tap Add to use it, or close to skip.
+              </p>
+            )}
             {canAddAllocation && (
               <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
                 <div style={{ flex: '1 1 140px', minWidth: 0 }}>

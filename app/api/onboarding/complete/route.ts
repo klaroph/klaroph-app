@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { toLocalDateString } from '@/lib/format'
 
 const VALID_FINANCIAL_STAGES = ['starter', 'stabilizing', 'building', 'scaling'] as const
 const VALID_RISK_COMFORT = ['low', 'medium', 'high'] as const
@@ -61,6 +62,20 @@ export async function POST(request: Request) {
       )
     }
 
+    // Pay-period amount the user typed. Never derived from monthly_income.
+    const pay_period_income =
+      typeof body?.pay_period_income === 'number' &&
+      Number.isFinite(body.pay_period_income) &&
+      body.pay_period_income > 0
+        ? body.pay_period_income
+        : null
+    if (pay_period_income == null) {
+      return NextResponse.json(
+        { error: 'A valid pay-period income amount is required.' },
+        { status: 400 }
+      )
+    }
+
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .update({
@@ -86,21 +101,62 @@ export async function POST(request: Request) {
       )
     }
 
-    const { error: goalError } = await supabaseAdmin.from('goals').insert({
-      user_id: user.id,
-      name: goal_name,
-      target_amount: goal_target,
-      saved_amount: 0,
-    })
+    const { data: insertedGoal, error: goalError } = await supabaseAdmin
+      .from('goals')
+      .insert({
+        user_id: user.id,
+        name: goal_name,
+        target_amount: goal_target,
+        saved_amount: 0,
+      })
+      .select('id')
+      .single()
 
-    if (goalError) {
+    if (goalError || !insertedGoal?.id) {
       return NextResponse.json(
-        { error: goalError.message },
+        { error: goalError?.message ?? 'Could not create your goal.' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({ ok: true })
+    const today = toLocalDateString(new Date())
+    const { data: insertedIncome, error: incomeError } = await supabaseAdmin
+      .from('income_records')
+      .insert({
+        user_id: user.id,
+        total_amount: pay_period_income,
+        disposable_amount: pay_period_income,
+        date: today,
+        income_source: null,
+      })
+      .select('id')
+      .single()
+
+    if (incomeError || !insertedIncome?.id) {
+      // Profile was already marked complete and the goal row exists. Undo both
+      // so a retry does not leave a finished onboarding without this income.
+      const { error: rollbackGoalError } = await supabaseAdmin
+        .from('goals')
+        .delete()
+        .eq('id', insertedGoal.id)
+        .eq('user_id', user.id)
+      if (rollbackGoalError) {
+        console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+      }
+      const { error: rollbackProfileError } = await supabaseAdmin
+        .from('profiles')
+        .update({ onboarding_completed: false })
+        .eq('id', user.id)
+      if (rollbackProfileError) {
+        console.error('POST /api/onboarding/complete profile rollback', rollbackProfileError.message)
+      }
+      return NextResponse.json(
+        { error: incomeError?.message ?? 'Could not save your first income.' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ ok: true, income_id: insertedIncome.id })
   } catch (e) {
     console.error('POST /api/onboarding/complete', e)
     return NextResponse.json(
