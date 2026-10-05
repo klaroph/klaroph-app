@@ -1,25 +1,29 @@
 -- Refund one consumed import when the confirm insert fails in the same request.
--- auth.uid() only. Locks the caller row, then decrements import_count by 1, not below 0.
--- Uses the same transaction-local flag as consume_import_quota so the protect trigger allows the write.
+-- service_role only. Authenticated clients must not be able to call this and walk
+-- import_count back to 0. The route passes the signed-in user id because the
+-- service-role client has no auth.uid(). Locks that profile row and decrements
+-- import_count by 1, not below 0. Uses the same transaction-local flag as
+-- consume_import_quota so the protect trigger allows the write.
 
-create or replace function public.refund_import_quota()
+drop function if exists public.refund_import_quota();
+
+create or replace function public.refund_import_quota(p_user_id uuid)
 returns integer
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_uid uuid := auth.uid();
   v_count integer;
 begin
-  if v_uid is null then
-    raise exception 'Unauthorized';
+  if p_user_id is null then
+    raise exception 'User id is required.';
   end if;
 
   select p.import_count
     into v_count
   from public.profiles p
-  where p.id = v_uid
+  where p.id = p_user_id
   for update;
 
   if not found then
@@ -29,7 +33,7 @@ begin
   perform set_config('klaroph.allow_import_count_write', '1', true);
   update public.profiles
   set import_count = greatest(import_count - 1, 0)
-  where id = v_uid
+  where id = p_user_id
   returning import_count into v_count;
   perform set_config('klaroph.allow_import_count_write', '', true);
 
@@ -37,8 +41,10 @@ begin
 end;
 $$;
 
-comment on function public.refund_import_quota() is
-  'Decrements profiles.import_count by 1 for auth.uid(), not below 0. Used when an import insert fails after consume_import_quota.';
+comment on function public.refund_import_quota(uuid) is
+  'Decrements profiles.import_count by 1 for p_user_id, not below 0. service_role only. Used when an import insert fails after consume_import_quota.';
 
-revoke all on function public.refund_import_quota() from public, anon;
-grant execute on function public.refund_import_quota() to authenticated, service_role;
+revoke all on function public.refund_import_quota(uuid) from public;
+revoke all on function public.refund_import_quota(uuid) from anon;
+revoke all on function public.refund_import_quota(uuid) from authenticated;
+grant execute on function public.refund_import_quota(uuid) to service_role;

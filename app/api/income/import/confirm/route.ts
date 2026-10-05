@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveUserPlan } from '@/lib/resolveUserPlan'
 import { validateIncomeCsv, validateImportRows, INCOME_SOURCES_SET, type ImportRow } from '@/lib/expensesImport'
 
@@ -13,7 +14,8 @@ const IMPORT_QUOTA_EXCEEDED_BODY = {
 /**
  * POST /api/income/import/confirm
  * Re-validate rows, check shared quota (same as expenses), consume import quota, then insert into income_records.
- * If the insert fails after a successful consume, refund the quota in the same request.
+ * If the insert fails after a successful consume, refund the quota in the same request
+ * via the service-role client. refund_import_quota is not executable by authenticated.
  */
 export async function POST(request: Request) {
   try {
@@ -88,7 +90,9 @@ export async function POST(request: Request) {
 
     if (insertError) {
       console.error('POST /api/income/import/confirm insert error:', insertError.message)
-      const { error: refundError } = await supabase.rpc('refund_import_quota')
+      const { error: refundError } = await supabaseAdmin.rpc('refund_import_quota', {
+        p_user_id: user.id,
+      })
       if (refundError) {
         console.error('POST /api/income/import/confirm refund error:', refundError.message)
       }

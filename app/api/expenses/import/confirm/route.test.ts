@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   planName: 'free' as 'free' | 'pro',
   importCount: 0,
   calls: [] as string[],
+  refundArgs: undefined as unknown,
   quotaError: null as { message: string } | null,
   insertError: null as { message: string } | null,
   refundError: null as { message: string } | null,
@@ -31,7 +32,7 @@ vi.mock('@/lib/supabaseServer', () => ({
       if (table === 'expenses') {
         return {
           insert: async () => {
-            state.calls.push('insert')
+            state.calls.push('user:insert')
             return { error: state.insertError }
           },
         }
@@ -39,16 +40,22 @@ vi.mock('@/lib/supabaseServer', () => ({
       throw new Error(`unexpected table ${table}`)
     },
     rpc: async (fn: string) => {
-      if (fn !== 'consume_import_quota' && fn !== 'refund_import_quota') {
-        throw new Error(`unexpected rpc ${fn}`)
-      }
-      state.calls.push(fn)
-      if (fn === 'consume_import_quota') {
-        return { data: state.quotaError ? null : 1, error: state.quotaError }
-      }
-      return { data: state.refundError ? null : 0, error: state.refundError }
+      if (fn !== 'consume_import_quota') throw new Error(`unexpected user rpc ${fn}`)
+      state.calls.push(`user:${fn}`)
+      return { data: state.quotaError ? null : 1, error: state.quotaError }
     },
   }),
+}))
+
+vi.mock('@/lib/supabaseAdmin', () => ({
+  supabaseAdmin: {
+    rpc: async (fn: string, args?: unknown) => {
+      if (fn !== 'refund_import_quota') throw new Error(`unexpected admin rpc ${fn}`)
+      state.calls.push(`admin:${fn}`)
+      state.refundArgs = args
+      return { data: state.refundError ? null : 0, error: state.refundError }
+    },
+  },
 }))
 
 vi.mock('@/lib/resolveUserPlan', () => ({
@@ -74,6 +81,7 @@ beforeEach(() => {
   state.planName = 'free'
   state.importCount = 0
   state.calls = []
+  state.refundArgs = undefined
   state.quotaError = null
   state.insertError = null
   state.refundError = null
@@ -96,7 +104,7 @@ describe('POST /api/expenses/import/confirm', () => {
     const res = await post()
     expect(res.status).toBe(403)
     expect(await res.json()).toEqual(QUOTA_BODY)
-    expect(state.calls).toEqual(['consume_import_quota'])
+    expect(state.calls).toEqual(['user:consume_import_quota'])
   })
 
   it('returns 500 and does not insert when quota consumption fails for another reason', async () => {
@@ -106,14 +114,14 @@ describe('POST /api/expenses/import/confirm', () => {
     expect(await res.json()).toEqual({
       error: 'Could not update import usage. Nothing was imported.',
     })
-    expect(state.calls).toEqual(['consume_import_quota'])
+    expect(state.calls).toEqual(['user:consume_import_quota'])
   })
 
   it('inserts only after consume succeeds', async () => {
     const res = await post()
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ imported: 1 })
-    expect(state.calls).toEqual(['consume_import_quota', 'insert'])
+    expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert'])
   })
 
   it('refunds the quota and returns 500 when insert fails after consume', async () => {
@@ -121,7 +129,8 @@ describe('POST /api/expenses/import/confirm', () => {
     const res = await post()
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({ error: 'duplicate key' })
-    expect(state.calls).toEqual(['consume_import_quota', 'insert', 'refund_import_quota'])
+    expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert', 'admin:refund_import_quota'])
+    expect(state.refundArgs).toEqual({ p_user_id: 'user-1' })
   })
 
   it('still returns the insert 500 when the refund call fails', async () => {
@@ -130,6 +139,7 @@ describe('POST /api/expenses/import/confirm', () => {
     const res = await post()
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({ error: 'duplicate key' })
-    expect(state.calls).toEqual(['consume_import_quota', 'insert', 'refund_import_quota'])
+    expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert', 'admin:refund_import_quota'])
+    expect(state.refundArgs).toEqual({ p_user_id: 'user-1' })
   })
 })
