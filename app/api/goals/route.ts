@@ -76,6 +76,26 @@ export async function POST(request: Request) {
       .single()
 
     if (insertError) {
+      // Trigger is the write-site backstop (direct inserts and the count-then-insert race).
+      const dbMessage = insertError.message ?? ''
+      if (dbMessage.includes('GOAL_CREATION_GRACE')) {
+        return NextResponse.json(
+          {
+            error: GRACE_MESSAGE,
+            upgrade_required: false,
+          },
+          { status: 403 }
+        )
+      }
+      if (dbMessage.includes('GOAL_LIMIT_REACHED')) {
+        return NextResponse.json(
+          {
+            error: GOAL_LIMIT_MESSAGE,
+            upgrade_required: true,
+          },
+          { status: 403 }
+        )
+      }
       return NextResponse.json(
         { error: insertError.message },
         { status: 500 }
