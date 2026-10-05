@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { resolveUserPlanFromSubscription } from '@/lib/resolveUserPlan'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
-import { getBudgetEditingAllowed } from '@/lib/entitlements'
+import { getBudgetEditingAllowed, getBudgetTrialDaysLeft } from '@/lib/entitlements'
 import { toLocalDateString } from '@/lib/format'
 import type { UserFeaturesWithSubscription } from '@/types/features'
 
@@ -21,6 +21,7 @@ function toFeaturesResponse(
   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - FREE_ANALYTICS_DAYS)
   const analyticsCutoffDate = plan.plan_name === 'free' ? toLocalDateString(d) : null
   const has_budget_editing = getBudgetEditingAllowed(plan, userCreatedAt)
+  const budget_trial_days_left = getBudgetTrialDaysLeft(plan, userCreatedAt)
   return {
     plan_name: planLabel,
     max_goals: plan.max_goals,
@@ -30,6 +31,7 @@ function toFeaturesResponse(
     has_export: plan.export_enabled,
     has_analytics: plan.advanced_analytics,
     has_budget_editing,
+    budget_trial_days_left,
     is_grace: plan.is_grace,
     can_create_goals: plan.can_create_goals,
     isPro: plan.plan_name === 'pro',
