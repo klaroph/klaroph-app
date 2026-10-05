@@ -9,10 +9,10 @@ const state = vi.hoisted(() => ({
   user: null as { id: string } | null,
   planName: 'free' as 'free' | 'pro',
   importCount: 0,
-  insertCalls: 0,
-  rpcCalls: 0,
-  rpcArgs: undefined as unknown,
+  calls: [] as string[],
   quotaError: null as { message: string } | null,
+  insertError: null as { message: string } | null,
+  refundError: null as { message: string } | null,
 }))
 
 vi.mock('@/lib/supabaseServer', () => ({
@@ -31,18 +31,22 @@ vi.mock('@/lib/supabaseServer', () => ({
       if (table === 'income_records') {
         return {
           insert: async () => {
-            state.insertCalls += 1
-            return { error: null }
+            state.calls.push('insert')
+            return { error: state.insertError }
           },
         }
       }
       throw new Error(`unexpected table ${table}`)
     },
-    rpc: async (fn: string, args?: unknown) => {
-      if (fn !== 'consume_import_quota') throw new Error(`unexpected rpc ${fn}`)
-      state.rpcCalls += 1
-      state.rpcArgs = args
-      return { data: state.quotaError ? null : 1, error: state.quotaError }
+    rpc: async (fn: string) => {
+      if (fn !== 'consume_import_quota' && fn !== 'refund_import_quota') {
+        throw new Error(`unexpected rpc ${fn}`)
+      }
+      state.calls.push(fn)
+      if (fn === 'consume_import_quota') {
+        return { data: state.quotaError ? null : 1, error: state.quotaError }
+      }
+      return { data: state.refundError ? null : 0, error: state.refundError }
     },
   }),
 }))
@@ -69,10 +73,10 @@ beforeEach(() => {
   state.user = { id: 'user-1' }
   state.planName = 'free'
   state.importCount = 0
-  state.insertCalls = 0
-  state.rpcCalls = 0
-  state.rpcArgs = undefined
+  state.calls = []
   state.quotaError = null
+  state.insertError = null
+  state.refundError = null
 })
 
 describe('POST /api/income/import/confirm', () => {
@@ -81,11 +85,10 @@ describe('POST /api/income/import/confirm', () => {
     const res = await post()
     expect(res.status).toBe(403)
     expect(await res.json()).toEqual(QUOTA_BODY)
-    expect(state.insertCalls).toBe(0)
-    expect(state.rpcCalls).toBe(0)
+    expect(state.calls).toEqual([])
   })
 
-  it('maps a consume_import_quota IMPORT_QUOTA_EXCEEDED error to the same 403', async () => {
+  it('consumes quota before insert and maps IMPORT_QUOTA_EXCEEDED to the same 403', async () => {
     state.importCount = 1
     state.quotaError = {
       message: 'IMPORT_QUOTA_EXCEEDED: free import quota is already used',
@@ -93,17 +96,40 @@ describe('POST /api/income/import/confirm', () => {
     const res = await post()
     expect(res.status).toBe(403)
     expect(await res.json()).toEqual(QUOTA_BODY)
-    expect(state.insertCalls).toBe(1)
-    expect(state.rpcCalls).toBe(1)
-    expect(state.rpcArgs).toBeUndefined()
+    expect(state.calls).toEqual(['consume_import_quota'])
   })
 
-  it('still returns 500 when quota consumption fails for another reason', async () => {
+  it('returns 500 and does not insert when quota consumption fails for another reason', async () => {
     state.quotaError = { message: 'permission denied for function consume_import_quota' }
     const res = await post()
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({
-      error: 'Imports saved but usage count could not be updated.',
+      error: 'Could not update import usage. Nothing was imported.',
     })
+    expect(state.calls).toEqual(['consume_import_quota'])
+  })
+
+  it('inserts only after consume succeeds', async () => {
+    const res = await post()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ imported: 1 })
+    expect(state.calls).toEqual(['consume_import_quota', 'insert'])
+  })
+
+  it('refunds the quota and returns 500 when insert fails after consume', async () => {
+    state.insertError = { message: 'duplicate key' }
+    const res = await post()
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'duplicate key' })
+    expect(state.calls).toEqual(['consume_import_quota', 'insert', 'refund_import_quota'])
+  })
+
+  it('still returns the insert 500 when the refund call fails', async () => {
+    state.insertError = { message: 'duplicate key' }
+    state.refundError = { message: 'permission denied for function refund_import_quota' }
+    const res = await post()
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'duplicate key' })
+    expect(state.calls).toEqual(['consume_import_quota', 'insert', 'refund_import_quota'])
   })
 })

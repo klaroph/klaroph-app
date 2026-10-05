@@ -12,9 +12,9 @@ const IMPORT_QUOTA_EXCEEDED_BODY = {
 
 /**
  * POST /api/expenses/import/confirm
- * After client validation: re-validate, check quota, insert rows, consume import quota.
+ * After client validation: re-validate, check quota, consume import quota, then insert rows.
+ * If the insert fails after a successful consume, refund the quota in the same request.
  * Body: { rows: ExpenseImportRow[] } (from validation response) or { csv: string } to re-validate.
- * Only increments on full success.
  */
 export async function POST(request: Request) {
   try {
@@ -73,16 +73,6 @@ export async function POST(request: Request) {
       description: r.description || null,
     }))
 
-    const { error: insertError } = await supabase.from('expenses').insert(inserts)
-
-    if (insertError) {
-      console.error('POST /api/expenses/import/confirm insert error:', insertError.message)
-      return NextResponse.json(
-        { error: insertError.message || 'Failed to save expenses.' },
-        { status: 500 }
-      )
-    }
-
     const { error: quotaError } = await supabase.rpc('consume_import_quota')
 
     if (quotaError) {
@@ -91,7 +81,21 @@ export async function POST(request: Request) {
       }
       console.error('POST /api/expenses/import/confirm quota error:', quotaError.message)
       return NextResponse.json(
-        { error: 'Imports saved but usage count could not be updated.' },
+        { error: 'Could not update import usage. Nothing was imported.' },
+        { status: 500 }
+      )
+    }
+
+    const { error: insertError } = await supabase.from('expenses').insert(inserts)
+
+    if (insertError) {
+      console.error('POST /api/expenses/import/confirm insert error:', insertError.message)
+      const { error: refundError } = await supabase.rpc('refund_import_quota')
+      if (refundError) {
+        console.error('POST /api/expenses/import/confirm refund error:', refundError.message)
+      }
+      return NextResponse.json(
+        { error: insertError.message || 'Failed to save expenses.' },
         { status: 500 }
       )
     }
