@@ -197,34 +197,24 @@ export default function IncomeAllocationModal({
       setLoading(false)
       return
     }
-    const disposableAmount = Math.max(0, incomeNum - allocated)
 
-    const { data: incomeData, error: incomeErr } = await supabase.from('income_records').insert({
-      user_id: user.id,
-      total_amount: incomeNum,
-      disposable_amount: disposableAmount,
-      date,
-      income_source: incomeSource || null,
-    }).select('id').single()
-    if (incomeErr) {
-      setError(incomeErr.message)
+    const allocations =
+      allocateGoalId && allocated > 0
+        ? [{ goal_id: allocateGoalId, amount: allocated }]
+        : []
+
+    const { error: createErr } = await supabase.rpc('create_income_with_allocations', {
+      p_total_amount: incomeNum,
+      p_date: date,
+      p_income_source: incomeSource || null,
+      p_allocations: allocations,
+    })
+    if (createErr) {
+      setError(createErr.message)
       setLoading(false)
       return
     }
-    let allocationsChanged = false
-    if (allocateGoalId && allocateAmount && allocated > 0 && incomeData) {
-      const { error: allocErr } = await supabase.from('income_allocations').insert({
-        income_record_id: incomeData.id,
-        goal_id: allocateGoalId,
-        amount: allocated,
-      })
-      if (allocErr) {
-        setError(allocErr.message)
-        setLoading(false)
-        return
-      }
-      allocationsChanged = true
-    }
+    const allocationsChanged = allocations.length > 0
     setLoading(false)
     handleClose()
     onSaved({ allocationsChanged })
