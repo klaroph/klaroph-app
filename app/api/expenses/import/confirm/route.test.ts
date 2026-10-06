@@ -121,14 +121,16 @@ describe('POST /api/expenses/import/confirm', () => {
     expect(state.calls).toEqual(['user:consume_import_quota'])
   })
 
-  it('maps the PR 8 42501 import_count protect error to the same 403', async () => {
+  it('keeps the 42501 import_count protect error on the import-usage 500', async () => {
     state.quotaError = {
       message: 'import_count is not updatable by client',
       code: '42501',
     }
     const res = await post()
-    expect(res.status).toBe(403)
-    expect(await res.json()).toEqual(QUOTA_BODY)
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({
+      error: 'Could not update import usage. Nothing was imported.',
+    })
     expect(state.calls).toEqual(['user:consume_import_quota'])
   })
 

@@ -76,7 +76,7 @@ describe('plainDbError', () => {
 })
 
 describe('isImportQuotaExceededError', () => {
-  it('recognizes IMPORT_QUOTA_EXCEEDED and the PR 8 42501 import_count path', () => {
+  it('returns true only when the message or details contain IMPORT_QUOTA_EXCEEDED', () => {
     expect(
       isImportQuotaExceededError({
         message: 'IMPORT_QUOTA_EXCEEDED: free import quota is already used',
@@ -85,13 +85,19 @@ describe('isImportQuotaExceededError', () => {
     ).toBe(true)
     expect(
       isImportQuotaExceededError({
-        message: 'import_count is not updatable by client',
-        code: '42501',
+        message: 'quota check failed',
+        details: 'IMPORT_QUOTA_EXCEEDED: free import quota is already used',
       })
     ).toBe(true)
   })
 
-  it('does not treat other 42501 failures or product codes as the import limit', () => {
+  it('does not treat the 42501 import_count protect error or other product codes as the import limit', () => {
+    expect(
+      isImportQuotaExceededError({
+        message: 'import_count is not updatable by client',
+        code: '42501',
+      })
+    ).toBe(false)
     expect(
       isImportQuotaExceededError({
         message: 'permission denied for function consume_import_quota',

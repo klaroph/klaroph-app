@@ -18,20 +18,16 @@ type QuotaErrorLike = {
   code?: string | null
 }
 
-const IMPORT_COUNT_PROTECT_MESSAGE = 'import_count is not updatable by client'
-
 /**
- * Free-import limit from consume_import_quota, including the PR #8 protect
- * trigger (SQLSTATE 42501, "import_count is not updatable by client").
- * Other 42501 errors, such as permission denied, are not this path.
+ * True when consume_import_quota reports the free import limit.
+ * Matches only IMPORT_QUOTA_EXCEEDED in the message or details, same as main.
  * Callers return their existing import-limit body; this does not build that copy.
+ * The 42501 import_count protect error is not this path.
  */
 export function isImportQuotaExceededError(error: QuotaErrorLike | null | undefined): boolean {
   if (!error) return false
   const text = `${error.message ?? ''}\n${error.details ?? ''}`
-  if (text.includes('IMPORT_QUOTA_EXCEEDED')) return true
-  if (!text.includes(IMPORT_COUNT_PROTECT_MESSAGE)) return false
-  return error.code == null || error.code === '' || error.code === '42501' || text.includes('42501')
+  return text.includes('IMPORT_QUOTA_EXCEEDED')
 }
 
 /**
