@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { plainDbError } from '@/lib/apiError'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -87,9 +88,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       .single()
 
     if (error) {
-      console.error('PATCH /api/budget-overrides/[id] error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'save', 'PATCH /api/budget-overrides/[id] error:') },
         { status: 500 }
       )
     }
@@ -151,9 +151,8 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       .eq('user_id', user.id)
 
     if (error) {
-      console.error('DELETE /api/budget-overrides/[id] error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'delete', 'DELETE /api/budget-overrides/[id] error:') },
         { status: 500 }
       )
     }

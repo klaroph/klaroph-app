@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { plainDbError } from '@/lib/apiError'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -101,9 +102,8 @@ export async function PUT(request: Request, { params }: RouteParams) {
       ) {
         return NextResponse.json({ error: msg }, { status: 400 })
       }
-      console.error('PUT /api/income/[id] RPC error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'save', 'PUT /api/income/[id] RPC error:') },
         { status: 500 }
       )
     }
@@ -163,9 +163,8 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       .eq('user_id', user.id)
 
     if (error) {
-      console.error('DELETE /api/income/[id] error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'delete', 'DELETE /api/income/[id] error:') },
         { status: 500 }
       )
     }

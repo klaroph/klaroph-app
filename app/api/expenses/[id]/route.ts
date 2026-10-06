@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { plainDbError } from '@/lib/apiError'
 import { getTypeForCategory } from '@/lib/expenseCategories'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -67,9 +68,8 @@ export async function PUT(request: Request, { params }: RouteParams) {
       .single()
 
     if (error) {
-      console.error('PUT /api/expenses/[id] update error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'save', 'PUT /api/expenses/[id] update error:') },
         { status: 500 }
       )
     }
@@ -108,9 +108,8 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       .eq('user_id', user.id)
 
     if (error) {
-      console.error('DELETE /api/expenses/[id] error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'delete', 'DELETE /api/expenses/[id] error:') },
         { status: 500 }
       )
     }

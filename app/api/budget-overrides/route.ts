@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { plainDbError } from '@/lib/apiError'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -44,9 +45,8 @@ export async function GET(request: Request) {
       .order('category')
 
     if (error) {
-      console.error('GET /api/budget-overrides error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'load', 'GET /api/budget-overrides error:') },
         { status: 500 }
       )
     }
@@ -121,9 +121,8 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
-      console.error('POST /api/budget-overrides error:', error.message)
       return NextResponse.json(
-        { error: error.message },
+        { error: plainDbError(error, 'save', 'POST /api/budget-overrides error:') },
         { status: 500 }
       )
     }

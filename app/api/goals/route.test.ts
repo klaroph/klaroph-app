@@ -127,6 +127,6 @@ describe('POST /api/goals', () => {
     state.insertError = { message: 'permission denied for table goals' }
     const res = await post()
     expect(res.status).toBe(500)
-    expect(await res.json()).toEqual({ error: 'permission denied for table goals' })
+    expect(await res.json()).toEqual({ error: 'Couldn’t save that.' })
   })
 })

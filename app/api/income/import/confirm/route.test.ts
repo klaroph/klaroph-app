@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({
   importCount: 0,
   calls: [] as string[],
   refundArgs: undefined as unknown,
-  quotaError: null as { message: string } | null,
+  quotaError: null as { message: string; code?: string } | null,
   insertError: null as { message: string } | null,
   refundError: null as { message: string } | null,
 }))
@@ -62,6 +62,7 @@ vi.mock('@/lib/resolveUserPlan', () => ({
   resolveUserPlan: async () => ({ plan_name: state.planName }),
 }))
 
+import { plainDbErrorText } from '@/lib/apiError'
 import { POST } from './route'
 
 const row = { date: '2026-10-01', amount: 5000, category: 'Salary', description: null }
@@ -108,13 +109,42 @@ describe('POST /api/income/import/confirm', () => {
   })
 
   it('returns 500 and does not insert when quota consumption fails for another reason', async () => {
-    state.quotaError = { message: 'permission denied for function consume_import_quota' }
+    state.quotaError = {
+      message: 'permission denied for function consume_import_quota',
+      code: '42501',
+    }
     const res = await post()
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({
       error: 'Could not update import usage. Nothing was imported.',
     })
     expect(state.calls).toEqual(['user:consume_import_quota'])
+  })
+
+  it('keeps the 42501 import_count protect error on the import-usage 500', async () => {
+    state.quotaError = {
+      message: 'import_count is not updatable by client',
+      code: '42501',
+    }
+    const res = await post()
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({
+      error: 'Could not update import usage. Nothing was imported.',
+    })
+    expect(state.calls).toEqual(['user:consume_import_quota'])
+  })
+
+  it('returns the row validation error and does not consume quota', async () => {
+    const res = await POST(
+      new Request('http://localhost/api/income/import/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: [{ date: 'not-a-date', amount: 5000, category: 'Salary' }] }),
+      })
+    )
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'Row 1: invalid date.' })
+    expect(state.calls).toEqual([])
   })
 
   it('inserts only after consume succeeds', async () => {
@@ -128,7 +158,7 @@ describe('POST /api/income/import/confirm', () => {
     state.insertError = { message: 'duplicate key' }
     const res = await post()
     expect(res.status).toBe(500)
-    expect(await res.json()).toEqual({ error: 'duplicate key' })
+    expect(await res.json()).toEqual({ error: plainDbErrorText.save })
     expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert', 'admin:refund_import_quota'])
     expect(state.refundArgs).toEqual({ p_user_id: 'user-1' })
   })
@@ -138,7 +168,7 @@ describe('POST /api/income/import/confirm', () => {
     state.refundError = { message: 'permission denied for function refund_import_quota' }
     const res = await post()
     expect(res.status).toBe(500)
-    expect(await res.json()).toEqual({ error: 'duplicate key' })
+    expect(await res.json()).toEqual({ error: plainDbErrorText.save })
     expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert', 'admin:refund_import_quota'])
     expect(state.refundArgs).toEqual({ p_user_id: 'user-1' })
   })
