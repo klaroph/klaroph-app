@@ -140,7 +140,7 @@ export class SyncEngine {
   }
 
   /**
-   * An omitted plan is the account cap from `get_user_features`.
+   * An omitted plan is the account cap from the caller's subscription row.
    * An explicit plan still wins for the goal cap. The budget clock always comes from the account.
    * A failed lookup leaves the stored clock unchanged.
    */

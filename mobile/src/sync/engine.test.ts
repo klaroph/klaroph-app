@@ -802,7 +802,7 @@ describe('sync engine', () => {
     expect(await tokens.get('sb-klaro-auth-token')).toBe('token-b')
   })
 
-  it('uses the account goal cap from get_user_features when sync is not given a plan', async () => {
+  it('uses the goal cap from the account subscription when sync is not given a plan', async () => {
     const { repo, remote, engine } = harness()
     remote.account = {
       plan: { name: 'Pro', maxGoals: 20 },
@@ -822,7 +822,7 @@ describe('sync engine', () => {
 
   it('keeps the free cap and still syncs other tables when the plan lookup fails', async () => {
     const { repo, remote, engine } = harness()
-    remote.resolveError = new DomainError('42501', 'permission denied for function get_user_features')
+    remote.resolveError = new DomainError('42501', 'permission denied for table subscriptions')
     repo.createGoal({ userId: USER_A, name: 'One', targetAmount: 10, maxGoals: 20 })
     repo.createGoal({ userId: USER_A, name: 'Two', targetAmount: 10, maxGoals: 20 })
     repo.createGoal({ userId: USER_A, name: 'Three', targetAmount: 10, maxGoals: 20 })
@@ -843,14 +843,14 @@ describe('sync engine', () => {
 
   it('still uploads goals under an explicit plan when the lookup fails', async () => {
     const { repo, remote, engine } = harness()
-    remote.resolveError = new DomainError('42501', 'permission denied for function get_user_features')
+    remote.resolveError = new DomainError('42501', 'permission denied for table subscriptions')
     repo.createGoal({ userId: USER_A, name: 'One', targetAmount: 10, maxGoals: 20 })
     repo.createGoal({ userId: USER_A, name: 'Two', targetAmount: 10, maxGoals: 20 })
     repo.createGoal({ userId: USER_A, name: 'Three', targetAmount: 10, maxGoals: 20 })
     const report = await engine.sync(USER_A, { name: 'Pro', maxGoals: 20 })
     expect(report.errors).toEqual([{
       table: 'goals',
-      message: 'permission denied for function get_user_features',
+      message: 'permission denied for table subscriptions',
       code: '42501',
     }])
     expect(await remote.countLive('goals', USER_A)).toBe(3)

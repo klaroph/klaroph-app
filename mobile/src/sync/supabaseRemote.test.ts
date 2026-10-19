@@ -4,25 +4,24 @@ import { createSupabaseRemote } from './supabaseRemote'
 
 type Call = Record<string, unknown>
 
+const SEEDED_PLANS = [
+  { id: 'plan-free', name: 'free', max_goals: 2, has_budgeting: false },
+  { id: 'plan-pro', name: 'pro', max_goals: 20, has_budgeting: true },
+  { id: 'plan-clarity', name: 'clarity_premium', max_goals: 20, has_budgeting: true },
+]
+
 function mockClient(options?: {
   insertConflict?: boolean
-  features?: unknown
-  featuresError?: { message: string; code?: string }
+  subscription?: Record<string, unknown> | null
+  subscriptionError?: { message: string; code?: string }
+  plans?: Record<string, unknown>[]
+  plansError?: { message: string; code?: string }
   user?: { id: string; created_at?: string | null } | null
   simulate?: boolean
   profileError?: { message: string; code?: string }
 }) {
   const calls: Call[] = []
-  const rpcCalls: Call[] = []
   const client = {
-    rpc(fn: string, args: unknown) {
-      rpcCalls.push({ fn, args })
-      if (options?.featuresError) return Promise.resolve({ data: null, error: options.featuresError })
-      return Promise.resolve({
-        data: options?.features ?? { plan_name: 'free', max_goals: 2 },
-        error: null,
-      })
-    },
     auth: {
       getUser() {
         const user = options?.user === undefined
@@ -90,6 +89,10 @@ function mockClient(options?: {
         },
         maybeSingle() {
           calls.push({ ...state, op: 'maybeSingle', table })
+          if (table === 'subscriptions') {
+            if (options?.subscriptionError) return Promise.resolve({ data: null, error: options.subscriptionError })
+            return Promise.resolve({ data: options?.subscription ?? null, error: null })
+          }
           if (options?.profileError) return Promise.resolve({ data: null, error: options.profileError })
           return Promise.resolve({
             data: { simulate_budget_expired: options?.simulate === true },
@@ -97,14 +100,18 @@ function mockClient(options?: {
           })
         },
         then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
-          calls.push({ ...state, op: 'then' })
+          calls.push({ ...state, op: 'then', table })
+          if (table === 'plans') {
+            if (options?.plansError) return Promise.resolve({ data: null, error: options.plansError }).then(resolve, reject)
+            return Promise.resolve({ data: options?.plans ?? SEEDED_PLANS, error: null }).then(resolve, reject)
+          }
           return Promise.resolve({ data: null, error: null, count: 4 }).then(resolve, reject)
         },
       }
       return api
     },
   }
-  return { client: client as unknown as SupabaseClient, calls, rpcCalls }
+  return { client: client as unknown as SupabaseClient, calls }
 }
 
 describe('supabase remote', () => {
@@ -173,9 +180,15 @@ describe('supabase remote', () => {
     expect(call?.is).toEqual(['deleted_at', null])
   })
 
-  it('resolves Pro from get_user_features and reads the budget clock', async () => {
-    const { client, rpcCalls, calls } = mockClient({
-      features: { plan_name: 'clarity_premium', max_goals: 20, is_grace: false },
+  it('resolves Pro from the caller subscription row and reads the budget clock', async () => {
+    const { client, calls } = mockClient({
+      subscription: {
+        status: 'active',
+        plan_id: 'plan-pro',
+        current_period_end: '2027-01-01T00:00:00.000Z',
+        grace_period_until: null,
+        is_lifetime: false,
+      },
       user: { id: 'user-1', created_at: '2024-01-01T00:00:00.000Z' },
       simulate: false,
     })
@@ -186,19 +199,33 @@ describe('supabase remote', () => {
       accountCreatedAt: '2024-01-01T00:00:00.000Z',
       simulateBudgetExpired: false,
     })
-    expect(rpcCalls).toEqual([{ fn: 'get_user_features', args: { p_user_id: 'user-1' } }])
-    const profile = calls.find((entry) => entry.op === 'maybeSingle')
-    expect(profile?.table).toBe('profiles')
+    const subscription = calls.find((entry) => entry.op === 'maybeSingle' && entry.table === 'subscriptions')
+    expect(subscription?.select).toBe('status, plan_id, current_period_end, grace_period_until, is_lifetime')
+    expect(subscription?.eq).toEqual([['user_id', 'user-1']])
+    expect(subscription?.order).toEqual([['current_period_end', { ascending: false }]])
+    expect(calls.some((entry) => entry.fn === 'get_user_features' || entry.op === 'rpc')).toBe(false)
+    const profile = calls.find((entry) => entry.op === 'maybeSingle' && entry.table === 'profiles')
     expect(profile?.select).toBe('simulate_budget_expired')
-    expect(profile?.eq).toEqual([['id', 'user-1']])
   })
 
-  it('throws when get_user_features fails and ignores a profile read failure', async () => {
-    const denied = mockClient({ featuresError: { code: '42501', message: 'permission denied for function get_user_features' } })
+  it('falls back to Free when there is no subscription row and throws when the read fails', async () => {
+    const empty = mockClient({ subscription: null, user: { id: 'user-1', created_at: '2026-10-01T00:00:00.000Z' } })
+    await expect(createSupabaseRemote(empty.client).resolveAccount('user-1')).resolves.toMatchObject({
+      plan: { name: 'Free', maxGoals: 2 },
+      fullBudgeting: false,
+    })
+
+    const denied = mockClient({ subscriptionError: { code: '42501', message: 'permission denied for table subscriptions' } })
     await expect(createSupabaseRemote(denied.client).resolveAccount('user-1')).rejects.toMatchObject({ code: '42501' })
 
     const { client } = mockClient({
-      features: { plan_name: 'free', max_goals: 2 },
+      subscription: {
+        status: 'free',
+        plan_id: 'plan-free',
+        current_period_end: '2027-01-01T00:00:00.000Z',
+        grace_period_until: null,
+        is_lifetime: false,
+      },
       profileError: { message: 'profile unavailable' },
       simulate: true,
     })

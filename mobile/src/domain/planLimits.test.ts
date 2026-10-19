@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FREE_PLAN_CAP, fullBudgetingFromUserFeatures, goalAdoptionBlockMessage, planCapFromUserFeatures } from './planLimits'
+import { accountPlanFromSubscription, FREE_PLAN_CAP, goalAdoptionBlockMessage, type PlanConfig, type SubscriptionSnapshot } from './planLimits'
 
 describe('goal adoption cap', () => {
   it('allows a combined total equal to the plan and blocks one past it', () => {
@@ -19,21 +19,85 @@ describe('goal adoption cap', () => {
   })
 })
 
-describe('get_user_features', () => {
-  it('maps clarity_premium and pro onto the Pro cap from max_goals', () => {
-    expect(planCapFromUserFeatures({ plan_name: 'clarity_premium', max_goals: 20 })).toEqual({
+const NOW = new Date('2026-10-19T00:00:00.000Z')
+
+const PLANS: PlanConfig[] = [
+  { id: 'plan-free', name: 'free', maxGoals: 2, hasBudgeting: false },
+  { id: 'plan-pro', name: 'pro', maxGoals: 20, hasBudgeting: true },
+  { id: 'plan-clarity', name: 'clarity_premium', maxGoals: 20, hasBudgeting: true },
+]
+
+function subscription(overrides: Partial<SubscriptionSnapshot>): SubscriptionSnapshot {
+  return {
+    status: 'active',
+    planId: 'plan-pro',
+    currentPeriodEnd: '2027-01-01T00:00:00.000Z',
+    gracePeriodUntil: null,
+    isLifetime: false,
+    ...overrides,
+  }
+}
+
+describe('subscription goal cap', () => {
+  it('uses the linked pro or clarity_premium max_goals during an active period', () => {
+    expect(accountPlanFromSubscription(subscription({}), PLANS, NOW)).toEqual({
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+    })
+    expect(accountPlanFromSubscription(subscription({ planId: 'plan-clarity' }), PLANS, NOW).plan).toEqual({
       name: 'Pro',
       maxGoals: 20,
     })
-    expect(planCapFromUserFeatures({ plan_name: 'pro', max_goals: 20 })).toEqual({ name: 'Pro', maxGoals: 20 })
-    expect(fullBudgetingFromUserFeatures({ plan_name: 'clarity_premium', max_goals: 20, is_grace: true })).toBe(true)
+    const custom: PlanConfig[] = [
+      { id: 'plan-pro', name: 'pro', maxGoals: 20, hasBudgeting: true },
+      { id: 'plan-custom', name: 'pro', maxGoals: 15, hasBudgeting: true },
+    ]
+    expect(accountPlanFromSubscription(subscription({ planId: 'plan-custom' }), custom, NOW).plan.maxGoals).toBe(15)
   })
 
-  it('uses a free payload max_goals and falls back to 2', () => {
-    expect(planCapFromUserFeatures({ plan_name: 'free', max_goals: 2 })).toEqual({ name: 'Free', maxGoals: 2 })
-    expect(planCapFromUserFeatures({ plan_name: 'free' })).toEqual({ name: 'Free', maxGoals: 2 })
-    expect(planCapFromUserFeatures(null)).toEqual({ name: 'Free', maxGoals: 2 })
-    expect(planCapFromUserFeatures({ plan_name: 'nope', max_goals: '20' })).toEqual({ name: 'Free', maxGoals: 2 })
-    expect(fullBudgetingFromUserFeatures({ plan_name: 'free', max_goals: 2 })).toBe(false)
+  it('uses the pro plan max for lifetime, including a free plan_id and a null max_goals', () => {
+    expect(accountPlanFromSubscription(subscription({
+      status: 'canceled',
+      planId: 'plan-free',
+      currentPeriodEnd: '2020-01-01T00:00:00.000Z',
+      isLifetime: true,
+    }), PLANS, NOW)).toEqual({
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+    })
+    const nullMax: PlanConfig[] = [
+      { id: 'plan-pro', name: 'pro', maxGoals: null, hasBudgeting: true },
+    ]
+    expect(accountPlanFromSubscription(subscription({ isLifetime: true }), nullMax, NOW).plan.maxGoals).toBe(20)
+    expect(accountPlanFromSubscription(subscription({ isLifetime: true, planId: 'plan-free' }), [], NOW)).toEqual({
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+    })
+  })
+
+  it('keeps the free cap of 2 when there is no row, the period has ended, or the plan is free', () => {
+    expect(accountPlanFromSubscription(null, PLANS, NOW)).toEqual({ plan: FREE_PLAN_CAP, fullBudgeting: false })
+    expect(accountPlanFromSubscription(subscription({
+      currentPeriodEnd: '2020-01-01T00:00:00.000Z',
+    }), PLANS, NOW)).toEqual({ plan: FREE_PLAN_CAP, fullBudgeting: false })
+    expect(accountPlanFromSubscription(subscription({ planId: 'plan-free' }), PLANS, NOW)).toEqual({
+      plan: FREE_PLAN_CAP,
+      fullBudgeting: false,
+    })
+  })
+
+  it('keeps the free goal cap during grace and still allows full budgeting', () => {
+    expect(accountPlanFromSubscription(subscription({
+      status: 'past_due',
+      currentPeriodEnd: '2020-01-01T00:00:00.000Z',
+      gracePeriodUntil: '2026-10-22T00:00:00.000Z',
+    }), PLANS, NOW)).toEqual({
+      plan: FREE_PLAN_CAP,
+      fullBudgeting: true,
+    })
+    expect(accountPlanFromSubscription(subscription({
+      status: 'past_due',
+      gracePeriodUntil: '2026-10-01T00:00:00.000Z',
+    }), PLANS, NOW).fullBudgeting).toBe(false)
   })
 })

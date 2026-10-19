@@ -30,36 +30,118 @@ export const FREE_PLAN_CAP: ResolvedPlanCap = {
   maxGoals: FREE_PLAN_MAX_GOALS,
 }
 
-const PRO_PLAN_NAMES = new Set(['pro', 'clarity_premium'])
+const PREMIUM_PLAN_NAMES = new Set(['pro', 'clarity_premium'])
 
-function featureRecord(value: unknown): Record<string, unknown> {
-  if (value == null || typeof value !== 'object' || Array.isArray(value)) return {}
-  return value as Record<string, unknown>
+/**
+ * `enforce_goal_plan_limit` uses `COALESCE(plans.max_goals, 20)` after it has
+ * already chosen a pro or clarity_premium row. The seeded rows are 20
+ * (supabase/migrations/20260308000000_plans_has_budgeting.sql). This is only
+ * the null fallback from that trigger, not a second cap.
+ */
+const PREMIUM_MAX_GOALS_WHEN_NULL = 20
+
+/** One `plans` row, as readable by `authenticated` (`plans_select_all`). */
+export type PlanConfig = {
+  id: string
+  name: string
+  maxGoals: number | null
+  /** `plans.has_budgeting`. Null when the column was not in the payload. */
+  hasBudgeting: boolean | null
 }
 
-function featurePlanName(value: unknown): string {
-  const name = featureRecord(value).plan_name
-  return typeof name === 'string' ? name.trim().toLowerCase() : 'free'
+/** One `subscriptions` row, the caller's own row under `subscriptions_select_own`. */
+export type SubscriptionSnapshot = {
+  status: string | null
+  planId: string | null
+  currentPeriodEnd: string | null
+  gracePeriodUntil: string | null
+  isLifetime: boolean
+}
+
+function planName(plan: PlanConfig): string {
+  return plan.name.trim().toLowerCase()
+}
+
+function premiumRank(name: string): number {
+  if (name === 'pro') return 0
+  if (name === 'clarity_premium') return 1
+  return 2
+}
+
+function premiumMax(plan: PlanConfig | undefined): number {
+  if (plan?.maxGoals == null || !Number.isInteger(plan.maxGoals)) return PREMIUM_MAX_GOALS_WHEN_NULL
+  return plan.maxGoals
+}
+
+function fullBudgeting(plan: PlanConfig | undefined, fallback: boolean): boolean {
+  if (typeof plan?.hasBudgeting === 'boolean') return plan.hasBudgeting
+  return fallback
+}
+
+function instant(value: string | null): number {
+  if (value == null) return Number.NaN
+  return Date.parse(value)
 }
 
 /**
- * `get_user_features(p_user_id uuid) returns jsonb`.
- * Pro and lifetime rows come back as `clarity_premium` with that plan's `max_goals`.
- * A missing or free row uses `max_goals` from the payload, otherwise 2.
- * Local-only mode does not call this and stays on `FREE_PLAN_CAP`.
+ * Goal cap from `enforce_goal_plan_limit` (latest body in
+ * `20261019120000_exclude_soft_deleted_reads.sql`) and `plans.max_goals`.
+ *
+ * Lifetime uses the pro row, then clarity_premium, even when the subscription
+ * points at free. An active period on pro or clarity_premium uses that row's
+ * `max_goals`. Every other row, including past_due grace, keeps the free
+ * default of 2. Grace still keeps `has_budgeting` so budget edits match the
+ * web routes. A missing subscription is Free.
  */
-export function planCapFromUserFeatures(value: unknown): ResolvedPlanCap {
-  const maxRaw = featureRecord(value).max_goals
-  const maxGoals = typeof maxRaw === 'number' && Number.isInteger(maxRaw) && maxRaw > 0
-    ? maxRaw
-    : FREE_PLAN_MAX_GOALS
-  if (PRO_PLAN_NAMES.has(featurePlanName(value))) return { name: 'Pro', maxGoals }
-  return { name: 'Free', maxGoals }
-}
+export function accountPlanFromSubscription(
+  subscription: SubscriptionSnapshot | null,
+  plans: readonly PlanConfig[],
+  now: Date,
+): { plan: ResolvedPlanCap; fullBudgeting: boolean } {
+  if (!subscription) return { plan: FREE_PLAN_CAP, fullBudgeting: false }
 
-/** Pro and lifetime include full budgeting. The RPC does not return `has_budgeting`. */
-export function fullBudgetingFromUserFeatures(value: unknown): boolean {
-  return PRO_PLAN_NAMES.has(featurePlanName(value))
+  const status = (subscription.status ?? '').trim().toLowerCase()
+  const linked = plans.find((plan) => plan.id === subscription.planId)
+
+  if (subscription.isLifetime) {
+    const premium = plans
+      .filter((plan) => PREMIUM_PLAN_NAMES.has(planName(plan)))
+      .slice()
+      .sort((a, b) => premiumRank(planName(a)) - premiumRank(planName(b)))
+    const chosen = premium[0]
+    return {
+      plan: { name: 'Pro', maxGoals: premiumMax(chosen) },
+      fullBudgeting: fullBudgeting(chosen, true),
+    }
+  }
+
+  const periodEnd = instant(subscription.currentPeriodEnd)
+  const activePremium = status === 'active'
+    && subscription.planId != null
+    && Number.isFinite(periodEnd)
+    && periodEnd > now.getTime()
+    && linked != null
+    && PREMIUM_PLAN_NAMES.has(planName(linked))
+
+  if (activePremium) {
+    return {
+      plan: { name: 'Pro', maxGoals: premiumMax(linked) },
+      fullBudgeting: fullBudgeting(linked, true),
+    }
+  }
+
+  const graceUntil = instant(subscription.gracePeriodUntil)
+  const inGrace = status === 'past_due'
+    && Number.isFinite(graceUntil)
+    && now.getTime() < graceUntil
+    && linked != null
+    && PREMIUM_PLAN_NAMES.has(planName(linked))
+
+  if (inGrace) {
+    return { plan: FREE_PLAN_CAP, fullBudgeting: fullBudgeting(linked, true) }
+  }
+
+  return { plan: FREE_PLAN_CAP, fullBudgeting: false }
 }
 
 /**

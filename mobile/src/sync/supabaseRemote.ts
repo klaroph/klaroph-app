@@ -1,7 +1,11 @@
 import { createClient, type SupabaseClient, type SupportedStorage } from '@supabase/supabase-js'
 import { keysetOr, type PullPageInput } from './cursor'
 import { DomainError } from '../domain/errors'
-import { fullBudgetingFromUserFeatures, planCapFromUserFeatures } from '../domain/planLimits'
+import {
+  accountPlanFromSubscription,
+  type PlanConfig,
+  type SubscriptionSnapshot,
+} from '../domain/planLimits'
 import type { ServerStamp, SyncedTable } from './model'
 import { fieldsFor } from './model'
 import type { AccountFeatures, PushMode, RemoteSync } from './remote'
@@ -47,21 +51,22 @@ export type SyncSupabase = {
   from: (table: SyncedTable) => FilterQuery & WriteQuery
 }
 
+type AccountQuery = {
+  select: (columns: string) => AccountQuery
+  eq: (column: string, value: string) => AccountQuery
+  order: (column: string, options: { ascending: boolean }) => AccountQuery
+  maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: QueryError }>
+  then: PromiseLike<{ data: Record<string, unknown>[] | null; error: QueryError }>['then']
+}
+
 type AccountClient = {
-  rpc: (fn: 'get_user_features', args: { p_user_id: string }) => Promise<{ data: unknown; error: QueryError }>
   auth: {
     getUser: () => Promise<{
       data: { user: { id: string; created_at?: string | null } | null }
       error: QueryError
     }>
   }
-  from: (table: 'profiles') => {
-    select: (columns: 'simulate_budget_expired') => {
-      eq: (column: 'id', value: string) => {
-        maybeSingle: () => Promise<{ data: { simulate_budget_expired?: boolean } | null; error: QueryError }>
-      }
-    }
-  }
+  from: (table: 'profiles' | 'subscriptions' | 'plans') => AccountQuery
 }
 
 function remoteError(error: Exclude<QueryError, null>): never {
@@ -165,15 +170,37 @@ export function createSupabaseRemote(client: SupabaseClient): RemoteSync {
   }
 }
 
+const SUBSCRIPTION_COLUMNS = 'status, plan_id, current_period_end, grace_period_until, is_lifetime'
+const PLAN_COLUMNS = 'id, name, max_goals, has_budgeting'
+
 /**
- * `get_user_features(p_user_id uuid) returns jsonb` with `plan_name` and `max_goals`.
- * Execute is granted to service_role only today. This call uses the user session.
- * A failure is thrown so sync can keep the Free goal cap without storing a budget clock.
+ * Reads `subscriptions` for this user with the user token. RLS policy
+ * `subscriptions_select_own` is `auth.uid() = user_id`. `plans` is readable by
+ * `authenticated`. `get_user_features` is not called.
+ * A subscription or plans error is thrown so sync can keep the Free goal cap
+ * without storing a budget clock. No subscription row is Free.
  * A profile read failure does not fail the lookup; the simulate flag stays false.
  */
 async function readAccountFeatures(account: AccountClient, userId: string): Promise<AccountFeatures> {
-  const features = await account.rpc('get_user_features', { p_user_id: userId })
-  if (features.error) remoteError(features.error)
+  const subscriptionResult = await account
+    .from('subscriptions')
+    .select(SUBSCRIPTION_COLUMNS)
+    .eq('user_id', userId)
+    .order('current_period_end', { ascending: false })
+    .maybeSingle()
+  if (subscriptionResult.error) remoteError(subscriptionResult.error)
+
+  const plansResult = subscriptionResult.data
+    ? await account.from('plans').select(PLAN_COLUMNS)
+    : { data: [], error: null }
+  if (plansResult.error) remoteError(plansResult.error)
+
+  const resolved = accountPlanFromSubscription(
+    subscriptionFromRow(subscriptionResult.data),
+    plansFromRows(plansResult.data),
+    new Date(),
+  )
+
   const userResult = await account.auth.getUser()
   if (userResult.error) remoteError(userResult.error)
   const user = userResult.data.user
@@ -192,11 +219,38 @@ async function readAccountFeatures(account: AccountClient, userId: string): Prom
     simulateBudgetExpired = false
   }
   return {
-    plan: planCapFromUserFeatures(features.data),
-    fullBudgeting: fullBudgetingFromUserFeatures(features.data),
+    plan: resolved.plan,
+    fullBudgeting: resolved.fullBudgeting,
     accountCreatedAt,
     simulateBudgetExpired,
   }
+}
+
+function subscriptionFromRow(row: Record<string, unknown> | null): SubscriptionSnapshot | null {
+  if (!row) return null
+  return {
+    status: typeof row.status === 'string' ? row.status : null,
+    planId: typeof row.plan_id === 'string' ? row.plan_id : null,
+    currentPeriodEnd: typeof row.current_period_end === 'string' ? row.current_period_end : null,
+    gracePeriodUntil: typeof row.grace_period_until === 'string' ? row.grace_period_until : null,
+    isLifetime: row.is_lifetime === true,
+  }
+}
+
+function plansFromRows(rows: Record<string, unknown>[] | null): PlanConfig[] {
+  if (!rows) return []
+  const plans: PlanConfig[] = []
+  for (const row of rows) {
+    if (typeof row.id !== 'string' || typeof row.name !== 'string') continue
+    const maxGoals = typeof row.max_goals === 'number' && Number.isInteger(row.max_goals) ? row.max_goals : null
+    plans.push({
+      id: row.id,
+      name: row.name,
+      maxGoals,
+      hasBudgeting: typeof row.has_budgeting === 'boolean' ? row.has_budgeting : null,
+    })
+  }
+  return plans
 }
 
 function selectList(table: SyncedTable): string {
