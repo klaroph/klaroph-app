@@ -1,6 +1,7 @@
 /**
- * Product-update email preference, stored only as profiles.marketing_emails_unsubscribed_at
- * (NULL = subscribed). Uses the caller's RLS-scoped client, so a user can only touch their own row.
+ * Marketing email preference, stored only as profiles.marketing_emails_unsubscribed_at
+ * (NULL = subscribed). One switch covers product updates and the weekly summary.
+ * Uses the caller's RLS-scoped client, so a user can only touch their own row.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'

@@ -67,6 +67,8 @@ export type OperationalEmailContent = {
   cta: { label: string; url: string }
   footerReason: string
   testNotice?: string
+  /** Marketing mail only. Transactional callers leave this unset. */
+  unsubscribeUrl?: string
 }
 
 const esc = escapeHtml
@@ -106,7 +108,19 @@ function ctaButton(cta: { label: string; url: string }): string {
               </table>`
 }
 
-function shell(input: { title: string; preheader: string; testNotice?: string; card: string; footer: string[] }): string {
+function unsubscribeLink(url?: string): string {
+  if (!url) return ''
+  return `<p style="margin:10px 0 0; font-size:12px; line-height:1.5;"><a href="${esc(url)}" style="color:${COLOR.muted}; text-decoration:underline;">Unsubscribe from KlaroPH updates</a></p>`
+}
+
+function shell(input: {
+  title: string
+  preheader: string
+  testNotice?: string
+  card: string
+  footer: string[]
+  unsubscribeUrl?: string
+}): string {
   const testBanner = input.testNotice
     ? `<tr>
           <td style="padding:0 0 16px;">
@@ -145,7 +159,7 @@ function shell(input: { title: string; preheader: string; testNotice?: string; c
             <td align="center" style="padding:24px 16px 0;">
               <p style="margin:0 0 8px; font-size:13px; line-height:1.5; color:${COLOR.muted};"><strong style="color:${COLOR.ink};">KlaroPH</strong> · Clearer money habits start here. · <a href="https://klaroph.com" style="color:${COLOR.primary}; text-decoration:none;">klaroph.com</a></p>
               <p style="margin:0; font-size:12px; line-height:1.5; color:${COLOR.muted};">${esc(reason)}</p>
-              ${notes.map((n) => `<p style="margin:10px 0 0; font-size:12px; line-height:1.5; color:${COLOR.muted};">${esc(n)}</p>`).join('')}
+              ${notes.map((n) => `<p style="margin:10px 0 0; font-size:12px; line-height:1.5; color:${COLOR.muted};">${esc(n)}</p>`).join('')}${unsubscribeLink(input.unsubscribeUrl)}
             </td>
           </tr>
         </table>
@@ -261,7 +275,14 @@ export function renderOperationalEmail(c: OperationalEmailContent): { html: stri
               <div style="height:8px; line-height:8px;">&nbsp;</div>
               ${ctaButton(c.cta)}`
 
-  const html = shell({ title: c.headline, preheader: c.preheader, testNotice: c.testNotice, card, footer: [c.footerReason] })
+  const html = shell({
+    title: c.headline,
+    preheader: c.preheader,
+    testNotice: c.testNotice,
+    card,
+    footer: [c.footerReason],
+    unsubscribeUrl: c.unsubscribeUrl,
+  })
 
   const text = [
     ...(c.testNotice ? [c.testNotice, ''] : []),
@@ -281,6 +302,7 @@ export function renderOperationalEmail(c: OperationalEmailContent): { html: stri
     '',
     TEXT_FOOTER,
     c.footerReason,
+    ...(c.unsubscribeUrl ? [`Unsubscribe: ${c.unsubscribeUrl}`] : []),
   ].join('\n')
 
   return { html, text }
