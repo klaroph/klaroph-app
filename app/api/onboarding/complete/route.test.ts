@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { onboardingNamePrefill } from '@/lib/displayName'
+import { NICKNAME_MAX_LENGTH, NICKNAME_REQUIRED_ERROR, NICKNAME_TOO_LONG_ERROR, onboardingNamePrefill } from '@/lib/displayName'
 
 type Call = {
   table: string
@@ -125,6 +125,7 @@ function validBody(overrides: Record<string, unknown> = {}) {
     savings_percent: 20,
     goal_name: 'Emergency fund',
     goal_target_amount: 100000,
+    nickname: 'Juan',
     ...overrides,
   }
 }
@@ -188,8 +189,8 @@ describe('POST /api/onboarding/complete', () => {
       savings_percent: 20,
       income_frequency: 'semi-monthly',
       onboarding_completed: true,
+      nickname: 'Juan',
     })
-    expect(profile[0]?.payload).not.toHaveProperty('nickname')
     expect(profile[0]?.filters).toEqual({ id: 'user-1' })
 
     expect(callsTo('goals', 'insert')[0]?.payload).toEqual({
@@ -217,32 +218,38 @@ describe('POST /api/onboarding/complete', () => {
     expect(state.rpcCalls).toBe(0)
   })
 
-  it('writes a trimmed nickname and caps it at 40 characters', async () => {
-    const longName = `  ${'Maria'.repeat(12)}  `
-    const res = await post(validBody({ nickname: longName }))
+  it('writes a trimmed nickname of 15 characters or fewer', async () => {
+    const res = await post(validBody({ nickname: '  Christopher  ' }))
     expect(res.status).toBe(200)
-    const profile = callsTo('profiles', 'update')
-    expect(profile).toHaveLength(1)
-    expect(profile[0]?.payload).toMatchObject({ nickname: 'Maria'.repeat(8) })
-    expect((profile[0]?.payload as { nickname: string }).nickname).toHaveLength(40)
+    expect(callsTo('profiles', 'update')[0]?.payload).toMatchObject({ nickname: 'Christopher' })
+
+    state.calls = []
+    const max = 'A'.repeat(NICKNAME_MAX_LENGTH)
+    const exact = await post(validBody({ nickname: max }))
+    expect(exact.status).toBe(200)
+    expect(callsTo('profiles', 'update')[0]?.payload).toMatchObject({ nickname: max })
   })
 
-  it('does not save a nickname when an email user skips the empty name field', async () => {
-    expect(
-      onboardingNamePrefill({ nickname: null, fullName: 'ada@example.com' }),
-    ).toBe('')
-    const res = await post(validBody())
-    expect(res.status).toBe(200)
-    expect(callsTo('profiles', 'update')[0]?.payload).not.toHaveProperty('nickname')
-  })
-
-  it('does not write nickname when it is missing, blank, or only spaces', async () => {
+  it('rejects a skipped or blank nickname before any write', async () => {
+    expect(onboardingNamePrefill({ nickname: null, fullName: 'ada@example.com' })).toBe('')
     for (const nickname of [undefined, null, '', '   ', 12]) {
       state.calls = []
       const res = await post(validBody({ nickname }))
-      expect(res.status).toBe(200)
-      expect(callsTo('profiles', 'update')[0]?.payload).not.toHaveProperty('nickname')
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({ error: NICKNAME_REQUIRED_ERROR })
+      expect(state.calls).toEqual([])
     }
+  })
+
+  it('returns 400 for more than 15 characters and does not truncate', async () => {
+    const nickname = 'Christopher John'
+    expect(nickname).toHaveLength(16)
+    const res = await post(validBody({ nickname: `  ${nickname}  ` }))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body).toEqual({ error: NICKNAME_TOO_LONG_ERROR })
+    expect(JSON.stringify(body)).not.toContain('Christopher Joh')
+    expect(state.calls).toEqual([])
   })
 
   it('does not insert income when the profile update fails', async () => {

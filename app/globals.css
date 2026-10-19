@@ -1220,10 +1220,16 @@ select:focus-visible {
     justify-content: flex-end;
   }
 
-  .dashboard-page-header .dashboard-greeting-title,
   .dashboard-page-header .klaro-page-header-title {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  .dashboard-page-header .dashboard-greeting-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Hand logo — layout box 40px; visual scale */

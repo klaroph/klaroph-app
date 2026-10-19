@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { toLocalDateString } from '@/lib/format'
-import { NICKNAME_MAX_LENGTH } from '@/lib/displayName'
+import { nicknameForWrite } from '@/lib/displayName'
 
 const VALID_FINANCIAL_STAGES = ['starter', 'stabilizing', 'building', 'scaling'] as const
 const VALID_RISK_COMFORT = ['low', 'medium', 'high'] as const
@@ -77,8 +77,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const nickname =
-      typeof body?.nickname === 'string' ? body.nickname.trim().slice(0, NICKNAME_MAX_LENGTH) : ''
+    const parsedNickname = nicknameForWrite(body?.nickname)
+    if (!parsedNickname.ok) {
+      return NextResponse.json({ error: parsedNickname.error }, { status: 400 })
+    }
+
     const profileUpdate = {
       monthly_income_range,
       monthly_income,
@@ -92,7 +95,7 @@ export async function POST(request: Request) {
       dream_statement,
       onboarding_completed: true,
       profile_completion_percentage: 100,
-      ...(nickname ? { nickname } : {}),
+      nickname: parsedNickname.nickname,
     }
 
     const { error: profileError } = await supabaseAdmin

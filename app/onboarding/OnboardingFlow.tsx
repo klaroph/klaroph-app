@@ -5,7 +5,13 @@ import { formatWholePeso } from '@/lib/format'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { GOAL_PRESETS } from '@/lib/goalPresets'
-import { NICKNAME_MAX_LENGTH, onboardingNamePrefill } from '@/lib/displayName'
+import {
+  NICKNAME_MAX_LENGTH,
+  NICKNAME_REQUIRED_ERROR,
+  NICKNAME_TOO_LONG_ERROR,
+  nicknameForWrite,
+  onboardingNamePrefill,
+} from '@/lib/displayName'
 import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 import {
   FINANCIAL_STAGES,
@@ -50,17 +56,55 @@ const STEP_LABELS: Record<number, string> = {
 
 const SETUP_PREVIEW = ['Your income', 'A simple spending plan', 'Your first goal', 'A savings preference']
 
+function PreferredNameField({
+  value,
+  message,
+  onChange,
+}: {
+  value: string
+  message: string | null
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="onb-field">
+      <span className="onb-label">What should we call you?</span>
+      <input
+        type="text"
+        name="nickname"
+        autoComplete="nickname"
+        required
+        maxLength={NICKNAME_MAX_LENGTH}
+        value={value}
+        aria-invalid={message ? true : undefined}
+        aria-describedby={message ? 'onb-nickname-error' : undefined}
+        onChange={(e) => onChange(e.target.value)}
+        className="login-input"
+      />
+      {message ? (
+        <p id="onb-nickname-error" className="onb-error" role="alert">
+          {message}
+        </p>
+      ) : null}
+    </label>
+  )
+}
+
 type OnboardingFlowProps = {
   nickname?: string | null
   fullName?: string | null
+  /** Test hook so the summary step can render without clicking through. */
+  initialStep?: number
 }
 
 export default function OnboardingFlow({
   nickname = null,
   fullName = null,
+  initialStep = 1,
 }: OnboardingFlowProps) {
   const router = useRouter()
-  const [step, setStep] = useState(1)
+  const [step, setStep] = useState(initialStep)
+  const seededName = onboardingNamePrefill({ nickname, fullName })
+  const seededNameProblem = initialStep === STEPS ? nicknameForWrite(seededName) : null
   const [income, setIncome] = useState('')
   const [frequency, setFrequency] = useState<IncomeFrequency>('monthly')
   const [goalName, setGoalName] = useState('')
@@ -74,8 +118,12 @@ export default function OnboardingFlow({
   const [dreamStatement, setDreamStatement] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [preferredName, setPreferredName] = useState(() =>
-    onboardingNamePrefill({ nickname, fullName }),
+  const [preferredName, setPreferredName] = useState(seededName)
+  const [nameError, setNameError] = useState<string | null>(
+    seededNameProblem && !seededNameProblem.ok ? seededNameProblem.error : null,
+  )
+  const [finishNameOpen, setFinishNameOpen] = useState(
+    initialStep === STEPS && !!seededNameProblem && !seededNameProblem.ok,
   )
 
   const incomeNum = parseFloat(income.replace(/[^0-9.]/g, '')) || 0
@@ -85,13 +133,48 @@ export default function OnboardingFlow({
   const monthsToGoal =
     savingsPerMonth > 0 ? Math.ceil(targetNum / savingsPerMonth) : 0
 
+  const editPreferredName = (value: string) => {
+    setPreferredName(value)
+    if (!nameError && !finishNameOpen) return
+    const parsed = nicknameForWrite(value)
+    setNameError(parsed.ok ? null : parsed.error)
+  }
+
+  const rejectIncompleteName = (atFinish: boolean) => {
+    const parsed = nicknameForWrite(preferredName)
+    if (parsed.ok) {
+      setNameError(null)
+      setPreferredName(parsed.nickname)
+      return parsed
+    }
+    if (atFinish) setFinishNameOpen(true)
+    setNameError(parsed.error)
+    return parsed
+  }
+
+  const startPlan = () => {
+    const parsed = rejectIncompleteName(false)
+    if (!parsed.ok) return
+    setStep(2)
+  }
+
+  const openFinish = () => {
+    const parsed = nicknameForWrite(preferredName)
+    if (!parsed.ok) {
+      setFinishNameOpen(true)
+      setNameError(parsed.error)
+    }
+    setStep(STEPS)
+  }
+
   const handleFinish = async () => {
     setError(null)
+    const parsed = rejectIncompleteName(true)
+    if (!parsed.ok) return
     setLoading(true)
     const name = goalName.trim() || 'My Goal'
     const target = targetNum > 0 ? targetNum : 100000
     const primary_goal_category = presetToGoalCategory(goalPresetId)
-    const trimmedNickname = preferredName.trim().slice(0, NICKNAME_MAX_LENGTH)
     try {
       const res = await fetch('/api/onboarding/complete', {
         method: 'POST',
@@ -110,12 +193,18 @@ export default function OnboardingFlow({
           dream_statement: dreamStatement.trim() || null,
           goal_name: name,
           goal_target_amount: target,
-          ...(trimmedNickname ? { nickname: trimmedNickname } : {}),
+          nickname: parsed.nickname,
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError((data?.error as string) || 'Something went wrong.')
+        const serverError = (data?.error as string) || 'Something went wrong.'
+        if (serverError === NICKNAME_REQUIRED_ERROR || serverError === NICKNAME_TOO_LONG_ERROR) {
+          setFinishNameOpen(true)
+          setNameError(serverError)
+        } else {
+          setError(serverError)
+        }
         setLoading(false)
         return
       }
@@ -214,20 +303,12 @@ export default function OnboardingFlow({
                   ))}
                 </ul>
               </div>
-              <label className="onb-field">
-                <span className="onb-label">What should we call you?</span>
-                <input
-                  type="text"
-                  name="nickname"
-                  autoComplete="nickname"
-                  maxLength={NICKNAME_MAX_LENGTH}
-                  value={preferredName}
-                  onChange={(e) => setPreferredName(e.target.value.slice(0, NICKNAME_MAX_LENGTH))}
-                  className="login-input"
-                  placeholder="Optional"
-                />
-              </label>
-              <button type="button" onClick={() => setStep(2)} className="btn-primary onb-btn onb-btn--wide">
+              <PreferredNameField
+                value={preferredName}
+                message={nameError}
+                onChange={editPreferredName}
+              />
+              <button type="button" onClick={startPlan} className="btn-primary onb-btn onb-btn--wide">
                 Start My Plan
               </button>
               <p className="onb-hint">Takes less than 2 minutes. You can change everything later.</p>
@@ -435,7 +516,7 @@ export default function OnboardingFlow({
               </label>
               <div className="onb-actions">
                 {backButton}
-                <button type="button" onClick={() => setStep(8)} className="btn-primary onb-btn">
+                <button type="button" onClick={openFinish} className="btn-primary onb-btn">
                   See My Plan
                 </button>
               </div>
@@ -481,6 +562,13 @@ export default function OnboardingFlow({
                 We&apos;ll save this pay period&apos;s income today. Nothing moves to your goal until you
                 allocate it later — your savings % stays a preference only.
               </p>
+              {(finishNameOpen || nameError) && (
+                <PreferredNameField
+                  value={preferredName}
+                  message={nameError}
+                  onChange={editPreferredName}
+                />
+              )}
               {errorLine}
               <div className="onb-actions">
                 {backButton}

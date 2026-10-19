@@ -3,7 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ProfileWithComputed } from '@/types/profile'
 import { getBrowserUser } from '@/lib/supabaseClient'
-import { NICKNAME_MAX_LENGTH, displayName as resolveDisplayName } from '@/lib/displayName'
+import {
+  NICKNAME_MAX_LENGTH,
+  displayName as resolveDisplayName,
+  profileNicknameUpdate,
+} from '@/lib/displayName'
 import {
   INCOME_RANGES,
   RISK_COMFORT_OPTIONS,
@@ -34,6 +38,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [nicknameError, setNicknameError] = useState<string | null>(null)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
 
   const [form, setForm] = useState<ProfileState>({
@@ -119,6 +124,15 @@ export default function ProfilePage() {
     setSaving(false)
   }
 
+  const saveProfile = () => {
+    const { nickname, ...rest } = form
+    const decision = profileNicknameUpdate(nickname, data?.profile?.nickname)
+    setNicknameError(decision.error)
+    const updates: Partial<ProfileState> =
+      decision.nickname !== undefined ? { ...rest, nickname: decision.nickname } : rest
+    void save(updates)
+  }
+
   const handleBlur = (field: keyof ProfileState, value: string | number | null) => {
     const prev = data?.profile ? (data.profile as Record<string, unknown>)[field] : undefined
     const same = prev === value || (prev == null && (value === '' || value === null))
@@ -183,7 +197,7 @@ export default function ProfilePage() {
             />
             <button
               type="button"
-              onClick={() => save(form)}
+              onClick={saveProfile}
               disabled={saving}
               style={{
                 marginTop: 16,
@@ -321,25 +335,39 @@ export default function ProfilePage() {
           </div>
         </div>
         <div className="klaro-field" style={{ marginTop: 16 }}>
-          <label className="klaro-field-label">Nickname (how we address you)</label>
+          <label className="klaro-field-label" htmlFor="profile-nickname">
+            Nickname (how we address you)
+          </label>
           <input
+            id="profile-nickname"
             type="text"
             className="klaro-field-input"
             value={form.nickname}
+            required
             maxLength={NICKNAME_MAX_LENGTH}
-            onChange={(e) =>
-              setForm((f) => ({
-                ...f,
-                nickname: e.target.value.slice(0, NICKNAME_MAX_LENGTH),
-              }))
-            }
-            onBlur={(e) => {
-              const nickname = e.target.value.trim().slice(0, NICKNAME_MAX_LENGTH)
+            aria-invalid={nicknameError ? true : undefined}
+            aria-describedby={nicknameError ? 'profile-nickname-error' : undefined}
+            onChange={(e) => {
+              const nickname = e.target.value
               setForm((f) => ({ ...f, nickname }))
-              handleBlur('nickname', nickname)
+              if (nicknameError) {
+                setNicknameError(profileNicknameUpdate(nickname, data?.profile?.nickname).error)
+              }
+            }}
+            onBlur={() => {
+              const decision = profileNicknameUpdate(form.nickname, data?.profile?.nickname)
+              setForm((f) => ({ ...f, nickname: form.nickname.trim() }))
+              setNicknameError(decision.error)
+              if (decision.nickname === undefined) return
+              handleBlur('nickname', decision.nickname)
             }}
             placeholder="e.g. Jerald"
           />
+          {nicknameError ? (
+            <p id="profile-nickname-error" role="alert" style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--color-error)' }}>
+              {nicknameError}
+            </p>
+          ) : null}
         </div>
         <div className="klaro-field" style={{ marginTop: 16 }}>
           <label className="klaro-field-label">Motivation</label>
