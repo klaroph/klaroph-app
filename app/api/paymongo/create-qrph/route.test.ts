@@ -163,6 +163,7 @@ describe('POST /api/paymongo/create-qrph', () => {
     }
     const res = await post()
     expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'You already have KlaroPH Pro.' })
     expect(state.intents).toHaveLength(0)
   })
 

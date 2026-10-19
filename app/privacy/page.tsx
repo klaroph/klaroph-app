@@ -72,11 +72,22 @@ export default function PrivacyPage() {
 
         <section className="legal-section">
           <h2>Third-Party Services</h2>
-          <p>
-            We use Google OAuth to let you sign in with your Google account. When you choose &quot;Sign in with Google,&quot;
-            Google may share your email and basic profile with us in accordance with Google&apos;s privacy policy. We do not
-            control Google&apos;s data practices; please review Google&apos;s privacy policy for more information.
-          </p>
+          <p>KlaroPH uses these services to run the app:</p>
+          <ul>
+            <li>Supabase stores your account and the records you save, and handles sign-in.</li>
+            <li>
+              Google sign-in is available. If you choose &quot;Sign in with Google,&quot; Google may share your email
+              and basic profile with KlaroPH in accordance with Google&apos;s privacy policy. KlaroPH does not control
+              Google&apos;s data practices.
+            </li>
+            <li>Vercel hosts the app and runs its scheduled job.</li>
+            <li>PayMongo processes the one-time ₱999 KlaroPH Pro payment.</li>
+            <li>
+              Google Gemini writes Klaro Insight and Ask Klaro replies. The next section states which details are
+              sent.
+            </li>
+            <li>Resend sends KlaroPH email.</li>
+          </ul>
         </section>
 
         <section className="legal-section">

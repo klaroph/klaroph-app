@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const sub = await resolveSubscriptionState(user.id)
     if (shouldBlockNewProPurchase(sub)) {
       return NextResponse.json(
-        { error: 'User already has active subscription.' },
+        { error: 'You already have KlaroPH Pro.' },
         { status: 400 }
       )
     }

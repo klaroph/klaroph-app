@@ -104,7 +104,12 @@ describe('customer-facing Pro copy', () => {
     expect(terms).toContain('Google Gemini')
     expect(terms).toContain('Resend sends KlaroPH email')
     expect(terms).toContain('Deleting your account ends Pro')
+    expect(privacy).toContain('Supabase stores your account')
+    expect(privacy).toContain('Google sign-in')
+    expect(privacy).toContain('Vercel hosts the app')
+    expect(privacy).toContain('PayMongo processes the one-time ₱999 KlaroPH Pro payment')
     expect(privacy).toContain('Google Gemini')
+    expect(privacy).toContain('Resend sends KlaroPH email')
     expect(privacy).toContain(
       'KlaroPH currently uses Google&apos;s free Gemini tier, so Google may use the prompts and replies to improve its products.'
     )
