@@ -42,12 +42,13 @@ export type FounderSubscription = SubscriptionStateRow & {
   plan_type: string | null
 }
 
-/** Same entitlement rule as the app (lifetime ignores period end; grace still counts as Pro). */
+/** Lifetime is Pro on its own. Other rows still need a pro plan and an active or grace period. */
 export function planKind(sub: FounderSubscription | undefined, now: Date): PlanKind {
-  if (!sub || !sub.plan_name || !PRO_PLAN_NAMES.has(sub.plan_name)) return 'free'
+  if (!sub) return 'free'
+  if (sub.is_lifetime === true) return 'lifetime'
+  if (!sub.plan_name || !PRO_PLAN_NAMES.has(sub.plan_name)) return 'free'
   const { state } = normalizeSubscriptionFromRow(sub, now)
   if (state !== 'ACTIVE' && state !== 'GRACE') return 'free'
-  if (sub.is_lifetime) return 'lifetime'
   return sub.payment_provider === 'paymongo' ? 'paid' : 'complimentary'
 }
 

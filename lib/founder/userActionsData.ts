@@ -60,6 +60,7 @@ export const supabaseUserActionStore: UserActionStore = {
       .eq('plan_id', expected.plan_id)
       .eq('status', expected.status ?? '')
       .eq('current_period_end', expected.current_period_end ?? '')
+      .eq('is_lifetime', false)
       .select('id')
     if (error) throw new Error(`subscriptions: ${error.message}`)
     return (data ?? []).length === 1 ? 'applied' : 'conflict'

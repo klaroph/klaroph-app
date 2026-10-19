@@ -18,7 +18,6 @@ import {
   PLAN_SECTION_TOOLS_LABEL,
 } from '../../lib/planFeatures'
 import { PRO_ANNUAL_PESOS, PRO_MONTHLY_PESOS, formatPlanPeso } from '@/lib/planPricing'
-import { LandingPromoCodeCapture } from './LandingPromoCodeCapture'
 import PasswordInput from '@/components/auth/PasswordInput'
 import { KLARO_ICONS, KlaroFlow, PrincipleCard, type KlaroTone } from '../brand/KlaroBrand'
 import heroWebImage from '@/public/web.png'
@@ -319,7 +318,6 @@ export default function LandingPageClient() {
 
   return (
     <div className="landing-page">
-      <LandingPromoCodeCapture />
       <a href="#main-content" className="landing-skip-link">Skip to main content</a>
       <nav className="landing-nav">
         <Link href="/" className="landing-nav-brand" aria-label="KlaroPH home">

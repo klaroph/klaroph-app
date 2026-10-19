@@ -46,6 +46,24 @@ describe('planKind', () => {
     expect(planKind(sub({ is_lifetime: true, current_period_end: daysAgo(90) }), NOW)).toBe('lifetime')
   })
 
+  it('counts a lifetime row as Pro when the plan is free or the status has ended', () => {
+    expect(
+      planKind(
+        sub({ is_lifetime: true, plan_name: 'free', status: 'canceled', current_period_end: daysAgo(30) }),
+        NOW
+      )
+    ).toBe('lifetime')
+    expect(
+      planKind(
+        sub({ is_lifetime: true, plan_name: 'free', status: 'expired', current_period_end: daysAgo(1) }),
+        NOW
+      )
+    ).toBe('lifetime')
+    expect(
+      planKind(sub({ is_lifetime: true, status: 'canceled', current_period_end: daysAgo(1) }), NOW)
+    ).toBe('lifetime')
+  })
+
   it('counts grace-period subscriptions as Pro', () => {
     expect(planKind(sub({ status: 'past_due', grace_period_until: daysAhead(2) }), NOW)).toBe('paid')
   })

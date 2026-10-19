@@ -1,8 +1,8 @@
 'use client'
 
-import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import Sidebar from '../../components/layout/Sidebar'
 import MobileBottomNav from '../../components/layout/MobileBottomNav'
@@ -18,7 +18,6 @@ import { UpgradeTriggerProvider, useUpgradeTrigger } from '@/contexts/UpgradeTri
 import { DashboardProfileProvider } from '@/contexts/DashboardProfileContext'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { dispatchDashboardRefresh, dispatchDashboardTransactionsRefresh, dispatchDashboardGoalsRefresh } from '@/lib/dashboardRefresh'
-import type { KlaroPromoVoucher } from '@/lib/klaroPromoStorage'
 import type { ProfileWithComputed } from '@/types/profile'
 
 /** Ignore backdrop close briefly after open (iOS Safari can deliver a ghost click on the new layer). */
@@ -37,47 +36,16 @@ export function useDashboardActions() {
   return ctx ?? { openAddIncome: () => {}, openAddExpense: () => {} }
 }
 
-/** Opens upgrade modal once when `?code=` is present; does not reopen after user closes. */
-function UpgradeUrlAutoOpen() {
-  const searchParams = useSearchParams()
-  const { openUpgradeModal, isUpgradeModalOpen } = useUpgradeTrigger()
-  const { isPro } = useSubscription()
-  const hasOpenedFromUrl = useRef(false)
-
-  useEffect(() => {
-    if (hasOpenedFromUrl.current) return
-    const urlCode = searchParams.get('code')?.trim() ?? ''
-    if (!urlCode) return
-    if (isPro) {
-      hasOpenedFromUrl.current = true
-      return
-    }
-    hasOpenedFromUrl.current = true
-    if (!isUpgradeModalOpen) {
-      openUpgradeModal()
-    }
-  }, [searchParams, isUpgradeModalOpen, isPro, openUpgradeModal])
-
-  return null
-}
-
 function UpgradeModalGate() {
   const { isUpgradeModalOpen, upgradeModalMessage, closeUpgradeModal } = useUpgradeTrigger()
   const { refresh: refreshSubscription, isPro } = useSubscription()
   const [paymentQROpen, setPaymentQROpen] = useState(false)
-  const [paymentPlanType, setPaymentPlanType] = useState<'monthly' | 'annual'>('monthly')
-  const [paymentPromo, setPaymentPromo] = useState<KlaroPromoVoucher | null | undefined>(
-    undefined
-  )
   /** Modal chunks load on first open, then stay mounted so open/close behaves as before. */
   const [upgradeFlowRequested, setUpgradeFlowRequested] = useState(false)
   if (isUpgradeModalOpen && !upgradeFlowRequested) setUpgradeFlowRequested(true)
 
   return (
     <>
-      <Suspense fallback={null}>
-        <UpgradeUrlAutoOpen />
-      </Suspense>
       {upgradeFlowRequested && (
         <>
           <UpgradeModal
@@ -85,9 +53,7 @@ function UpgradeModalGate() {
             onClose={closeUpgradeModal}
             message={upgradeModalMessage ?? undefined}
             onUpgrade={() => {}}
-            onOpenPaymentModal={(planType, promo) => {
-              setPaymentPlanType(planType ?? 'monthly')
-              setPaymentPromo(promo ?? null)
+            onOpenPaymentModal={() => {
               setPaymentQROpen(true)
             }}
           />
@@ -95,12 +61,9 @@ function UpgradeModalGate() {
             isOpen={paymentQROpen}
             onClose={() => {
               setPaymentQROpen(false)
-              setPaymentPromo(undefined)
             }}
             refreshSubscription={refreshSubscription}
             isPro={isPro}
-            planType={paymentPlanType}
-            promoOverride={paymentPromo}
           />
         </>
       )}

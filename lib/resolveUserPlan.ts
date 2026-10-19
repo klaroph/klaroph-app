@@ -41,12 +41,42 @@ const PRO_PLAN_BASE: Omit<ResolvedPlan, 'is_grace' | 'can_create_goals'> = {
   full_budgeting_entitled: true,
 }
 
+function proPlanFromRow(
+  planRow: Awaited<ReturnType<typeof getPlanRow>>,
+  isGrace: boolean
+): ResolvedPlan {
+  const maxGoals = typeof planRow?.max_goals === 'number' ? planRow.max_goals : PRO_PLAN_BASE.max_goals
+  const exportEnabled =
+    typeof planRow?.has_export === 'boolean' ? planRow.has_export : PRO_PLAN_BASE.export_enabled
+  const advancedAnalytics =
+    typeof planRow?.has_analytics === 'boolean' ? planRow.has_analytics : PRO_PLAN_BASE.advanced_analytics
+  const fullBudgetingEntitled =
+    typeof planRow?.has_budgeting === 'boolean' ? planRow.has_budgeting : PRO_PLAN_BASE.full_budgeting_entitled
+  return {
+    plan_name: 'pro',
+    max_goals: maxGoals,
+    max_rows_per_tool: PRO_PLAN_BASE.max_rows_per_tool,
+    export_enabled: exportEnabled,
+    advanced_analytics: advancedAnalytics,
+    full_budgeting_entitled: fullBudgetingEntitled,
+    is_grace: isGrace,
+    can_create_goals: !isGrace,
+  }
+}
+
 /**
  * Derives plan from already-resolved subscription state (avoids duplicate subscription query).
  * Use when the caller has already called resolveSubscriptionState.
+ * is_lifetime is Pro without reading a period end. Other rows follow normalizeSubscriptionFromRow.
  */
 export async function resolveUserPlanFromSubscription(sub: NormalizedSubscription): Promise<ResolvedPlan> {
   try {
+    if (sub.isLifetime) {
+      const planRow = sub.planId ? await getPlanRow(sub.planId) : null
+      const planName = String(planRow?.name ?? '').trim().toLowerCase()
+      const proRow = planName === 'pro' || planName === 'clarity_premium' ? planRow : null
+      return proPlanFromRow(proRow, false)
+    }
     if (sub.state === 'NONE' || sub.state === 'EXPIRED' || !sub.planId) {
       return FREE_PLAN
     }
@@ -55,23 +85,7 @@ export async function resolveUserPlanFromSubscription(sub: NormalizedSubscriptio
     const planName = String(planRow?.name ?? 'free').trim().toLowerCase()
     const isProPlan = planName === 'pro' || planName === 'clarity_premium'
     if (!isProPlan) return FREE_PLAN
-    const maxGoals = typeof planRow?.max_goals === 'number' ? planRow.max_goals : PRO_PLAN_BASE.max_goals
-    const exportEnabled =
-      typeof planRow?.has_export === 'boolean' ? planRow.has_export : PRO_PLAN_BASE.export_enabled
-    const advancedAnalytics =
-      typeof planRow?.has_analytics === 'boolean' ? planRow.has_analytics : PRO_PLAN_BASE.advanced_analytics
-    const fullBudgetingEntitled =
-      typeof planRow?.has_budgeting === 'boolean' ? planRow.has_budgeting : PRO_PLAN_BASE.full_budgeting_entitled
-    return {
-      plan_name: 'pro',
-      max_goals: maxGoals,
-      max_rows_per_tool: PRO_PLAN_BASE.max_rows_per_tool,
-      export_enabled: exportEnabled,
-      advanced_analytics: advancedAnalytics,
-      full_budgeting_entitled: fullBudgetingEntitled,
-      is_grace: sub.state === 'GRACE',
-      can_create_goals: sub.state !== 'GRACE',
-    }
+    return proPlanFromRow(planRow, sub.state === 'GRACE')
   } catch {
     return FREE_PLAN
   }

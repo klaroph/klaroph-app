@@ -15,7 +15,7 @@ import { authorizePaymongoWebhook } from '@/lib/paymongoWebhookSecurity'
 import { runClaimedWebhookHandler } from '@/lib/paymentEventIdempotency'
 import { sendPremiumConfirmationIfNew } from '@/lib/premiumConfirmationEmail'
 import { tryIncrementVoucherUsedCountFromMetadata } from '@/lib/voucherWebhookIncrement'
-import { verifyPaidGrant, type CheckoutGrant } from '@/lib/checkoutGrant'
+import { verifyPaidGrant } from '@/lib/checkoutGrant'
 import { extractPaidAmount } from '@/lib/email/proEmails'
 import { notifyFounderOfPayment } from '@/lib/founder/alertsServer'
 
@@ -186,14 +186,10 @@ async function alertFounderOfPaid(event: WebhookEvent, userId: string | null, pl
   }
 }
 
-function planLabelFor(grant: CheckoutGrant): string {
+function planLabelFor(grant: 'lifetime'): string {
   switch (grant) {
     case 'lifetime':
       return 'Lifetime'
-    case 'annual':
-      return 'Annual'
-    case 'monthly':
-      return 'Monthly'
     default: {
       const unexpected: never = grant
       return unexpected
@@ -234,8 +230,7 @@ async function fulfillPaidPro(params: {
     return
   }
 
-  const isLifetimeGrant = decision.grant === 'lifetime'
-  if ((await existingRowIsLifetime(params.userId)) && !isLifetimeGrant) {
+  if (await existingRowIsLifetime(params.userId)) {
     console.log(
       '[Webhook] Lifetime row preserved type=',
       params.event.data.attributes.type,
@@ -257,13 +252,7 @@ async function fulfillPaidPro(params: {
     throw new Error('Premium plan not found')
   }
 
-  const now = new Date()
-  const periodEnd = new Date(now)
-  if (decision.planType === 'annual') {
-    periodEnd.setFullYear(periodEnd.getFullYear() + 1)
-  } else {
-    periodEnd.setMonth(periodEnd.getMonth() + 1)
-  }
+  const now = new Date().toISOString()
 
   const { error } = await supabaseAdmin
     .from('subscriptions')
@@ -272,15 +261,17 @@ async function fulfillPaidPro(params: {
         user_id: params.userId,
         plan_id: premiumPlan.id,
         status: 'active',
-        plan_type: decision.planType,
+        // subscriptions.plan_type allows only free, monthly, or annual.
+        // The entitlement is is_lifetime, not this column.
+        plan_type: 'annual',
         payment_provider: 'paymongo',
         paymongo_checkout_session_id: params.checkoutSessionId,
-        current_period_start: now.toISOString(),
-        current_period_end: periodEnd.toISOString(),
+        current_period_start: now,
+        current_period_end: now,
         grace_period_until: null,
         grace_period_used: false,
-        auto_renew: !isLifetimeGrant,
-        is_lifetime: isLifetimeGrant,
+        auto_renew: false,
+        is_lifetime: true,
       },
       { onConflict: 'user_id' }
     )
@@ -294,15 +285,13 @@ async function fulfillPaidPro(params: {
     '[Webhook] Subscription upsert success event_id=',
     params.event.data.id,
     'grant=',
-    decision.grant,
-    'plan_type=',
-    decision.planType
+    decision.grant
   )
 
   await tryIncrementVoucherUsedCountFromMetadata(params.metadata)
 
   try {
-    await sendPremiumConfirmationIfNew(params.event.data.id, params.userId, decision.planType)
+    await sendPremiumConfirmationIfNew(params.event.data.id, params.userId, 'annual')
   } catch {
     // Email failure must never block payment fulfillment
   }

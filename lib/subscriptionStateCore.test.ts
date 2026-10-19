@@ -7,14 +7,27 @@ import {
 const now = new Date('2026-09-23T12:00:00.000Z')
 
 describe('normalizeSubscriptionFromRow', () => {
-  it('keeps lifetime users ACTIVE even when current_period_end is in the past', () => {
+  it('treats a canceled lifetime row on the free plan as active', () => {
     const sub = normalizeSubscriptionFromRow(
       {
-        status: 'active',
+        status: 'canceled',
+        plan_id: 'plan_free',
+        current_period_end: '2020-01-01T00:00:00.000Z',
+        is_lifetime: true,
+      },
+      now
+    )
+    expect(sub.state).toBe('ACTIVE')
+    expect(sub.isLifetime).toBe(true)
+  })
+
+  it('treats is_lifetime as active without reading the end date or status', () => {
+    const sub = normalizeSubscriptionFromRow(
+      {
+        status: 'expired',
         plan_id: 'plan_pro',
         current_period_end: '2020-01-01T00:00:00.000Z',
         is_lifetime: true,
-        auto_renew: false,
       },
       now
     )
@@ -50,17 +63,17 @@ describe('normalizeSubscriptionFromRow', () => {
 })
 
 describe('shouldBlockNewProPurchase', () => {
-  it('blocks pro, clarity_premium, and lifetime users from buying another prepaid period', () => {
+  it('blocks only an already-lifetime user', () => {
     const lifetime = normalizeSubscriptionFromRow(
       {
-        status: 'active',
+        status: 'expired',
         plan_id: 'plan_pro',
         current_period_end: '2020-01-01T00:00:00.000Z',
         is_lifetime: true,
       },
       now
     )
-    const prepaidPro = normalizeSubscriptionFromRow(
+    const monthly = normalizeSubscriptionFromRow(
       {
         status: 'active',
         plan_id: 'plan_pro',
@@ -69,10 +82,19 @@ describe('shouldBlockNewProPurchase', () => {
       },
       now
     )
-    expect(shouldBlockNewProPurchase(lifetime, 'pro')).toBe(true)
-    expect(shouldBlockNewProPurchase(prepaidPro, 'pro')).toBe(true)
-    expect(shouldBlockNewProPurchase(prepaidPro, 'clarity_premium')).toBe(true)
-    expect(shouldBlockNewProPurchase(lifetime, null)).toBe(true)
+    const annual = normalizeSubscriptionFromRow(
+      {
+        status: 'active',
+        plan_id: 'plan_pro',
+        current_period_end: '2027-09-23T12:00:00.000Z',
+        is_lifetime: false,
+      },
+      now
+    )
+    expect(lifetime.state).toBe('ACTIVE')
+    expect(shouldBlockNewProPurchase(lifetime)).toBe(true)
+    expect(shouldBlockNewProPurchase(monthly)).toBe(false)
+    expect(shouldBlockNewProPurchase(annual)).toBe(false)
   })
 
   it('allows expired prepaid Pro to purchase again', () => {
@@ -85,6 +107,6 @@ describe('shouldBlockNewProPurchase', () => {
       },
       now
     )
-    expect(shouldBlockNewProPurchase(expired, 'pro')).toBe(false)
+    expect(shouldBlockNewProPurchase(expired)).toBe(false)
   })
 })
