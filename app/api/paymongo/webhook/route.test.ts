@@ -3,14 +3,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({
   claimed: new Set<string>(),
   upserts: [] as Record<string, unknown>[],
+  updates: [] as Record<string, unknown>[],
+  existingSubscription: null as { is_lifetime?: boolean } | null,
   intentMetadata: {} as Record<string, string>,
+  sessionMetadata: {} as Record<string, string>,
+  sessionPayments: [] as { attributes?: Record<string, unknown> }[],
   notify: vi.fn<(input: Record<string, unknown>) => Promise<void>>(async () => {}),
   premium: vi.fn(async () => {}),
 }))
 
 vi.mock('@/lib/paymongoWebhookSecurity', () => ({ authorizePaymongoWebhook: () => ({ ok: true, timestamp: 0 }) }))
 vi.mock('@/lib/paymongo', () => ({
-  retrieveCheckoutSession: vi.fn(),
+  retrieveCheckoutSession: async () => ({
+    data: { attributes: { metadata: state.sessionMetadata, payments: state.sessionPayments } },
+  }),
   retrievePaymentIntent: async () => ({ data: { attributes: { metadata: state.intentMetadata } } }),
 }))
 vi.mock('@/lib/premiumConfirmationEmail', () => ({ sendPremiumConfirmationIfNew: state.premium }))
@@ -34,10 +40,21 @@ vi.mock('@/lib/supabaseAdmin', () => ({
       }
       if (table === 'subscriptions') {
         return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: state.existingSubscription, error: null }),
+            }),
+          }),
           upsert: async (row: Record<string, unknown>) => {
             state.upserts.push(row)
             return { error: null }
           },
+          update: (row: Record<string, unknown>) => ({
+            eq: async () => {
+              state.updates.push(row)
+              return { error: null }
+            },
+          }),
         }
       }
       throw new Error(`unexpected table ${table}`)
@@ -45,7 +62,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
   },
 }))
 
-import { FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
+import { FOUNDER_PROMO_CODE } from '@/lib/founderPromo'
 import { POST } from './route'
 
 function paymentEvent(type: 'payment.paid' | 'payment.failed', over: { id?: string; livemode?: boolean; attributes?: Record<string, unknown> } = {}) {
@@ -69,6 +86,48 @@ function paymentEvent(type: 'payment.paid' | 'payment.failed', over: { id?: stri
   }
 }
 
+function checkoutPaidEvent(over: { id?: string; attributes?: Record<string, unknown> } = {}) {
+  return {
+    data: {
+      id: over.id ?? `evt_${Math.random().toString(36).slice(2)}`,
+      type: 'event',
+      attributes: {
+        type: 'checkout_session.payment.paid',
+        livemode: true,
+        data: {
+          id: 'cs_1',
+          type: 'checkout_session',
+          attributes: over.attributes ?? {},
+        },
+        previous_data: {},
+        created_at: 1_790_474_400,
+        updated_at: 1_790_474_400,
+      },
+    },
+  }
+}
+
+function subscriptionEvent(type: string) {
+  return {
+    data: {
+      id: `evt_${type}`,
+      type: 'event',
+      attributes: {
+        type,
+        livemode: true,
+        data: {
+          id: 'sub_1',
+          type: 'subscription',
+          attributes: { customer_id: 'cus_1', status: 'past_due', resource_id: 'sub_1' },
+        },
+        previous_data: {},
+        created_at: 1_790_474_400,
+        updated_at: 1_790_474_400,
+      },
+    },
+  }
+}
+
 const deliver = (event: unknown) =>
   POST(new Request('http://localhost/api/paymongo/webhook', { method: 'POST', body: JSON.stringify(event), headers: { 'paymongo-signature': 'sig' } }))
 
@@ -78,7 +137,17 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   state.claimed.clear()
   state.upserts = []
-  state.intentMetadata = { user_id: 'user-1', plan: 'pro', plan_type: 'annual' }
+  state.updates = []
+  state.existingSubscription = null
+  state.intentMetadata = {
+    user_id: 'user-1',
+    plan: 'pro',
+    plan_type: 'annual',
+    grant: 'annual',
+    expected_amount_centavos: '19900',
+  }
+  state.sessionMetadata = {}
+  state.sessionPayments = []
   state.notify.mockResolvedValue(undefined)
 })
 
@@ -100,9 +169,17 @@ describe('PayMongo webhook founder payment alerts', () => {
     })
   })
 
-  it('labels founder-promo purchases as Lifetime', async () => {
-    state.intentMetadata = { user_id: 'user-1', plan: 'pro', plan_type: 'monthly', promo_code: FOUNDER_PROMO_CODE }
-    await deliver(paymentEvent('payment.paid'))
+  it('labels a paid founder grant as Lifetime', async () => {
+    state.intentMetadata = {
+      user_id: 'user-1',
+      plan: 'pro',
+      plan_type: 'monthly',
+      grant: 'lifetime',
+      expected_amount_centavos: '129900',
+      promoCode: FOUNDER_PROMO_CODE,
+    }
+    await deliver(paymentEvent('payment.paid', { attributes: { amount: 129_900 } }))
+    expect(state.upserts[0]).toMatchObject({ is_lifetime: true, auto_renew: false, plan_type: 'monthly' })
     expect(state.notify.mock.calls[0][0]).toMatchObject({ planLabel: 'Lifetime' })
   })
 
@@ -169,5 +246,139 @@ describe('PayMongo webhook founder payment alerts', () => {
     const input = state.notify.mock.calls[0][0]
     expect(input).not.toHaveProperty('recipient')
     expect(input).not.toHaveProperty('to')
+  })
+})
+
+describe('PayMongo paid grants', () => {
+  it('grants lifetime when a checkout session was paid at the founder amount', async () => {
+    state.sessionMetadata = {
+      user_id: 'user-1',
+      plan: 'pro',
+      plan_type: 'monthly',
+      grant: 'lifetime',
+      expected_amount_centavos: '129900',
+      promoCode: FOUNDER_PROMO_CODE,
+    }
+    state.sessionPayments = [{ attributes: { amount: 129_900, currency: 'PHP' } }]
+    const res = await deliver(checkoutPaidEvent())
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ status: 'ok' })
+    expect(state.upserts[0]).toMatchObject({ is_lifetime: true, auto_renew: false })
+    expect(state.notify).not.toHaveBeenCalled()
+  })
+
+  it('does not grant lifetime when an invalid founder code pays ₱99', async () => {
+    state.intentMetadata = {
+      user_id: 'user-1',
+      plan: 'pro',
+      plan_type: 'monthly',
+      grant: 'monthly',
+      expected_amount_centavos: '9900',
+      promoCode: FOUNDER_PROMO_CODE,
+    }
+    const res = await deliver(paymentEvent('payment.paid', { attributes: { amount: 9900 } }))
+    expect(res.status).toBe(200)
+    expect(state.upserts[0]).toMatchObject({ is_lifetime: false, plan_type: 'monthly', auto_renew: true })
+  })
+
+  it('grants nothing when the founder code is present but the grant metadata is missing', async () => {
+    state.intentMetadata = {
+      user_id: 'user-1',
+      plan: 'pro',
+      plan_type: 'monthly',
+      promoCode: FOUNDER_PROMO_CODE,
+    }
+    const res = await deliver(paymentEvent('payment.paid', { id: 'evt_missing_grant', attributes: { amount: 9900 } }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ status: 'ok' })
+    expect(state.upserts).toHaveLength(0)
+    expect(state.updates).toHaveLength(0)
+    expect(state.notify).toHaveBeenCalledWith(expect.objectContaining({ eventId: 'evt_missing_grant', planLabel: null }))
+  })
+
+  it('grants nothing when the paid amount does not match the server expected amount', async () => {
+    state.intentMetadata = {
+      user_id: 'user-1',
+      plan: 'pro',
+      plan_type: 'monthly',
+      grant: 'lifetime',
+      expected_amount_centavos: '129900',
+    }
+    const paid = await deliver(paymentEvent('payment.paid', { id: 'evt_wrong_amount', attributes: { amount: 9900 } }))
+    expect(paid.status).toBe(200)
+    expect(state.upserts).toHaveLength(0)
+
+    state.sessionMetadata = {
+      user_id: 'user-1',
+      plan: 'pro',
+      plan_type: 'annual',
+      grant: 'annual',
+      expected_amount_centavos: '99900',
+    }
+    state.sessionPayments = [{ attributes: { amount: 9900, currency: 'PHP' } }]
+    const checkout = await deliver(checkoutPaidEvent({ id: 'evt_checkout_wrong' }))
+    expect(checkout.status).toBe(200)
+    expect(state.upserts).toHaveLength(0)
+    expect(state.notify).toHaveBeenCalledWith(expect.objectContaining({ eventId: 'evt_checkout_wrong', planLabel: null }))
+  })
+
+  it('does not downgrade an existing lifetime row when a later monthly payment matches', async () => {
+    state.existingSubscription = { is_lifetime: true }
+    state.intentMetadata = {
+      user_id: 'user-1',
+      plan: 'pro',
+      plan_type: 'monthly',
+      grant: 'monthly',
+      expected_amount_centavos: '9900',
+    }
+    const res = await deliver(paymentEvent('payment.paid', { attributes: { amount: 9900 } }))
+    expect(res.status).toBe(200)
+    expect(state.upserts).toHaveLength(0)
+    expect(state.updates).toHaveLength(0)
+    expect(state.notify.mock.calls[0][0]).toMatchObject({ planLabel: 'Lifetime' })
+  })
+
+  it('dead subscription and invoice events do not change a lifetime row', async () => {
+    state.existingSubscription = { is_lifetime: true }
+    const types = [
+      'subscription.activated',
+      'subscription.updated',
+      'subscription.past_due',
+      'subscription.unpaid',
+      'subscription.invoice.paid',
+      'subscription.invoice.payment_failed',
+      'invoice.payment_failed',
+    ]
+    for (const type of types) {
+      const res = await deliver(subscriptionEvent(type))
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ status: 'ok' })
+    }
+    expect(state.upserts).toHaveLength(0)
+    expect(state.updates).toHaveLength(0)
+    expect(state.claimed.size).toBe(types.length)
+  })
+
+  it('still grants a tester payment of ₱5', async () => {
+    state.intentMetadata = {
+      user_id: 'user-1',
+      plan: 'pro',
+      plan_type: 'monthly',
+      grant: 'monthly',
+      expected_amount_centavos: '500',
+    }
+    const res = await deliver(paymentEvent('payment.paid', { attributes: { amount: 500 } }))
+    expect(res.status).toBe(200)
+    expect(state.upserts[0]).toMatchObject({ is_lifetime: false, plan_type: 'monthly', auto_renew: true })
+    expect(state.notify.mock.calls[0][0]).toMatchObject({ planLabel: 'Monthly', amount: { centavos: 500, currency: 'PHP' } })
+  })
+
+  it('a replayed paid event is still deduped', async () => {
+    const event = paymentEvent('payment.paid', { id: 'evt_replay', attributes: { amount: 100 } })
+    expect((await deliver(event)).status).toBe(200)
+    const second = await deliver(event)
+    expect(await second.json()).toEqual({ status: 'already_processed' })
+    expect(state.upserts).toHaveLength(0)
+    expect(state.notify).toHaveBeenCalledTimes(1)
   })
 })

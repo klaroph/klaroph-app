@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { FOUNDER_FINAL_PESOS, FOUNDER_PROMO_CODE } from '@/lib/founderPromo'
 
 /** Validates voucher only — no voucher_redemptions row; consumption after payment (webhook). */
 
@@ -57,12 +58,15 @@ export async function POST(request: Request) {
       }
     }
 
+    const isFounderLifetime = code === FOUNDER_PROMO_CODE
     return NextResponse.json({
       success: true,
       voucher: {
         type: result.type,
         value: result.value,
       },
+      offer: isFounderLifetime ? 'lifetime' : null,
+      finalPesos: isFounderLifetime ? FOUNDER_FINAL_PESOS : null,
     })
   } catch (e) {
     console.error('POST /api/vouchers/validate', e)

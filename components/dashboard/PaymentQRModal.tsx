@@ -7,22 +7,16 @@ import {
   readKlaroPromoCode,
   type KlaroPromoVoucher,
 } from '@/lib/klaroPromoStorage'
-import { FOUNDER_FINAL_CENTAVOS, FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
 import { PRO_ANNUAL_PESOS as ANNUAL_PESOS, PRO_MONTHLY_PESOS as MONTHLY_PESOS, formatPlanPeso } from '@/lib/planPricing'
 
 const POLL_INTERVAL_MS = 3500
 
 /** Matches UpgradeModal / server checkout (pesos; final rounded for display). */
-function computeFinalPesos(
-  original: number,
-  promo: KlaroPromoVoucher | null,
-  promoCode: string | null
-) {
-  const normalizedCode = (promoCode ?? '').trim().toUpperCase()
-  if (normalizedCode === FOUNDER_PROMO_CODE) {
+function computeFinalPesos(original: number, promo: KlaroPromoVoucher | null) {
+  if (promo?.offer === 'lifetime' && typeof promo.finalPesos === 'number') {
     return {
       original,
-      final: Math.round(FOUNDER_FINAL_CENTAVOS / 100),
+      final: promo.finalPesos,
       showDiscount: false,
       isFounderLifetime: true,
     }
@@ -159,11 +153,9 @@ export default function PaymentQRModal({
   const basePeso = planType === 'annual' ? ANNUAL_PESOS : MONTHLY_PESOS
   const promoForDisplay =
     promoOverride !== undefined ? promoOverride : readKlaroPromo()?.promo ?? null
-  const promoCodeForDisplay = readKlaroPromoCode()
   const { final: finalPeso, showDiscount: showPromoDiscount, isFounderLifetime } = computeFinalPesos(
     basePeso,
-    promoForDisplay,
-    promoCodeForDisplay
+    promoForDisplay
   )
 
   const title =

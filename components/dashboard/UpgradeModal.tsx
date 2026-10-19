@@ -14,7 +14,6 @@ import {
   writeKlaroPromo,
   type KlaroPromoVoucher,
 } from '@/lib/klaroPromoStorage'
-import { FOUNDER_FINAL_CENTAVOS, FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
 import {
   PRO_ANNUAL_PESOS as ANNUAL_PESOS,
   PRO_MONTHLY_PESOS as MONTHLY_PESOS,
@@ -33,17 +32,11 @@ function formatExpiryDate(planType: 'monthly' | 'annual') {
   return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function computePricing(
-  original: number,
-  promo: KlaroPromoVoucher | null,
-  promoCode: string | null
-) {
-  const normalizedCode = (promoCode ?? '').trim().toUpperCase()
-  if (normalizedCode === FOUNDER_PROMO_CODE) {
-    const final = Math.round(FOUNDER_FINAL_CENTAVOS / 100)
+function computePricing(original: number, promo: KlaroPromoVoucher | null) {
+  if (promo?.offer === 'lifetime' && typeof promo.finalPesos === 'number') {
     return {
       original,
-      final,
+      final: promo.finalPesos,
       discountLabel: null as string | null,
       specialLabel: 'Founder price',
     }
@@ -247,7 +240,10 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
         }
         if (data?.success && data?.voucher?.type && typeof data.voucher?.value === 'number') {
           const v = data.voucher as { type: 'percentage' | 'fixed'; value: number }
-          const applied = { type: v.type, value: v.value }
+          const offer: 'lifetime' | null = data.offer === 'lifetime' ? 'lifetime' : null
+          const finalPesos: number | null =
+            offer === 'lifetime' && typeof data.finalPesos === 'number' ? data.finalPesos : null
+          const applied: KlaroPromoVoucher = { type: v.type, value: v.value, offer, finalPesos }
           setPromo(applied)
           setAppliedPromoCode(code)
           writeKlaroPromo({ promoCode: code, promo: applied })
@@ -314,7 +310,8 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
     lastModalOpen.current = true
     if (!justOpened) return
     const stored = readKlaroPromo()
-    if (!stored?.promoCode || stored.promo) return
+    if (!stored?.promoCode) return
+    if (stored.promo && stored.promo.offer !== undefined) return
     void applyPromoWithCode(stored.promoCode, { fromUrl: false })
   }, [isOpen, applyPromoWithCode])
 
@@ -333,12 +330,8 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
   }, [isOpen, searchParams, applyPromoWithCode])
 
   const originalPrice = planType === 'monthly' ? MONTHLY_PESOS : ANNUAL_PESOS
-  const { final: finalPrice, discountLabel, specialLabel } = computePricing(
-    originalPrice,
-    promo,
-    appliedPromoCode
-  )
-  const isFounderLifetime = appliedPromoCode?.toUpperCase() === FOUNDER_PROMO_CODE
+  const { final: finalPrice, discountLabel, specialLabel } = computePricing(originalPrice, promo)
+  const isFounderLifetime = promo?.offer === 'lifetime'
   const expiryText = isFounderLifetime
     ? 'No expiry (Lifetime Access)'
     : formatExpiryDate(planType)
@@ -463,8 +456,8 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
             </div>
             {promo && (
               <p className="upgrade-modal-promo-ok" role="status">
-                {appliedPromoCode?.toUpperCase() === FOUNDER_PROMO_CODE
-                  ? `🎉 Founder promo applied! Final price is ${formatPeso(FOUNDER_FINAL_CENTAVOS / 100)}`
+                {promo.offer === 'lifetime' && typeof promo.finalPesos === 'number'
+                  ? `🎉 Founder promo applied! Final price is ${formatPeso(promo.finalPesos)}`
                   : promo.type === 'percentage'
                   ? `🎉 Promo applied! You got ${promo.value}% off`
                   : `🎉 Promo applied! You got ${formatPeso(promo.value)} off`}

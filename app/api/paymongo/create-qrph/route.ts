@@ -13,7 +13,7 @@ import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { shouldBlockNewProPurchase } from '@/lib/subscriptionStateCore'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
-import { resolveCheckoutAmountCentavos } from '@/lib/checkoutPromo'
+import { buildCheckoutMetadata, resolveCheckoutGrant } from '@/lib/checkoutGrant'
 import { parsePromoCodeFromBody, resolveVoucherForCheckout } from '@/lib/voucherForCheckout'
 
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
@@ -102,12 +102,13 @@ export async function POST(request: Request) {
       monthlyCentavos: pricing.monthlyCentavos,
       annualCentavos: pricing.annualCentavos,
     })
-    const amountCentavos = resolveCheckoutAmountCentavos(
+    const { grant, amountCentavos } = resolveCheckoutGrant({
+      planType: plan_type,
       baseCentavos,
       promo,
-      appliedPromo?.code ?? null,
-      'paymongo/create-qrph'
-    )
+      appliedPromoCode: appliedPromo?.code ?? null,
+      context: 'paymongo/create-qrph',
+    })
     if (amountCentavos <= 0) {
       return NextResponse.json(
         { error: 'Payment amount must be greater than zero.' },
@@ -134,12 +135,13 @@ export async function POST(request: Request) {
       description: plan_type === 'annual'
         ? 'KlaroPH Pro Annual: 20 goals, unlimited history, import/export, advance charts and analytics.'
         : 'KlaroPH Pro Monthly: 20 goals, unlimited history, import/export, advance charts and analytics.',
-      metadata: {
-        user_id: String(user.id),
-        plan: 'pro',
-        plan_type,
-        promoCode: promoCodeParam ?? '',
-      },
+      metadata: buildCheckoutMetadata({
+        userId: user.id,
+        planType: plan_type,
+        grant,
+        expectedAmountCentavos: amountCentavos,
+        appliedPromoCode: appliedPromo?.code ?? null,
+      }),
     })
 
     const pm = await createPaymentMethodQrph({
