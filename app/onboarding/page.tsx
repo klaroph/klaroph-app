@@ -32,11 +32,12 @@ export default async function OnboardingPage() {
 
   const profileName = profile?.full_name ?? null
   const googleName = metadataFullName(session.user.user_metadata)
-  const fullName = profileName && !profileName.includes('@') ? profileName : (googleName ?? profileName)
+  const fullName =
+    profileName && profileName.trim() && !profileName.includes('@') ? profileName : googleName
 
   return (
     <div className="onboarding-page">
-      <OnboardingFlow nickname={profile?.nickname ?? null} fullName={fullName} email={session.user.email ?? null} />
+      <OnboardingFlow nickname={profile?.nickname ?? null} fullName={fullName} />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { onboardingNamePrefill } from '@/lib/displayName'
 
 type Call = {
   table: string
@@ -224,6 +225,15 @@ describe('POST /api/onboarding/complete', () => {
     expect(profile).toHaveLength(1)
     expect(profile[0]?.payload).toMatchObject({ nickname: 'Maria'.repeat(8) })
     expect((profile[0]?.payload as { nickname: string }).nickname).toHaveLength(40)
+  })
+
+  it('does not save a nickname when an email user skips the empty name field', async () => {
+    expect(
+      onboardingNamePrefill({ nickname: null, fullName: 'ada@example.com' }),
+    ).toBe('')
+    const res = await post(validBody())
+    expect(res.status).toBe(200)
+    expect(callsTo('profiles', 'update')[0]?.payload).not.toHaveProperty('nickname')
   })
 
   it('does not write nickname when it is missing, blank, or only spaces', async () => {

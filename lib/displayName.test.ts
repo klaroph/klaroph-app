@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayName } from './displayName'
+import { displayName, onboardingNamePrefill } from './displayName'
 
 describe('displayName', () => {
   it('prefers a trimmed nickname over a Google name and an email', () => {
@@ -62,6 +62,14 @@ describe('displayName', () => {
     expect(
       displayName({ nickname, fullName: 'Other Person', email: 'other@example.com' }, 'You'),
     ).toBe(nickname)
+  })
+
+  it('pre-fills onboarding only from a nickname or a real full name', () => {
+    expect(onboardingNamePrefill({ nickname: '  Jun  ', fullName: 'ada@example.com' })).toBe('Jun')
+    expect(onboardingNamePrefill({ nickname: null, fullName: '  Juan Dela Cruz  ' })).toBe('Juan Dela Cruz')
+    expect(onboardingNamePrefill({ nickname: '   ', fullName: 'Juan @ Work' })).toBe('')
+    expect(onboardingNamePrefill({ nickname: null, fullName: 'ada@example.com' })).toBe('')
+    expect(onboardingNamePrefill({ fullName: '' })).toBe('')
   })
 
   it('keeps greeting sites on the first word of a Google name', () => {

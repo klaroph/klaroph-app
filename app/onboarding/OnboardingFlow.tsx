@@ -5,7 +5,7 @@ import { formatWholePeso } from '@/lib/format'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { GOAL_PRESETS } from '@/lib/goalPresets'
-import { NICKNAME_MAX_LENGTH, displayName } from '@/lib/displayName'
+import { NICKNAME_MAX_LENGTH, onboardingNamePrefill } from '@/lib/displayName'
 import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 import {
   FINANCIAL_STAGES,
@@ -53,13 +53,11 @@ const SETUP_PREVIEW = ['Your income', 'A simple spending plan', 'Your first goal
 type OnboardingFlowProps = {
   nickname?: string | null
   fullName?: string | null
-  email?: string | null
 }
 
 export default function OnboardingFlow({
   nickname = null,
   fullName = null,
-  email = null,
 }: OnboardingFlowProps) {
   const router = useRouter()
   const [step, setStep] = useState(1)
@@ -77,7 +75,7 @@ export default function OnboardingFlow({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [preferredName, setPreferredName] = useState(() =>
-    displayName({ nickname, fullName, email }, '').slice(0, NICKNAME_MAX_LENGTH),
+    onboardingNamePrefill({ nickname, fullName }),
   )
 
   const incomeNum = parseFloat(income.replace(/[^0-9.]/g, '')) || 0

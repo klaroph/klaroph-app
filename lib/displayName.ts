@@ -59,6 +59,22 @@ function emailLocalPart(value: string | null | undefined, firstName: boolean): s
   return local
 }
 
+/**
+ * Welcome-screen suggestion. An existing nickname, otherwise a full name that
+ * is non-empty and contains no "@". Never the email local part — skipping the
+ * field must leave profiles.nickname unset, and displayName covers the greeting.
+ */
+export function onboardingNamePrefill(input: {
+  nickname?: string | null
+  fullName?: string | null
+}): string {
+  const nickname = trimmed(input.nickname)
+  if (nickname) return nickname.slice(0, NICKNAME_MAX_LENGTH)
+  const fullName = trimmed(input.fullName)
+  if (fullName && !fullName.includes('@')) return fullName.slice(0, NICKNAME_MAX_LENGTH)
+  return ''
+}
+
 export function displayName(
   input: DisplayNameInput,
   fallback: string,
