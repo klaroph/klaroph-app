@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 
-const LAST_UPDATED = 'September 2026'
+const LAST_UPDATED = 'October 2026'
 
 export const metadata = {
   title: 'Privacy Policy — KlaroPH',
@@ -76,6 +76,44 @@ export default function PrivacyPage() {
             We use Google OAuth to let you sign in with your Google account. When you choose &quot;Sign in with Google,&quot;
             Google may share your email and basic profile with us in accordance with Google&apos;s privacy policy. We do not
             control Google&apos;s data practices; please review Google&apos;s privacy policy for more information.
+          </p>
+        </section>
+
+        <section className="legal-section">
+          <h2>Google Gemini</h2>
+          <p>
+            Klaro Insight and Ask Klaro are written with Google Gemini. KlaroPH sends the request from its servers.
+            The request does not include your email address, password, or payment details.
+          </p>
+          <p>
+            Klaro Insight sends a summary for one month: total income, total expenses, the difference between them,
+            budget totals when you have a budget, your top spending categories with their names and amounts, goal
+            names with target and saved amounts, total assets, total liabilities, net worth, and short observation
+            sentences KlaroPH already wrote from those figures. It does not send each income or expense record, and
+            it does not send the names of your income sources.
+          </p>
+          <p>Ask Klaro sends different details depending on the message:</p>
+          <ul>
+            <li>
+              A greeting, thanks, or other social message sends only that message. It does not send your financial
+              figures.
+            </li>
+            <li>
+              When KlaroPH needs to ask a follow-up before it answers, it sends your message and the choices it
+              already picked. Those choices can include your goal names.
+            </li>
+            <li>
+              When answering a finance question, it sends your message, recent messages from that conversation, and
+              the figures needed for that question. Those figures can include the month summary above, spending by
+              category, a comparison with the previous month, expense totals for the first half of the month and the
+              rest of the month, goal progress and estimated timelines KlaroPH calculated, or a loan estimate. A loan
+              estimate includes the amount, interest rate, and term you typed, plus your Loan Payment spending and
+              budget for that month when you have them.
+            </li>
+          </ul>
+          <p>
+            On Google&apos;s free Gemini tier, Google may use the prompts and replies from that tier to improve its
+            products.
           </p>
         </section>
 

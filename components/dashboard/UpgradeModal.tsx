@@ -70,16 +70,6 @@ function UpgradeTableRows() {
         <td className="upgrade-modal-feature">
           <span className="plan-feature-premium">
             <PlanFeaturePremiumIcon />
-            Export CSV (Income and Expenses)
-          </span>
-        </td>
-        <td className="upgrade-modal-free">—</td>
-        <td className="upgrade-modal-pro">✓</td>
-      </tr>
-      <tr className="upgrade-modal-row">
-        <td className="upgrade-modal-feature">
-          <span className="plan-feature-premium">
-            <PlanFeaturePremiumIcon />
             Import CSV (Income and Expenses)
           </span>
         </td>
@@ -102,6 +92,11 @@ function UpgradeTableRows() {
         <td className="upgrade-modal-pro">✓</td>
       </tr>
       <tr className="upgrade-modal-row">
+        <td className="upgrade-modal-feature">Export CSV (Income and Expenses)</td>
+        <td className="upgrade-modal-free">✓</td>
+        <td className="upgrade-modal-pro">✓</td>
+      </tr>
+      <tr className="upgrade-modal-row">
         <td className="upgrade-modal-feature">Income Tracker</td>
         <td className="upgrade-modal-free">✓</td>
         <td className="upgrade-modal-pro">✓</td>
@@ -111,11 +106,13 @@ function UpgradeTableRows() {
         <td className="upgrade-modal-free">✓</td>
         <td className="upgrade-modal-pro">✓</td>
       </tr>
+      {PRO_PLAN_TOOLS.length > 0 && (
       <tr className="upgrade-modal-row upgrade-modal-section-row">
         <td colSpan={3} className="upgrade-modal-section">
           {PLAN_SECTION_TOOLS_LABEL}
         </td>
       </tr>
+      )}
       {PRO_PLAN_TOOLS.map(({ label, premium }) => (
         <tr key={label} className="upgrade-modal-row">
           <td className="upgrade-modal-feature">

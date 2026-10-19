@@ -431,11 +431,11 @@ export default function OnboardingFlow() {
                 </div>
                 <div>
                   <dt>Income</dt>
-                  <dd>{formatWholePeso(monthlyIncome)}/month</dd>
+                  <dd>{formatWholePeso(monthlyIncome)} a month</dd>
                 </div>
                 <div>
                   <dt>Savings preference</dt>
-                  <dd>{savingsPercent}% · {formatWholePeso(savingsPerMonth)}/month</dd>
+                  <dd>{savingsPercent}% · {formatWholePeso(savingsPerMonth)} a month</dd>
                 </div>
                 <div>
                   <dt>Goal</dt>

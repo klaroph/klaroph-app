@@ -17,7 +17,7 @@ import { buildCheckoutMetadata, resolveCheckoutGrant } from '@/lib/checkoutGrant
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
 
 const PRO_DESCRIPTION =
-  'KlaroPH Pro: 20 goals, unlimited history, import/export, advance charts and analytics.'
+  'KlaroPH Pro: 20 goals, unlimited history, unlimited CSV import, and advanced charts.'
 
 export async function POST(request: Request) {
   try {

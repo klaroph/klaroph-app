@@ -15,9 +15,10 @@ describe('buildEmailSample', () => {
   it('renders both Pro samples in test mode from fixture data', () => {
     const paid = buildEmailSample('paid', NOW)
     expect(paid.subject).toBe('[TEST] You’re officially KlaroPH Pro')
-    expect(paid.text).toContain('No payment was made and no subscription was changed.')
-    expect(paid.text).toContain('Amount paid: ₱199.00')
-    expect(paid.text).toContain('Active until: October 26, 2026')
+    expect(paid.text).toContain('No payment was made and no account was changed.')
+    expect(paid.text).toContain('Amount paid: ₱999.00')
+    expect(paid.text).toContain('Pay once. No subscription. Pro stays on your account for as long as KlaroPH runs.')
+    expect(paid.text).not.toContain('Active until')
 
     const comp = buildEmailSample('complimentary', NOW)
     expect(comp.subject).toBe('[TEST] You’ve got KlaroPH Pro — on us')

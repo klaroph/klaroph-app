@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 
-const LAST_UPDATED = 'February 2025'
+const LAST_UPDATED = 'October 2026'
 
 export const metadata = {
   title: 'Terms & Conditions — KlaroPH',
@@ -71,13 +71,22 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
-          <h2>Subscription &amp; Billing</h2>
+          <h2>KlaroPH Pro</h2>
           <p>
-            KlaroPH may offer a free tier and a paid Pro plan. If you subscribe to the Pro plan, you agree to the
-            pricing and billing terms presented at the time of purchase. Payments are processed by our payment
-            provider. You may cancel your subscription in accordance with the upgrade and billing flows in the app.
-            Refunds are subject to our refund policy as stated at the time of purchase.
+            KlaroPH Pro costs ₱999, paid once. Pay once. No subscription. Pro stays on your account for as long as
+            KlaroPH runs. KlaroPH does not charge you again for that purchase.
           </p>
+          <p>
+            You can ask for a full refund within 7 days of purchase by contacting support at{' '}
+            <a href="mailto:support@klaroph.com" className="legal-link">support@klaroph.com</a>.
+            Refunds are handled manually. Pro is removed from your account when the refund goes through. A chargeback
+            removes Pro.
+          </p>
+          <p>
+            If KlaroPH closes, we will tell you at least 45 days ahead by email and with an in-app banner. Export of
+            your income and expense records stays open until the service shuts down.
+          </p>
+          <p>Deleting your account ends Pro.</p>
         </section>
 
         <section className="legal-section">

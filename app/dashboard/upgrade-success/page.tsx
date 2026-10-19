@@ -100,7 +100,7 @@ export default function UpgradeSuccessPage() {
             Welcome to KlaroPH Pro!
           </h1>
           <p style={{ fontSize: 15, color: 'var(--text-secondary)', margin: '0 0 24px', maxWidth: 400 }}>
-            You now have full access: 20 goals, unlimited history, export, advance charts and analytics.
+            You now have full access: 20 goals, unlimited history, unlimited CSV import, and advanced charts.
           </p>
           <button
             type="button"

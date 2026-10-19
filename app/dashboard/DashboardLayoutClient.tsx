@@ -7,7 +7,6 @@ import dynamic from 'next/dynamic'
 import Sidebar from '../../components/layout/Sidebar'
 import MobileBottomNav from '../../components/layout/MobileBottomNav'
 import HowKlaroPHWorksModal, { hasSeenOnboarding, markOnboardingSeen } from '../../components/onboarding/HowKlaroPHWorksModal'
-import GraceBanner from '../../components/dashboard/GraceBanner'
 import NewGoalModal from '../../components/dashboard/NewGoalModal'
 import IncomeAllocationModal from '../../components/dashboard/IncomeAllocationModal'
 import AddExpenseModal from '../../components/dashboard/AddExpenseModal'
@@ -260,7 +259,6 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
               className="main-wrapper"
               inert={drawerOpen ? true : undefined}
             >
-              <GraceBanner />
               <button
                 type="button"
                 className="drawer-menu-btn"

@@ -10,6 +10,7 @@ import { useDashboardProfile } from '@/contexts/DashboardProfileContext'
 import KlaroPHHandLogo from '../ui/KlaroPHHandLogo'
 import UpgradeCTA from '../ui/UpgradeCTA'
 import SupportModal from '../support/SupportModal'
+import { PRO_ONE_TIME_LINE } from '@/lib/planPricing'
 
 function formatActiveUntilDate(iso: string | null): string {
   if (!iso) return ''
@@ -243,7 +244,7 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
                     <div className="sidebar-plan-status">
                       <strong>Pro Plan – Active</strong>
                       {isLifetime ? (
-                        <span>Lifetime Pro</span>
+                        <span>{PRO_ONE_TIME_LINE}</span>
                       ) : (
                         activeUntil && <span>Active until {activeUntil}</span>
                       )}

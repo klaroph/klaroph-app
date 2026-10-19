@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
-import { resolveUserPlan } from '@/lib/resolveUserPlan'
 
 /**
- * GET — Export income + expenses as CSV. Premium only.
- * Free users get 403 with { locked: true, reason: 'export' } so the client can show the upgrade modal.
+ * GET — Export income + expenses as CSV for any signed-in user.
  */
 export async function GET() {
   try {
@@ -14,14 +12,6 @@ export async function GET() {
     } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const plan = await resolveUserPlan(user.id)
-    if (!plan.export_enabled) {
-      return NextResponse.json(
-        { error: 'Export CSV is a Pro feature.', locked: true, reason: 'export' },
-        { status: 403 }
-      )
     }
 
     const [incRes, expRes] = await Promise.all([

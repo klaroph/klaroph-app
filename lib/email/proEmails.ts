@@ -1,10 +1,12 @@
 /**
  * KlaroPH Pro transactional emails: paid confirmation and complimentary grant.
- * Every fact shown (plan, amount, dates, lifetime) comes from the caller's real entitlement;
- * a missing fact is omitted, never guessed. Pro is prepaid, so no email claims automatic renewal.
+ * Amount and dates come from the caller. A missing fact is omitted.
+ * Paid Pro uses the one-time line. The plan type argument is accepted so the
+ * payment confirmation caller stays unchanged, and it is not shown.
  */
 
 import { PRO_PLAN_FEATURES } from '@/lib/planFeatures'
+import { PRO_ONE_TIME_LINE } from '@/lib/planPricing'
 import { renderTransactionalEmail, type EmailDetailRow } from '@/lib/email/transactionalLayout'
 
 const APP_URL = 'https://klaroph.com/dashboard'
@@ -17,9 +19,10 @@ export type PaidAmount = { centavos: number; currency: string }
 
 export type PaidProEmailInput = {
   firstName: string | null
+  /** Accepted from the payment confirmation caller. Not shown in the email. */
   planType: 'monthly' | 'annual'
   isLifetime: boolean
-  /** subscriptions.current_period_end (ISO). */
+  /** End date for a time-limited paid row (ISO). Omitted when isLifetime is true. */
   activeUntil: string | null
   amountPaid: PaidAmount | null
   testMode?: boolean
@@ -67,14 +70,12 @@ function greeting(firstName: string | null): string {
 }
 
 export function renderPaidProEmail(input: PaidProEmailInput): RenderedEmail {
-  const period = input.planType === 'annual' ? 'Annual' : 'Monthly'
   const activeUntil = formatEmailDate(input.activeUntil)
   const amount = formatPaidAmount(input.amountPaid)
 
-  const rows: EmailDetailRow[] = [{ label: 'Plan', value: input.isLifetime ? 'KlaroPH Pro · Lifetime' : `KlaroPH Pro · ${period}` }]
+  const rows: EmailDetailRow[] = [{ label: 'Plan', value: 'KlaroPH Pro' }]
   if (amount) rows.push({ label: 'Amount paid', value: amount })
-  if (input.isLifetime) rows.push({ label: 'Access', value: 'Lifetime' })
-  else if (activeUntil) rows.push({ label: 'Active until', value: activeUntil })
+  if (!input.isLifetime && activeUntil) rows.push({ label: 'Active until', value: activeUntil })
 
   const { html, text } = renderTransactionalEmail({
     preheader: 'Your Pro access is active. Here’s everything that’s included.',
@@ -86,8 +87,8 @@ export function renderPaidProEmail(input: PaidProEmailInput): RenderedEmail {
       title: 'Your plan',
       rows,
       note: input.isLifetime
-        ? 'Your Pro access doesn’t expire, and there’s nothing more to pay.'
-        : 'Pro is prepaid. It won’t renew or charge you automatically — when it ends, you can renew anytime from KlaroPH.',
+        ? PRO_ONE_TIME_LINE
+        : 'This Pro access is prepaid through the date above. Nothing else will be charged.',
     },
     features: { title: 'What’s included', items: PRO_FEATURES },
     cta: CTA,
@@ -95,7 +96,7 @@ export function renderPaidProEmail(input: PaidProEmailInput): RenderedEmail {
     footerReason: 'You’re receiving this account notification because of a Pro purchase on your KlaroPH account.',
     footnote:
       'Fair use note: KlaroPH Pro is intended for personal, legitimate use. We apply safeguards against abuse and fraudulent activity to protect users and platform reliability.',
-    testNotice: input.testMode ? 'This is a KlaroPH sample email. No payment was made and no subscription was changed.' : undefined,
+    testNotice: input.testMode ? 'This is a KlaroPH sample email. No payment was made and no account was changed.' : undefined,
   })
 
   const subject = 'You’re officially KlaroPH Pro'
@@ -120,7 +121,7 @@ export function renderComplimentaryProEmail(input: ComplimentaryProEmailInput): 
         { label: 'Plan', value: 'KlaroPH Pro · Complimentary' },
         { label: 'Active until', value: validUntil },
       ],
-      note: 'This complimentary access will not renew or charge you automatically.',
+      note: 'This complimentary access ends on the date above. Nothing will be charged.',
     },
     features: { title: 'What’s included', items: PRO_FEATURES },
     cta: CTA,

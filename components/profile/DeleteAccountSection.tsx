@@ -7,7 +7,7 @@ import { signOutWithFullCleanup } from '@/lib/supabaseAuthSignOut'
 import Modal from '@/components/ui/Modal'
 
 const WARNING =
-  'Deleting your account permanently removes your profile, expenses, income, budgets, goals, and subscription data.'
+  'Deleting your account ends Pro and permanently removes your profile, expenses, income, budgets, goals, and other account data.'
 
 export default function DeleteAccountSection() {
   const router = useRouter()
