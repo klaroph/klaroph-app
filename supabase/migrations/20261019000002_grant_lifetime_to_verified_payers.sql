@@ -11,11 +11,33 @@
 -- user_id is payload #>> '{data,attributes,data,attributes,metadata,user_id}'.
 -- Deleted accounts (no auth.users or profiles row) are skipped. Testers
 -- (profiles.user_type = tester) are skipped, including the existing tester
--- lifetime row. Rows that are already lifetime are left set.
+-- lifetime row.
 --
--- subscriptions.plan_type allows only free, monthly, or annual. A payer with
--- no subscription row is inserted on the pro plan with plan_type annual so the
--- check constraint holds. Access is is_lifetime, not that column.
+-- The plan id is plans.name 'pro', or 'clarity_premium' when 'pro' is absent.
+-- Those are the two names resolveUserPlan treats as Pro. The webhook upserts
+-- on user_id the same way: missing row is inserted, existing row is updated.
+--
+-- A verified payer ends as is_lifetime = true, plan_id = that pro plan, and
+-- status = 'active', including when the current row is:
+--   plan free,    status active
+--   plan free,    status expired
+--   plan free,    status canceled
+--   plan pro,     status expired
+--   plan pro,     status canceled
+-- A row that is already that pro plan, active, and lifetime is not rewritten.
+--
+-- subscriptions.plan_type allows only free, monthly, or annual. A new row uses
+-- plan_type annual so the check constraint holds. Access is is_lifetime, not
+-- that column. An existing row keeps its plan_type and period dates.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.plans WHERE name IN ('pro', 'clarity_premium')
+  ) THEN
+    RAISE EXCEPTION 'one-time Pro grant: plans.name pro or clarity_premium is missing';
+  END IF;
+END $$;
 
 WITH raw_paid AS (
   SELECT
@@ -135,13 +157,12 @@ payers AS (
   WHERE pr.user_type IS DISTINCT FROM 'tester'
   GROUP BY d.user_id
 ),
-updated AS (
-  UPDATE public.subscriptions s
-  SET is_lifetime = true
-  FROM payers
-  WHERE s.user_id = payers.user_id::uuid
-    AND s.is_lifetime IS DISTINCT FROM true
-  RETURNING s.user_id
+pro_plan AS (
+  SELECT id
+  FROM public.plans
+  WHERE name IN ('pro', 'clarity_premium')
+  ORDER BY CASE WHEN name = 'pro' THEN 0 ELSE 1 END
+  LIMIT 1
 )
 INSERT INTO public.subscriptions (
   user_id,
@@ -156,7 +177,7 @@ INSERT INTO public.subscriptions (
 )
 SELECT
   payers.user_id::uuid,
-  pro.id,
+  pro_plan.id,
   'active',
   'annual',
   'paymongo',
@@ -165,10 +186,12 @@ SELECT
   false,
   true
 FROM payers
-JOIN public.plans pro ON pro.name = 'pro'
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.subscriptions s WHERE s.user_id = payers.user_id::uuid
-)
-AND NOT EXISTS (
-  SELECT 1 FROM updated u WHERE u.user_id = payers.user_id::uuid
-);
+CROSS JOIN pro_plan
+ON CONFLICT (user_id) DO UPDATE
+SET
+  is_lifetime = true,
+  plan_id = EXCLUDED.plan_id,
+  status = 'active'
+WHERE public.subscriptions.is_lifetime IS DISTINCT FROM true
+   OR public.subscriptions.plan_id IS DISTINCT FROM EXCLUDED.plan_id
+   OR public.subscriptions.status IS DISTINCT FROM 'active';

@@ -15,7 +15,12 @@
 --   already lifetime                 (includes the existing tester lifetime row)
 --   excluded: deleted account        (no auth.users or profiles row)
 --
--- Testers are not granted. Already-lifetime rows stay as they are.
+-- current_plan and current_status are the row before migration B. A paying
+-- customer on free, expired, or canceled is still granted: B sets that row to
+-- the pro plan, status active, and is_lifetime.
+--
+-- Testers are not granted. A tester who is already lifetime stays in
+-- 'already lifetime' and migration B does not update that row.
 
 WITH raw_paid AS (
   SELECT
@@ -152,6 +157,7 @@ classified AS (
     COALESCE(pay.payment_count, 0) AS payment_count,
     pay.last_paid_at,
     COALESCE(pl.name, 'none') AS current_plan,
+    COALESCE(s.status, 'none') AS current_status,
     CASE
       WHEN u.id IS NULL OR pr.id IS NULL THEN 'excluded: deleted account'
       WHEN s.is_lifetime IS TRUE THEN 'already lifetime'
@@ -165,7 +171,7 @@ classified AS (
   LEFT JOIN public.subscriptions s ON s.user_id = c.user_id::uuid
   LEFT JOIN public.plans pl ON pl.id = s.plan_id
 )
-SELECT user_id, total_paid, payment_count, last_paid_at, current_plan, category
+SELECT user_id, total_paid, payment_count, last_paid_at, current_plan, current_status, category
 FROM classified
 ORDER BY category, user_id;
 
