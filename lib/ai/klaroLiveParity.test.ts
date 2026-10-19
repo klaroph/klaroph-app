@@ -115,6 +115,7 @@ function userSupabase(): SupabaseClient {
       Object.assign(b, {
         select: chain,
         eq: chain,
+        is: chain,
         gte: chain,
         lt: chain,
         order: chain,
