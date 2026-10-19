@@ -122,6 +122,7 @@ async function applyMigrations(db: PGlite): Promise<void> {
   await db.exec(readMigration('20261019110000_income_allocations_user_id.sql'))
   await db.exec(readMigration('20261019120000_exclude_soft_deleted_reads.sql'))
   await db.exec(readMigration('20261019130000_soft_delete_recreate.sql'))
+  await db.exec(readMigration('20261019140000_cascade_soft_delete_allocations.sql'))
 }
 
 describe('sync schema migrations', () => {
@@ -268,6 +269,10 @@ describe('sync schema migrations', () => {
       ALTER TABLE public.income_allocations ENABLE TRIGGER income_allocations_sync_row;
       ALTER TABLE public.goals ENABLE TRIGGER goals_sync_row;
     `)
+    const orphanTombstone = await db.query<{ deleted_at: string | null }>(
+      `SELECT deleted_at::text FROM public.income_allocations WHERE id = '${ALLOC_ORPHAN}'`
+    )
+    expect(orphanTombstone.rows[0]?.deleted_at).not.toBeNull()
     const purged = await db.query<{ purge_soft_deleted_synced_rows: { income_allocations: number; goals: number } }>(
       `SELECT public.purge_soft_deleted_synced_rows() AS purge_soft_deleted_synced_rows`
     )
@@ -388,5 +393,136 @@ describe('sync schema migrations', () => {
          AND i.indpred IS NULL`
     )
     expect(blocking.rows).toEqual([])
+  })
+
+  it('tombstones allocations with a deleted goal or income record, then purge removes those parents', async () => {
+    const goal = '44444444-4444-4444-8444-444444444444'
+    const otherGoal = '55555555-5555-4555-8555-555555555555'
+    const income = '66666666-6666-4666-8666-666666666666'
+    const otherIncome = '99999999-9999-4999-8999-999999999999'
+    const allocOnGoal = '77777777-7777-4777-8777-777777777777'
+    const allocOnOtherGoal = '88888888-8888-4888-8888-888888888888'
+    const allocOnOtherIncome = 'aaaaaaaa-1111-4111-8111-111111111111'
+    const keptGoal = 'bbbbbbbb-2222-4222-8222-222222222222'
+    const keptIncome = 'cccccccc-3333-4333-8333-333333333333'
+    const oldAlloc = 'dddddddd-4444-4444-8444-444444444444'
+    const youngAlloc = 'eeeeeeee-5555-4555-8555-555555555555'
+
+    const db = new PGlite()
+    await db.exec(SETUP)
+    await db.exec(`
+      ALTER TABLE public.income_allocations
+        ADD CONSTRAINT income_allocations_goal_id_fkey
+        FOREIGN KEY (goal_id) REFERENCES public.goals (id) ON DELETE CASCADE;
+      ALTER TABLE public.income_allocations
+        ADD CONSTRAINT income_allocations_income_record_id_fkey
+        FOREIGN KEY (income_record_id) REFERENCES public.income_records (id) ON DELETE CASCADE;
+      INSERT INTO auth.users (id) VALUES ('${USER_A}');
+    `)
+    await applyMigrations(db)
+    await db.exec(`
+      INSERT INTO public.goals (id, user_id, name, target_amount) VALUES
+        ('${goal}', '${USER_A}', 'Emergency', 1000),
+        ('${otherGoal}', '${USER_A}', 'Travel', 500);
+      INSERT INTO public.income_records (id, user_id, total_amount, date) VALUES
+        ('${income}', '${USER_A}', 800, '2026-10-01'),
+        ('${otherIncome}', '${USER_A}', 100, '2026-10-02');
+      INSERT INTO public.income_allocations (id, income_record_id, goal_id, amount, user_id) VALUES
+        ('${allocOnGoal}', '${income}', '${goal}', 100, '${USER_A}'),
+        ('${allocOnOtherGoal}', '${income}', '${otherGoal}', 50, '${USER_A}'),
+        ('${allocOnOtherIncome}', '${otherIncome}', '${otherGoal}', 10, '${USER_A}');
+      UPDATE public.goals SET deleted_at = '2000-01-01' WHERE id = '${goal}';
+    `)
+
+    const afterGoal = await db.query<{ id: string; deleted_at: string | null }>(
+      `SELECT id::text, deleted_at::text FROM public.income_allocations ORDER BY amount`
+    )
+    const goalRow = await db.query<{ deleted_at: string }>(
+      `SELECT deleted_at::text FROM public.goals WHERE id = '${goal}'`
+    )
+    expect(new Date(goalRow.rows[0]!.deleted_at).getUTCFullYear()).toBeGreaterThan(2000)
+    const byId = new Map(afterGoal.rows.map((row) => [row.id, row.deleted_at]))
+    expect(byId.get(allocOnGoal)).not.toBeNull()
+    expect(new Date(byId.get(allocOnGoal)!).getUTCFullYear()).toBeGreaterThan(2000)
+    expect(byId.get(allocOnOtherGoal)).toBeNull()
+    expect(byId.get(allocOnOtherIncome)).toBeNull()
+
+    await db.exec(`
+      ALTER TABLE public.income_allocations DISABLE TRIGGER income_allocations_sync_row;
+      UPDATE public.income_allocations
+      SET deleted_at = '2020-06-01'
+      WHERE id = '${allocOnGoal}';
+      ALTER TABLE public.income_allocations ENABLE TRIGGER income_allocations_sync_row;
+      UPDATE public.income_records SET deleted_at = now() WHERE id = '${income}';
+    `)
+    const afterIncome = await db.query<{ id: string; unchanged: boolean; live: boolean }>(
+      `SELECT id::text,
+              deleted_at = '2020-06-01'::timestamptz AS unchanged,
+              deleted_at IS NULL AS live
+       FROM public.income_allocations`
+    )
+    const afterIncomeById = new Map(afterIncome.rows.map((row) => [row.id, row]))
+    expect(afterIncomeById.get(allocOnGoal)?.unchanged).toBe(true)
+    expect(afterIncomeById.get(allocOnOtherGoal)?.live).toBe(false)
+    expect(afterIncomeById.get(allocOnOtherIncome)?.live).toBe(true)
+
+    await db.exec(`
+      ALTER TABLE public.income_allocations DISABLE TRIGGER income_allocations_sync_row;
+      ALTER TABLE public.goals DISABLE TRIGGER goals_sync_row;
+      ALTER TABLE public.income_records DISABLE TRIGGER income_records_sync_row;
+      UPDATE public.income_allocations
+      SET deleted_at = now() - interval '91 days'
+      WHERE id IN ('${allocOnGoal}', '${allocOnOtherGoal}');
+      UPDATE public.goals SET deleted_at = now() - interval '91 days' WHERE id = '${goal}';
+      UPDATE public.income_records SET deleted_at = now() - interval '91 days' WHERE id = '${income}';
+      ALTER TABLE public.income_allocations ENABLE TRIGGER income_allocations_sync_row;
+      ALTER TABLE public.goals ENABLE TRIGGER goals_sync_row;
+      ALTER TABLE public.income_records ENABLE TRIGGER income_records_sync_row;
+    `)
+    const purged = await db.query<{
+      purge_soft_deleted_synced_rows: { income_allocations: number; goals: number; income_records: number }
+    }>(`SELECT public.purge_soft_deleted_synced_rows() AS purge_soft_deleted_synced_rows`)
+    expect(Number(purged.rows[0]?.purge_soft_deleted_synced_rows.income_allocations)).toBe(2)
+    expect(Number(purged.rows[0]?.purge_soft_deleted_synced_rows.goals)).toBe(1)
+    expect(Number(purged.rows[0]?.purge_soft_deleted_synced_rows.income_records)).toBe(1)
+    const gone = await db.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM (
+         SELECT id FROM public.income_allocations WHERE id IN ('${allocOnGoal}', '${allocOnOtherGoal}')
+         UNION ALL SELECT id FROM public.goals WHERE id = '${goal}'
+         UNION ALL SELECT id FROM public.income_records WHERE id = '${income}'
+       ) AS left_behind`
+    )
+    expect(gone.rows[0]?.n).toBe('0')
+    const untouched = await db.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM public.income_allocations WHERE id = '${allocOnOtherIncome}' AND deleted_at IS NULL`
+    )
+    expect(untouched.rows[0]?.n).toBe('1')
+
+    await db.exec(`
+      INSERT INTO public.goals (id, user_id, name, target_amount)
+        VALUES ('${keptGoal}', '${USER_A}', 'Kept', 20);
+      INSERT INTO public.income_records (id, user_id, total_amount, date)
+        VALUES ('${keptIncome}', '${USER_A}', 30, '2026-10-03');
+      INSERT INTO public.income_allocations (id, income_record_id, goal_id, amount, user_id) VALUES
+        ('${oldAlloc}', '${keptIncome}', '${keptGoal}', 5, '${USER_A}'),
+        ('${youngAlloc}', '${keptIncome}', '${keptGoal}', 6, '${USER_A}');
+      ALTER TABLE public.income_allocations DISABLE TRIGGER income_allocations_sync_row;
+      ALTER TABLE public.goals DISABLE TRIGGER goals_sync_row;
+      UPDATE public.income_allocations SET deleted_at = now() - interval '91 days' WHERE id = '${oldAlloc}';
+      UPDATE public.income_allocations SET deleted_at = now() - interval '1 day' WHERE id = '${youngAlloc}';
+      UPDATE public.goals SET deleted_at = now() - interval '91 days' WHERE id = '${keptGoal}';
+      ALTER TABLE public.income_allocations ENABLE TRIGGER income_allocations_sync_row;
+      ALTER TABLE public.goals ENABLE TRIGGER goals_sync_row;
+    `)
+    await db.query(`SELECT public.purge_soft_deleted_synced_rows()`)
+    const kept = await db.query<{ id: string; deleted_at: string | null }>(
+      `SELECT id::text, deleted_at::text FROM public.income_allocations
+       WHERE id IN ('${oldAlloc}', '${youngAlloc}')`
+    )
+    expect(kept.rows.map((row) => row.id)).toEqual([youngAlloc])
+    const keptGoalRow = await db.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM public.goals WHERE id = '${keptGoal}'`
+    )
+    expect(keptGoalRow.rows[0]?.n).toBe('1')
   })
 })

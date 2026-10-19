@@ -117,7 +117,17 @@ BEGIN
     SELECT ir.user_id INTO v_income_user
     FROM public.income_records AS ir
     WHERE ir.id = NEW.income_record_id;
-    IF NOT FOUND OR v_income_user IS DISTINCT FROM NEW.user_id THEN
+    IF FOUND AND v_income_user IS DISTINCT FROM NEW.user_id THEN
+      RAISE EXCEPTION 'Income record not found or unauthorized.';
+    END IF;
+    -- A missing income row is allowed only while tombstoning this allocation.
+    -- Goal soft-delete cascades that update, and the backfill already accepts
+    -- an income id whose row is gone.
+    IF NOT FOUND AND NOT (
+      TG_OP = 'UPDATE'
+      AND NEW.deleted_at IS NOT NULL
+      AND NEW.income_record_id IS NOT DISTINCT FROM OLD.income_record_id
+    ) THEN
       RAISE EXCEPTION 'Income record not found or unauthorized.';
     END IF;
   END IF;
@@ -127,7 +137,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.income_allocations_enforce_owner() IS
-  'BEFORE INSERT OR UPDATE. user_id must match the goal owner. Inserts onto a soft-deleted goal are rejected. The income record, when set, must belong to the same user.';
+  'BEFORE INSERT OR UPDATE. user_id must match the goal owner. Inserts onto a soft-deleted goal are rejected. The income record, when set, must belong to the same user. Tombstoning an allocation whose income row is already gone is allowed.';
 
 DROP TRIGGER IF EXISTS income_allocations_enforce_owner ON public.income_allocations;
 CREATE TRIGGER income_allocations_enforce_owner
