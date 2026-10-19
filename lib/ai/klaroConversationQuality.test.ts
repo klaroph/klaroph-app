@@ -96,6 +96,7 @@ function fakeSupabase(rowsByTable: Record<string, unknown[]>) {
       const builder = {
         select: () => builder,
         eq: () => builder,
+        is: () => builder,
         gte: () => builder,
         lt: () => builder,
         then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>

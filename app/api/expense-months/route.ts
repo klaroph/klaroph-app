@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { liveOnly } from '@/lib/liveRows'
 import { toLocalDateString } from '@/lib/format'
 
 /**
@@ -21,9 +22,7 @@ export async function GET() {
     const cutoff = new Date(now.getFullYear(), now.getMonth() - 24, now.getDate())
     const cutoffStr = toLocalDateString(cutoff)
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('date')
+    const { data, error } = await liveOnly(supabase.from('expenses').select('date'))
       .eq('user_id', user.id)
       .gte('date', cutoffStr)
       .order('date', { ascending: false })

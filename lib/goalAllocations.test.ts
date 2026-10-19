@@ -10,12 +10,14 @@ type Tables = Record<string, Row[]>
 function fakeSupabase(tables: Tables) {
   class Query {
     private filters: [string, unknown][] = []
+    private nullChecks: [string, unknown][] = []
     private op: 'select' | 'update' | 'delete' = 'select'
     private patch: Row = {}
     private single = false
     constructor(private table: string) {}
     select() { return this }
     eq(column: string, value: unknown) { this.filters.push([column, value]); return this }
+    is(column: string, value: unknown) { this.nullChecks.push([column, value]); return this }
     update(patch: Row) { this.op = 'update'; this.patch = patch; return this }
     delete() { this.op = 'delete'; return this }
     maybeSingle() { this.single = true; return this }
@@ -24,7 +26,10 @@ function fakeSupabase(tables: Tables) {
     }
     private run() {
       const rows = tables[this.table] ?? []
-      const matched = rows.filter((r) => this.filters.every(([c, v]) => r[c] === v))
+      const matched = rows.filter((r) => {
+        if (!this.filters.every(([c, v]) => r[c] === v)) return false
+        return this.nullChecks.every(([c, v]) => (v === null ? r[c] == null : r[c] === v))
+      })
       if (this.op === 'update') matched.forEach((r) => Object.assign(r, this.patch))
       if (this.op === 'delete') tables[this.table] = rows.filter((r) => !matched.includes(r))
       const data = this.single ? (matched[0] ? { ...matched[0] } : null) : matched.map((r) => ({ ...r }))
@@ -46,8 +51,8 @@ let tables: Tables
 let db: SupabaseClient
 
 function goalTotal() {
-  return (tables.income_allocations as { goal_id: string; amount: number }[])
-    .filter((r) => r.goal_id === GOAL.id)
+  return (tables.income_allocations as { goal_id: string; amount: number; deleted_at?: string | null }[])
+    .filter((r) => r.goal_id === GOAL.id && r.deleted_at == null)
     .reduce((sum, r) => sum + r.amount, 0)
 }
 
@@ -132,6 +137,7 @@ describe('removeGoalAllocation', () => {
     await updateGoalAllocation(db, ME, ALLOC, 7_500)
     const result = await removeGoalAllocation(db, ME, ALLOC)
     expect(result).toEqual({ ok: true, amount: 7_500 })
+    expect(tables.income_allocations.find((r) => r.id === ALLOC)?.deleted_at).toEqual(expect.any(String))
     expect(goalTotal()).toBe(0)
     expect(goalProgress()).toBe(0)
     expect(income(INCOME)).toMatchObject({ total_amount: 30_000, disposable_amount: 30_000 })

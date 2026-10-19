@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { liveOnly } from '@/lib/liveRows'
 import { plainDbError } from '@/lib/apiError'
 import { resolveUserPlan } from '@/lib/resolveUserPlan'
 
@@ -44,10 +45,9 @@ export async function POST(request: Request) {
       )
     }
 
-    const { count, error: countError } = await supabase
-      .from('goals')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
+    const { count, error: countError } = await liveOnly(
+      supabase.from('goals').select('*', { count: 'exact', head: true })
+    ).eq('user_id', user.id)
     if (countError) {
       console.error('POST /api/goals count error:', countError.message)
       return NextResponse.json(

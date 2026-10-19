@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { liveOnly } from '@/lib/liveRows'
 import { toLocalDateString, parseLocalDateString } from '@/lib/format'
 
 function toFirstDayOfMonth(input?: string | number): string {
@@ -29,13 +30,8 @@ export async function GET(request: Request) {
     const month = toFirstDayOfMonth(monthParam || undefined)
 
     const [planRes, overridesRes] = await Promise.all([
-      supabase
-        .from('budget_plans')
-        .select('category, amount, note')
-        .eq('user_id', user.id),
-      supabase
-        .from('budget_overrides')
-        .select('category, amount, note')
+      liveOnly(supabase.from('budget_plans').select('category, amount, note')).eq('user_id', user.id),
+      liveOnly(supabase.from('budget_overrides').select('category, amount, note'))
         .eq('user_id', user.id)
         .eq('month', month),
     ])

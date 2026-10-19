@@ -6,6 +6,7 @@
 
 import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { liveOnly } from '@/lib/liveRows'
 import { toLocalDateString, parseLocalDateString } from '@/lib/format'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { deriveMonthInsights } from '@/lib/dashboardInsight'
@@ -149,33 +150,27 @@ export async function buildKlaroFinancialContext(
     overrideRes,
     accountsRes,
   ] = await Promise.all([
-    supabase
-      .from('income_records')
-      .select('total_amount')
+    liveOnly(supabase.from('income_records').select('total_amount'))
       .eq('user_id', userId)
       .gte('date', start)
       .lt('date', endExclusive),
-    supabase
-      .from('expenses')
-      .select('amount, category')
+    liveOnly(supabase.from('expenses').select('amount, category'))
       .eq('user_id', userId)
       .gte('date', start)
       .lt('date', endExclusive),
-    supabase.from('goals').select('id, name, target_amount').eq('user_id', userId),
-    supabase.from('budget_plans').select('category, amount').eq('user_id', userId),
-    supabase
-      .from('budget_overrides')
-      .select('category, amount')
+    liveOnly(supabase.from('goals').select('id, name, target_amount')).eq('user_id', userId),
+    liveOnly(supabase.from('budget_plans').select('category, amount')).eq('user_id', userId),
+    liveOnly(supabase.from('budget_overrides').select('category, amount'))
       .eq('user_id', userId)
       .eq('month', start),
-    supabase.from('financial_accounts').select('type, amount').eq('user_id', userId),
+    liveOnly(supabase.from('financial_accounts').select('type, amount')).eq('user_id', userId),
   ])
 
-  // income_allocations has no user_id — scope via this user's goal ids only
+  // Scope to this user's goals. RLS also requires income_allocations.user_id.
   const goalIds = ((goalsRes.data ?? []) as Array<{ id: string }>).map((g) => g.id)
   const allocRes =
     goalIds.length > 0
-      ? await supabase.from('income_allocations').select('goal_id, amount').in('goal_id', goalIds)
+      ? await liveOnly(supabase.from('income_allocations').select('goal_id, amount')).in('goal_id', goalIds)
       : { data: [] as Array<{ goal_id: string; amount: number }>, error: null }
 
   const income = roundMoney(
@@ -211,6 +206,7 @@ export async function buildKlaroFinancialContext(
   const goals = ((goalsRes.data ?? []) as Array<{ id: string; name: string; target_amount: number }>).map(
     (g) => {
       const targetAmount = roundMoney(Number(g.target_amount) || 0)
+      // Live allocation sum. saved_amount is not selected and is not added.
       const currentAmount = roundMoney(savedByGoal[g.id] ?? 0)
       const progressPercent =
         targetAmount > 0 ? Math.min(100, Math.round((currentAmount / targetAmount) * 100)) : 0

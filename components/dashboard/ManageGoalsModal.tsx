@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatPeso } from '@/lib/format'
 import { supabase, getBrowserUser } from '../../lib/supabaseClient'
+import { liveOnly, softDelete } from '@/lib/liveRows'
 import Modal from '../ui/Modal'
 import NewGoalModal from './NewGoalModal'
 import UpgradeCTA from '../ui/UpgradeCTA'
@@ -80,7 +81,7 @@ export default function ManageGoalsModal({ isOpen, onClose, onGoalsChange, maxGo
       setLoading(false)
       return
     }
-    const { data: goalsData, error: goalsErr } = await supabase.from('goals').select('*')
+    const { data: goalsData, error: goalsErr } = await liveOnly(supabase.from('goals').select('*'))
     if (goalsErr) {
       setError(goalsErr.message)
       setGoals([])
@@ -95,7 +96,9 @@ export default function ManageGoalsModal({ isOpen, onClose, onGoalsChange, maxGo
       return
     }
     const goalIds = list.map((g) => g.id)
-    const { data: allocData } = await supabase.from('income_allocations').select('goal_id, amount').in('goal_id', goalIds)
+    const { data: allocData } = await liveOnly(
+      supabase.from('income_allocations').select('goal_id, amount')
+    ).in('goal_id', goalIds)
     const rows = (allocData || []) as AllocationRow[]
     const byGoal: Record<string, number> = {}
     for (const row of rows) byGoal[row.goal_id] = (byGoal[row.goal_id] ?? 0) + Number(row.amount)
@@ -137,7 +140,7 @@ export default function ManageGoalsModal({ isOpen, onClose, onGoalsChange, maxGo
 
   const handleDelete = async (goalId: string) => {
     setDeletingId(goalId)
-    const { error: err } = await supabase.from('goals').delete().eq('id', goalId)
+    const { error: err } = await softDelete(supabase.from('goals')).eq('id', goalId)
     if (err) setError(err.message)
     else {
       load()

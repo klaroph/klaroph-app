@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { liveOnly } from '@/lib/liveRows'
 import {
   computeGoalRunway,
   formatGoalRunwayCopy,
@@ -155,10 +156,9 @@ export async function buildGoalRunwayChatContext(
   supabase: SupabaseClient,
   userId: string
 ): Promise<GoalRunwayChatContext> {
-  const { data: goalsData, error: goalsError } = await supabase
-    .from('goals')
-    .select('id, name, target_amount')
-    .eq('user_id', userId)
+  const { data: goalsData, error: goalsError } = await liveOnly(
+    supabase.from('goals').select('id, name, target_amount')
+  ).eq('user_id', userId)
 
   if (goalsError) {
     console.error('[klaro-chat] goal_runway_goals_error', { message: goalsError.message })
@@ -181,10 +181,9 @@ export async function buildGoalRunwayChatContext(
   }
 
   const goalIds = goalsList.map((g) => g.id)
-  const { data: allocData, error: allocError } = await supabase
-    .from('income_allocations')
-    .select('goal_id, amount, income_records(date)')
-    .in('goal_id', goalIds)
+  const { data: allocData, error: allocError } = await liveOnly(
+    supabase.from('income_allocations').select('goal_id, amount, income_records(date)')
+  ).in('goal_id', goalIds)
 
   if (allocError) {
     console.error('[klaro-chat] goal_runway_alloc_error', { message: allocError.message })
@@ -209,7 +208,7 @@ export async function buildGoalRunwayChatContext(
       id: g.id,
       name: g.name,
       targetAmount: Number(g.target_amount) || 0,
-      currentAmount: savedByGoal[g.id] ?? 0,
+      currentAmount: savedByGoal[g.id] ?? 0, // live allocations only; saved_amount is not added
     })),
     eventsByGoalId
   )

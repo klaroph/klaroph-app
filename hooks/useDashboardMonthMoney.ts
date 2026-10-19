@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import {
   EMPTY_DASHBOARD_MONTH_MONEY,
   getMonthDateRange,
@@ -35,15 +36,11 @@ export function useDashboardMonthMoney(monthFirst: string, refreshKey: number) {
       }
       const { start, end } = getMonthDateRange(monthFirst)
       const [incRes, expRes] = await Promise.all([
-        supabase
-          .from('income_records')
-          .select('id, total_amount')
+        liveOnly(supabase.from('income_records').select('id, total_amount'))
           .eq('user_id', user.id)
           .gte('date', start)
           .lte('date', end),
-        supabase
-          .from('expenses')
-          .select('category, amount')
+        liveOnly(supabase.from('expenses').select('category, amount'))
           .eq('user_id', user.id)
           .gte('date', start)
           .lte('date', end),
@@ -53,10 +50,9 @@ export function useDashboardMonthMoney(monthFirst: string, refreshKey: number) {
       const incomeIds = incomeRows.map((row) => row.id).filter((id) => typeof id === 'string' && id.length > 0)
       let allocationRows: AllocationAmountRow[] = []
       if (incomeIds.length > 0) {
-        const allocRes = await supabase
-          .from('income_allocations')
-          .select('amount')
-          .in('income_record_id', incomeIds)
+        const allocRes = await liveOnly(
+          supabase.from('income_allocations').select('amount')
+        ).in('income_record_id', incomeIds)
         if (!mounted) return
         allocationRows = (allocRes.data ?? []) as AllocationAmountRow[]
       }

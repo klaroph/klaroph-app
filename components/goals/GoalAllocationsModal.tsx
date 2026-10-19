@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import Modal from '@/components/ui/Modal'
 import { formatCurrency } from '@/lib/format'
 import type { GoalForActions } from './GoalList'
@@ -60,9 +61,7 @@ export default function GoalAllocationsModal({ goal, onClose, onChanged }: GoalA
 
   useEffect(() => {
     let mounted = true
-    supabase
-      .from('income_allocations')
-      .select('id, amount, income_records(date, income_source)')
+    liveOnly(supabase.from('income_allocations').select('id, amount, income_records(date, income_source)'))
       .eq('goal_id', goalId)
       .order('created_at', { ascending: false })
       .then(({ data, error: loadError }) => {

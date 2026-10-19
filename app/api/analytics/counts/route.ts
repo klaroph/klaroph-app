@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { liveOnly } from '@/lib/liveRows'
 
 /**
  * GET — Return current user's income and expense record counts (for upgrade triggers).
@@ -15,8 +16,11 @@ export async function GET() {
     }
 
     const [incRes, expRes] = await Promise.all([
-      supabase.from('income_records').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-      supabase.from('expenses').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      liveOnly(supabase.from('income_records').select('id', { count: 'exact', head: true })).eq(
+        'user_id',
+        user.id
+      ),
+      liveOnly(supabase.from('expenses').select('id', { count: 'exact', head: true })).eq('user_id', user.id),
     ])
     const incomeCount = incRes.count ?? 0
     const expenseCount = expRes.count ?? 0

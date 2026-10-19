@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { liveOnly } from '@/lib/liveRows'
 
 /**
  * PostgREST returns at most this many rows per request. Read until a short page.
@@ -17,9 +18,7 @@ async function readAllForUser<T>(
 ): Promise<T[]> {
   const rows: T[] = []
   for (let from = 0; ; from += EXPORT_PAGE_SIZE) {
-    const { data, error } = await supabaseAdmin
-      .from(table)
-      .select(columns)
+    const { data, error } = await liveOnly(supabaseAdmin.from(table).select(columns))
       .eq('user_id', userId)
       .order('date', { ascending: false })
       .order('id', { ascending: false })

@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import Modal from '@/components/ui/Modal'
 import { formatPeso, formatCurrency } from '@/lib/format'
 
@@ -50,13 +51,11 @@ export default function AllocateToGoalModal({
       setLoadingData(true)
       setError(null)
       const [{ data: goalsData }, { data: incomeData }, { data: allocData }] = await Promise.all([
-        supabase.from('goals').select('id, name, target_amount').order('created_at', { ascending: true }),
-        supabase
-          .from('income_records')
-          .select('id, total_amount, date, income_source')
+        liveOnly(supabase.from('goals').select('id, name, target_amount')).order('created_at', { ascending: true }),
+        liveOnly(supabase.from('income_records').select('id, total_amount, date, income_source'))
           .order('date', { ascending: false })
           .limit(40),
-        supabase.from('income_allocations').select('income_record_id, amount'),
+        liveOnly(supabase.from('income_allocations').select('income_record_id, amount')),
       ])
       if (!mounted) return
 

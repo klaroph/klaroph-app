@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { supabase, getBrowserUser } from '../../../lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { INCOME_SOURCES } from '../../../lib/incomeSources'
 import IncomeAllocationModal from '../../../components/dashboard/IncomeAllocationModal'
 import type { IncomeRecordForEdit } from '../../../components/dashboard/IncomeAllocationModal'
@@ -237,9 +238,9 @@ export default function IncomePage() {
         setLoading(false)
         return
       }
-      let query = supabase
-        .from('income_records')
-        .select('id, total_amount, date, income_source')
+      let query = liveOnly(
+        supabase.from('income_records').select('id, total_amount, date, income_source')
+      )
         .eq('user_id', user.id)
         .gte('date', range.start)
         .lte('date', range.end)

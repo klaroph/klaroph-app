@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { liveOnly, softDelete } from '@/lib/liveRows'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { plainDbError } from '@/lib/apiError'
 import { getTypeForCategory } from '@/lib/expenseCategories'
@@ -59,11 +60,9 @@ export async function PUT(request: Request, { params }: RouteParams) {
     if (date !== undefined) payload.date = date
     if (description !== undefined) payload.description = description
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .update(payload)
-      .eq('id', id)
-      .eq('user_id', user.id)
+    const { data, error } = await liveOnly(
+      supabase.from('expenses').update(payload).eq('id', id).eq('user_id', user.id)
+    )
       .select('id, category, type, amount, date, description')
       .single()
 
@@ -101,9 +100,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { error } = await supabase
-      .from('expenses')
-      .delete()
+    const { error } = await softDelete(supabase.from('expenses'))
       .eq('id', id)
       .eq('user_id', user.id)
 

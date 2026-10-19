@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { toLocalDateString } from '@/lib/format'
 import { getTrendInsight } from '@/lib/dashboardCardInsights'
 import DashboardCardInsight from '@/components/dashboard/DashboardCardInsight'
@@ -56,15 +57,11 @@ export default function DashboardFinancialTrend({ refreshTrigger = 0 }: Dashboar
       }
 
       const [incRes, expRes] = await Promise.all([
-        supabase
-          .from('income_records')
-          .select('total_amount, date')
+        liveOnly(supabase.from('income_records').select('total_amount, date'))
           .eq('user_id', user.id)
           .gte('date', rangeStart)
           .lte('date', rangeEnd),
-        supabase
-          .from('expenses')
-          .select('amount, date')
+        liveOnly(supabase.from('expenses').select('amount, date'))
           .eq('user_id', user.id)
           .gte('date', rangeStart)
           .lte('date', rangeEnd),

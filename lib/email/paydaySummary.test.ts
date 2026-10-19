@@ -300,6 +300,7 @@ describe('loadPaydayEntries', () => {
             calls.push({ table, method: 'lte', args })
             return builder
           },
+          is: () => builder,
           order: () => builder,
           range: async () => ({ data: rows[table as 'expenses' | 'income_records'] ?? [], error: null }),
         }
@@ -322,6 +323,44 @@ describe('loadPaydayEntries', () => {
       { table: 'income_records', method: 'lte', args: ['date', '2026-10-14'] },
     ])
     expect(calls.every((call) => call.table === 'expenses' || call.table === 'income_records')).toBe(true)
+  })
+
+  it('does not count a soft-deleted expense or income day', async () => {
+    const rows = {
+      expenses: [
+        { user_id: 'u1', date: '2026-09-30', category: 'Groceries', amount: 10, deleted_at: null },
+        { user_id: 'u1', date: '2026-10-02', category: 'Rent', amount: 50, deleted_at: '2026-10-03T00:00:00Z' },
+      ],
+      income_records: [
+        { user_id: 'u1', date: '2026-10-03', deleted_at: '2026-10-04T00:00:00Z' },
+      ],
+    }
+    const admin = {
+      from(table: string) {
+        let hideDeleted = false
+        const builder = {
+          select: () => builder,
+          in: () => builder,
+          gte: () => builder,
+          lte: () => builder,
+          is: (column: string, value: unknown) => {
+            if (column === 'deleted_at' && value === null) hideDeleted = true
+            return builder
+          },
+          order: () => builder,
+          range: async () => ({
+            data: (rows[table as 'expenses' | 'income_records'] ?? []).filter(
+              (row) => !hideDeleted || row.deleted_at == null
+            ),
+            error: null,
+          }),
+        }
+        return builder
+      },
+    }
+    const entries = await loadPaydayEntries(admin as unknown as SupabaseClient, ['u1'], WINDOW)
+    expect(entries.map((entry) => entry.date)).toEqual(['2026-09-30'])
+    expect(summarizePayday(entries, 'u1', WINDOW)?.loggedDays).toBe(1)
   })
 
   it('does not query when nobody is eligible', async () => {

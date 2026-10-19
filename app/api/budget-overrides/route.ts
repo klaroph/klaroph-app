@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { liveOnly } from '@/lib/liveRows'
 import { plainDbError } from '@/lib/apiError'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
@@ -37,9 +38,9 @@ export async function GET(request: Request) {
     const monthParam = searchParams.get('month')
     const month = toFirstDayOfMonth(monthParam || undefined)
 
-    const { data, error } = await supabase
-      .from('budget_overrides')
-      .select('id, user_id, category, amount, month, note, created_at')
+    const { data, error } = await liveOnly(
+      supabase.from('budget_overrides').select('id, user_id, category, amount, month, note, created_at')
+    )
       .eq('user_id', user.id)
       .eq('month', month)
       .order('category')
@@ -104,21 +105,46 @@ export async function POST(request: Request) {
     }
 
     const note = trimNote(body?.note) ?? null
+    const row = { user_id: user.id, category, amount, month, note }
+    const columns = 'id, user_id, category, amount, month, note, created_at'
 
-    const { data, error } = await supabase
-      .from('budget_overrides')
-      .upsert(
-        {
-          user_id: user.id,
-          category,
-          amount,
-          month,
-          note,
-        },
-        { onConflict: 'user_id,category,month', ignoreDuplicates: false }
+    // A tombstone keeps its id. Saving the same category and month again inserts
+    // a new row when no live row exists. The partial unique index still rejects
+    // a second live row, and that race updates the live row instead.
+    const existing = await liveOnly(supabase.from('budget_overrides').select('id'))
+      .eq('user_id', user.id)
+      .eq('category', category)
+      .eq('month', month)
+      .maybeSingle()
+
+    if (existing.error) {
+      return NextResponse.json(
+        { error: plainDbError(existing.error, 'save', 'POST /api/budget-overrides error:') },
+        { status: 500 }
       )
-      .select('id, user_id, category, amount, month, note, created_at')
-      .single()
+    }
+
+    const saved = existing.data?.id
+      ? await liveOnly(
+          supabase.from('budget_overrides').update({ amount, note })
+        )
+          .eq('id', existing.data.id)
+          .eq('user_id', user.id)
+          .select(columns)
+          .single()
+      : await supabase.from('budget_overrides').insert(row).select(columns).single()
+
+    const conflict =
+      !existing.data?.id && saved.error?.code === '23505'
+        ? await liveOnly(supabase.from('budget_overrides').update({ amount, note }))
+            .eq('user_id', user.id)
+            .eq('category', category)
+            .eq('month', month)
+            .select(columns)
+            .single()
+        : saved
+
+    const { data, error } = conflict
 
     if (error) {
       return NextResponse.json(

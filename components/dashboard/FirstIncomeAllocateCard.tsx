@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import IncomeAllocationModal, { type IncomeRecordForEdit } from './IncomeAllocationModal'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { formatWholePeso } from '@/lib/format'
 import { suggestedSavingsAllocation } from '@/lib/suggestedSavingsAllocation'
 import {
@@ -34,9 +35,9 @@ export default function FirstIncomeAllocateCard({ refreshTrigger }: { refreshTri
       return
     }
 
-    const { data: incomes, error } = await supabase
-      .from('income_records')
-      .select('id, total_amount, date, income_source')
+    const { data: incomes, error } = await liveOnly(
+      supabase.from('income_records').select('id, total_amount, date, income_source')
+    )
       .eq('user_id', user.id)
       .order('date', { ascending: true })
       .limit(2)
@@ -64,10 +65,9 @@ export default function FirstIncomeAllocateCard({ refreshTrigger }: { refreshTri
       return
     }
 
-    const { count, error: allocError } = await supabase
-      .from('income_allocations')
-      .select('id', { count: 'exact', head: true })
-      .eq('income_record_id', row.id)
+    const { count, error: allocError } = await liveOnly(
+      supabase.from('income_allocations').select('id', { count: 'exact', head: true })
+    ).eq('income_record_id', row.id)
 
     if (allocError || (count ?? 0) > 0) {
       setCard(null)

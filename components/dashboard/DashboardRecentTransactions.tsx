@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { formatCurrency } from '@/lib/format'
 
 type TxRow = {
@@ -40,15 +41,11 @@ export default function DashboardRecentTransactions({
       }
 
       const [incRes, expRes] = await Promise.all([
-        supabase
-          .from('income_records')
-          .select('id, total_amount, date, income_source')
+        liveOnly(supabase.from('income_records').select('id, total_amount, date, income_source'))
           .eq('user_id', user.id)
           .order('date', { ascending: false })
           .limit(limit),
-        supabase
-          .from('expenses')
-          .select('id, amount, date, category, description')
+        liveOnly(supabase.from('expenses').select('id, amount, date, category, description'))
           .eq('user_id', user.id)
           .order('date', { ascending: false })
           .limit(limit),

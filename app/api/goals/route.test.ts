@@ -23,7 +23,9 @@ vi.mock('@/lib/supabaseServer', () => ({
     auth: { getUser: async () => ({ data: { user: state.user } }) },
     from: () => ({
       select: () => ({
-        eq: async () => ({ count: state.count, error: state.countError }),
+        is: () => ({
+          eq: async () => ({ count: state.count, error: state.countError }),
+        }),
       }),
       insert: () => {
         state.insertCalls += 1

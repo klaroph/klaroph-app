@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly, softDelete } from '@/lib/liveRows'
 import { getAccountDisplayLabel, type FinancialAccount } from '@/lib/financialAccounts'
 import { getFinancialHealthInsight, getWeightedLiquidAssets } from '@/lib/financialHealthInsights'
 import { formatPeso, formatDate } from '@/lib/format'
@@ -29,9 +30,11 @@ export default function FinancialHealthPage() {
       setLoading(false)
       return
     }
-    const { data } = await supabase
-      .from('financial_accounts')
-      .select('id, user_id, type, subtype, institution_name, custom_name, amount, notes, created_at, updated_at')
+    const { data } = await liveOnly(
+      supabase
+        .from('financial_accounts')
+        .select('id, user_id, type, subtype, institution_name, custom_name, amount, notes, created_at, updated_at')
+    )
     setAccounts((data as FinancialAccount[]) || [])
     setLoading(false)
   }
@@ -62,7 +65,7 @@ export default function FinancialHealthPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Remove this item?')) return
-    await supabase.from('financial_accounts').delete().eq('id', id)
+    await softDelete(supabase.from('financial_accounts')).eq('id', id)
     load()
   }
 
