@@ -1,6 +1,6 @@
 import { DomainError } from '../domain/errors'
 import { FREE_PLAN_CAP, GOAL_LIMIT_REACHED, goalAdoptionBlockMessage, type ResolvedPlanCap } from '../domain/planLimits'
-import { DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
+import { clampPageSize, DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
 import type { LocalStore } from './localStore'
 import {
   emptyCounts,
@@ -34,8 +34,8 @@ export type SignInPreview = {
   local: TableCounts
   server: TableCounts
   /**
-   * Set when unsynced device goals plus account goals exceed the plan.
-   * Adoption and sync must not run while this is set.
+   * Set when unsynced device goals plus account goals, minus pending deletes of
+   * synced goals, exceed the plan. New goal inserts wait. Other tables still sync.
    */
   goalLimitMessage: string | null
 }
@@ -102,12 +102,6 @@ export class SyncEngine {
 
   async sync(userId: string, plan: ResolvedPlanCap = FREE_PLAN_CAP): Promise<SyncReport> {
     const report: SyncReport = { pulled: 0, pushed: 0, errors: [], summary: [] }
-    const serverGoals = await this.remote.countLive('goals', userId)
-    const message = this.goalLimitMessage(userId, serverGoals, plan)
-    if (message) {
-      report.errors.push({ table: 'goals', message, code: GOAL_LIMIT_REACHED })
-      return report
-    }
     const budgetsKept = { n: 0 }
     try {
       await this.pullAll(userId, report, budgetsKept)
@@ -115,9 +109,15 @@ export class SyncEngine {
       report.errors.push({ table: 'expenses', message: errorMessage(error), code: errorCode(error) })
       return this.withSummary(report, budgetsKept.n)
     }
-    const errorsAfterPull = report.errors.length
-    await this.pushAll(userId, report)
-    if (report.errors.length > errorsAfterPull) return this.withSummary(report, budgetsKept.n)
+    await this.pushGoalTombstones(userId, report)
+    const serverGoals = await this.remote.countLive('goals', userId)
+    const message = this.goalLimitMessage(userId, serverGoals, plan)
+    if (message) {
+      report.errors.push({ table: 'goals', message, code: GOAL_LIMIT_REACHED })
+    }
+    const errorsBeforePush = report.errors.length
+    await this.pushAll(userId, report, message != null)
+    if (report.errors.length > errorsBeforePush) return this.withSummary(report, budgetsKept.n)
     try {
       await this.pullAll(userId, report, budgetsKept)
     } catch (error) {
@@ -127,10 +127,11 @@ export class SyncEngine {
   }
 
   private goalLimitMessage(userId: string, serverGoals: number, plan: ResolvedPlanCap): string | null {
+    const pendingDeletes = this.local.countPendingGoalDeletes(userId)
     return goalAdoptionBlockMessage({
       plan,
       localGoals: this.local.countUnsyncedLiveGoals(userId),
-      serverGoals,
+      serverGoals: Math.max(0, serverGoals - pendingDeletes),
     })
   }
 
@@ -160,12 +161,13 @@ export class SyncEngine {
     let rowErrors = 0
 
     for (;;) {
+      const limit = clampPageSize(this.pageSize)
       const page = await this.remote.pullPage({
         table,
         userId,
         updatedAtGte,
         after,
-        limit: this.pageSize,
+        limit,
       })
       if (page.length === 0) break
       const lastRaw = page[page.length - 1]
@@ -204,7 +206,7 @@ export class SyncEngine {
       }
 
       after = { updatedAt: lastUpdated, id: lastId }
-      if (page.length < this.pageSize) break
+      if (page.length < limit) break
     }
 
     if (rowErrors === 0 && maxSeen && maxSeen !== cursor) {
@@ -212,12 +214,20 @@ export class SyncEngine {
     }
   }
 
-  private async pushAll(userId: string, report: SyncReport): Promise<void> {
+  /** Goal deletes free plan slots, so they land before the cap check. */
+  private async pushGoalTombstones(userId: string, report: SyncReport): Promise<void> {
+    const dirty = this.local.listDirty('goals', userId)
+    for (const row of dirty) {
+      await this.pushRow(userId, row, true, report, false)
+    }
+  }
+
+  private async pushAll(userId: string, report: SyncReport, blockNewGoals: boolean): Promise<void> {
     for (const phase of PUSH_PHASES) {
       for (const table of phase.tables) {
         const dirty = this.local.listDirty(table, userId)
         for (const row of dirty) {
-          await this.pushRow(userId, row, phase.tombstones, report)
+          await this.pushRow(userId, row, phase.tombstones, report, blockNewGoals)
         }
       }
     }
@@ -228,10 +238,12 @@ export class SyncEngine {
     row: SyncRow,
     tombstones: boolean,
     report: SyncReport,
+    blockNewGoals: boolean,
   ): Promise<void> {
     const isTombstone = row.deleted_at != null
     if (isTombstone !== tombstones) return
     if (row.user_id !== userId) return
+    if (blockNewGoals && row.table === 'goals' && !isTombstone && row.base_updated_at == null) return
     if (isTombstone && row.base_updated_at == null) {
       this.local.discardNeverSynced(row.table, row.id)
       return
@@ -243,9 +255,11 @@ export class SyncEngine {
     if ('saved_amount' in payload || 'updated_at' in payload) {
       throw new Error('Refusing to send a server-owned column.')
     }
+    const revision = row.revision
+    const mode = row.base_updated_at == null ? 'insert' : 'update'
     try {
-      const stamp = await this.remote.push(row.table, payload)
-      this.local.markSynced(row.table, row.id, stamp)
+      const stamp = await this.remote.push(row.table, payload, mode)
+      this.local.markSynced(row.table, row.id, stamp, revision)
       report.pushed += 1
     } catch (error) {
       report.errors.push({

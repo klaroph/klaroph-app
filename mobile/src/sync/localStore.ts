@@ -9,7 +9,12 @@ export interface LocalStore {
   listDirty(table: SyncedTable, userId: string): SyncRow[]
   getRow(table: SyncedTable, id: string): SyncRow | null
   applyServerRow(table: SyncedTable, row: ServerRow): ApplyServerResult
-  markSynced(table: SyncedTable, id: string, stamp: ServerStamp): void
+  /**
+   * Records the server stamp. Leaves the row dirty when `revision` is no longer
+   * the revision that was pushed, and still advances `base_updated_at` so the
+   * echo of that push does not overwrite the newer local edit.
+   */
+  markSynced(table: SyncedTable, id: string, stamp: ServerStamp, revision: number): void
   discardNeverSynced(table: SyncedTable, id: string): void
   getCursor(userId: string, table: SyncedTable): string | null
   setCursor(userId: string, table: SyncedTable, cursor: string): void
@@ -21,6 +26,8 @@ export interface LocalStore {
    * so a later sync does not count the same goal twice.
    */
   countUnsyncedLiveGoals(userId: string): number
+  /** Synced goals this device has tombstoned and not yet pushed. */
+  countPendingGoalDeletes(userId: string): number
   clearAll(): void
   adoptUnassigned(userId: string): void
   sessionUserId(): string | null

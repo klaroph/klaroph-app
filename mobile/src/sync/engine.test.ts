@@ -5,7 +5,7 @@ import type { KlaroRepository } from '../db/repository'
 import { SyncEngine } from './engine'
 import type { PullPageInput } from './cursor'
 import type { ServerStamp, SyncedTable } from './model'
-import type { RemoteSync } from './remote'
+import type { PushMode, RemoteSync } from './remote'
 import { activateAccount, signOut } from './session'
 import { MemoryTokenStore } from './tokenStore'
 
@@ -29,6 +29,11 @@ class FakeRemote implements RemoteSync {
   updatedAtSends = 0
   failNext = false
   pulls = 0
+  goalCap = Number.POSITIVE_INFINITY
+  readonly modes: Array<{ table: SyncedTable; mode: PushMode; id: string }> = []
+  readonly limits: number[] = []
+  /** Runs after the server accepts the payload and before the stamp is returned. */
+  onAccepted?: (table: SyncedTable, payload: Record<string, unknown>) => void
   private readonly rows = new Map<string, Stored>()
   private serverMs = Date.parse('2026-10-19T00:00:00.000Z')
 
@@ -86,6 +91,7 @@ class FakeRemote implements RemoteSync {
 
   async pullPage(input: PullPageInput): Promise<Record<string, unknown>[]> {
     this.pulls += 1
+    this.limits.push(input.limit)
     const matched = [...this.rows.values()]
       .filter((row) => row.table === input.table && !row.hidden && row.user_id === input.userId)
       .filter((row) => input.updatedAtGte == null || Date.parse(row.updated_at) >= Date.parse(input.updatedAtGte))
@@ -104,13 +110,18 @@ class FakeRemote implements RemoteSync {
     return matched.slice(0, input.limit).map((row) => ({ ...row.raw }))
   }
 
-  async push(table: SyncedTable, payload: Record<string, unknown>): Promise<ServerStamp> {
+  async push(table: SyncedTable, payload: Record<string, unknown>, mode: PushMode): Promise<ServerStamp> {
     this.payloads.push({ table, payload: { ...payload } })
+    this.modes.push({ table, mode, id: String(payload.id) })
     if ('deleted_at' in payload && payload.deleted_at == null) this.clearedDeletedAt += 1
     if ('saved_amount' in payload) this.savedAmountSends += 1
     if ('updated_at' in payload) this.updatedAtSends += 1
     const id = String(payload.id)
     const existing = this.rows.get(this.key(table, id))
+    if (mode === 'insert' && !existing && table === 'goals' && payload.deleted_at == null) {
+      const live = await this.countLive('goals', String(payload.user_id))
+      if (live >= this.goalCap) throw new DomainError('GOAL_LIMIT_REACHED', 'goal limit')
+    }
     this.assertLiveUnique(table, payload, existing ?? null)
     const updatedAt = this.stamp()
     let deletedAt: string | null = null
@@ -133,6 +144,7 @@ class FakeRemote implements RemoteSync {
       raw,
       hidden: false,
     })
+    this.onAccepted?.(table, payload)
     if (this.failNext) {
       this.failNext = false
       throw new Error('response lost')
@@ -512,6 +524,13 @@ describe('sync engine', () => {
       amount: 20,
       date: '2026-02-01',
     })
+    const syncedExpense = repo.createExpense({
+      userId: USER_A,
+      category: 'Rent',
+      type: 'needs',
+      amount: 100,
+      date: '2026-02-01',
+    })
     remote.insert('goals', {
       id: 'server-goal',
       user_id: USER_A,
@@ -533,12 +552,11 @@ describe('sync engine', () => {
     expect(repo.getRow('goals', second.id)?.user_id).toBeNull()
 
     const report = await engine.sync(USER_A)
-    expect(report.pulled).toBe(0)
-    expect(report.pushed).toBe(0)
-    expect(report.summary).toEqual([])
     expect(report.errors).toEqual([{ table: 'goals', message: blocked, code: 'GOAL_LIMIT_REACHED' }])
-    expect(remote.pulls).toBe(0)
-    expect(remote.payloads).toHaveLength(0)
+    expect(report.pulled).toBeGreaterThan(0)
+    expect(remote.get('expenses', syncedExpense.id)?.category).toBe('Rent')
+    expect(remote.get('goals', first.id)).toBeUndefined()
+    expect(remote.get('goals', second.id)).toBeUndefined()
     expect(repo.getRow('expenses', expense.id)?.user_id).toBeNull()
     expect(await remote.countLive('goals', USER_A)).toBe(1)
 
@@ -579,6 +597,151 @@ describe('sync engine', () => {
     const again = await engine.sync(USER_A, { name: 'Pro', maxGoals: 20 })
     expect(again.errors).toEqual([])
     expect(repo.getRow('goals', 'server-goal')?.values.name).toBe('Three')
+  })
+
+  it('updates an acknowledged goal at the cap and inserts only rows the server has not seen', async () => {
+    const { repo, remote, engine } = harness()
+    remote.goalCap = 2
+    const first = repo.createGoal({ userId: USER_A, name: 'Emergency', targetAmount: 100 })
+    const second = repo.createGoal({ userId: USER_A, name: 'Tuition', targetAmount: 200 })
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Groceries',
+      type: 'needs',
+      amount: 20,
+      date: '2026-02-01',
+    })
+    const created = await engine.sync(USER_A)
+    expect(created.errors).toEqual([])
+    expect(remote.modes.filter((entry) => entry.table === 'goals').map((entry) => entry.mode)).toEqual(['insert', 'insert'])
+    expect(remote.modes.find((entry) => entry.id === expense.id)?.mode).toBe('insert')
+
+    remote.modes.length = 0
+    repo.updateGoal(first.id, { name: 'Renamed' })
+    repo.updateExpense(expense.id, { amount: 30 })
+    const edited = await engine.sync(USER_A)
+    expect(edited.errors).toEqual([])
+    expect(remote.modes.every((entry) => entry.mode === 'update')).toBe(true)
+    expect(remote.get('goals', first.id)?.name).toBe('Renamed')
+    expect(remote.get('expenses', expense.id)?.amount).toBe(30)
+
+    remote.modes.length = 0
+    repo.softDeleteGoal(second.id)
+    const removed = await engine.sync(USER_A)
+    expect(removed.errors).toEqual([])
+    expect(remote.modes.find((entry) => entry.id === second.id)?.mode).toBe('update')
+    expect(remote.get('goals', second.id)?.deleted_at).toEqual(expect.any(String))
+  })
+
+  it('uploads a replacement goal after its delete and still syncs other tables when new goals do not fit', async () => {
+    const { repo, remote, engine } = harness()
+    remote.goalCap = 2
+    const first = repo.createGoal({ userId: USER_A, name: 'Emergency', targetAmount: 100 })
+    const second = repo.createGoal({ userId: USER_A, name: 'Tuition', targetAmount: 200 })
+    await engine.sync(USER_A)
+
+    repo.softDeleteGoal(first.id)
+    const third = repo.createGoal({ userId: USER_A, name: 'Scooter', targetAmount: 50, maxGoals: 20 })
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Fare',
+      type: 'needs',
+      amount: 15,
+      date: '2026-02-01',
+    })
+    remote.modes.length = 0
+    const replaced = await engine.sync(USER_A)
+    expect(replaced.errors).toEqual([])
+    const goalModes = remote.modes.filter((entry) => entry.table === 'goals')
+    expect(goalModes[0]).toMatchObject({ id: first.id, mode: 'update' })
+    expect(goalModes.some((entry) => entry.id === third.id && entry.mode === 'insert')).toBe(true)
+    expect(goalModes.findIndex((entry) => entry.id === first.id)).toBeLessThan(
+      goalModes.findIndex((entry) => entry.id === third.id),
+    )
+    expect(await remote.countLive('goals', USER_A)).toBe(2)
+    expect(remote.get('expenses', expense.id)?.category).toBe('Fare')
+
+    const extra = repo.createGoal({ userId: USER_A, name: 'Laptop', targetAmount: 80, maxGoals: 20 })
+    const fare = repo.createExpense({
+      userId: USER_A,
+      category: 'Snack',
+      type: 'wants',
+      amount: 5,
+      date: '2026-02-02',
+    })
+    const blocked = await engine.sync(USER_A)
+    expect(blocked.errors.map((error) => error.code)).toContain('GOAL_LIMIT_REACHED')
+    expect(remote.get('expenses', fare.id)?.category).toBe('Snack')
+    expect(remote.get('goals', extra.id)).toBeUndefined()
+    expect(repo.getRow('goals', extra.id)?.dirty).toBe(true)
+    expect(await remote.countLive('goals', USER_A)).toBe(2)
+  })
+
+  it('keeps an edit made while its push is in flight', async () => {
+    const { repo, remote, engine } = harness()
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Groceries',
+      type: 'needs',
+      amount: 20,
+      date: '2026-02-01',
+    })
+    await engine.sync(USER_A)
+    repo.updateExpense(expense.id, { amount: 50 })
+    remote.onAccepted = () => {
+      remote.onAccepted = undefined
+      repo.updateExpense(expense.id, { amount: 77 })
+    }
+    const report = await engine.sync(USER_A)
+    expect(report.errors).toEqual([])
+    expect(remote.get('expenses', expense.id)?.amount).toBe(50)
+    expect(repo.getRow('expenses', expense.id)?.values.amount).toBe('77.00')
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(true)
+  })
+
+  it('asks for at most 1000 rows per page and continues after a full page', async () => {
+    const { repo, remote, engine } = harness({ pageSize: 5000 })
+    const stamp = '2026-10-19T00:00:00.000Z'
+    for (let index = 0; index < 1001; index += 1) {
+      remote.insert('expenses', {
+        id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        user_id: USER_A,
+        category: 'Fare',
+        type: 'needs',
+        amount: 1,
+        date: '2026-02-01',
+        description: null,
+        created_at: stamp,
+        updated_at: stamp,
+        deleted_at: null,
+      })
+    }
+    await engine.sync(USER_A)
+    expect(remote.limits.every((limit) => limit <= 1000)).toBe(true)
+    expect(remote.limits).toContain(1000)
+    expect(repo.listLive('expenses', USER_A)).toHaveLength(1001)
+  })
+
+  it('does not call a server replace of a synced budget a clash', async () => {
+    const { repo, remote, engine } = harness()
+    const local = repo.createBudgetPlan({ userId: USER_A, category: 'Food', amount: 100 })
+    await engine.sync(USER_A)
+    remote.insert('budget_plans', {
+      id: 'replacement-plan',
+      user_id: USER_A,
+      category: 'Food',
+      amount: 250,
+      note: null,
+      created_at: '2026-10-20T00:00:00.000Z',
+      updated_at: '2026-10-20T00:00:00.000Z',
+      deleted_at: null,
+    })
+    const report = await engine.sync(USER_A)
+    expect(report.errors).toEqual([])
+    expect(report.summary).toEqual([])
+    expect(repo.getRow('budget_plans', 'replacement-plan')?.values.amount).toBe('250.00')
+    expect(repo.listLive('budget_plans', USER_A).map((row) => row.id)).toEqual(['replacement-plan'])
+    expect(repo.getRow('budget_plans', local.id)?.deleted_at).not.toBeNull()
   })
 
   it('clears rows, cursors, and the token on sign-out', async () => {

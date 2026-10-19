@@ -4,7 +4,7 @@ import { createSupabaseRemote } from './supabaseRemote'
 
 type Call = Record<string, unknown>
 
-function mockClient() {
+function mockClient(options?: { insertConflict?: boolean }) {
   const calls: Call[] = []
   const client = {
     from(table: string) {
@@ -39,13 +39,22 @@ function mockClient() {
           calls.push({ ...state, op: 'limit', limit: count })
           return Promise.resolve({ data: [], error: null })
         },
-        upsert(payload: Record<string, unknown>, options: { onConflict: string }) {
-          state.upsert = { payload, options }
+        insert(payload: Record<string, unknown>) {
+          state.write = 'insert'
+          state.payload = payload
+          return api
+        },
+        update(payload: Record<string, unknown>) {
+          state.write = 'update'
+          state.payload = payload
           return api
         },
         single() {
           calls.push({ ...state, op: 'single' })
-          const payload = (state.upsert as { payload: { id: string; deleted_at?: string } }).payload
+          const payload = state.payload as { id: string; deleted_at?: string }
+          if (options?.insertConflict && state.write === 'insert') {
+            return Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "goals_pkey"' } })
+          }
           return Promise.resolve({
             data: {
               id: payload.id,
@@ -67,7 +76,7 @@ function mockClient() {
 }
 
 describe('supabase remote', () => {
-  it('upserts by id and does not use a partial unique index as the conflict target', async () => {
+  it('inserts a new row and updates an acknowledged row by id', async () => {
     const { client, calls } = mockClient()
     const remote = createSupabaseRemote(client)
     await remote.push('budget_plans', {
@@ -77,12 +86,32 @@ describe('supabase remote', () => {
       amount: 10,
       note: null,
       created_at: '2026-10-01T00:00:00.000Z',
-    })
-    const call = calls.find((entry) => entry.op === 'single')
-    expect(call?.upsert).toEqual({
-      payload: expect.objectContaining({ id: 'plan-1', category: 'Food' }),
-      options: { onConflict: 'id' },
-    })
+    }, 'insert')
+    await remote.push('goals', {
+      id: 'goal-1',
+      user_id: 'user-1',
+      name: 'Emergency',
+      target_amount: 10,
+      created_at: '2026-10-01T00:00:00.000Z',
+    }, 'update')
+    const writes = calls.filter((entry) => entry.op === 'single')
+    expect(writes.map((entry) => entry.write)).toEqual(['insert', 'update'])
+    expect(writes[1]?.eq).toEqual([['id', 'goal-1']])
+    expect(writes.some((entry) => 'upsert' in entry)).toBe(false)
+  })
+
+  it('updates by id when an insert hits a duplicate primary key', async () => {
+    const { client, calls } = mockClient({ insertConflict: true })
+    const remote = createSupabaseRemote(client)
+    await remote.push('goals', {
+      id: 'goal-1',
+      user_id: 'user-1',
+      name: 'Emergency',
+      target_amount: 10,
+      created_at: '2026-10-01T00:00:00.000Z',
+    }, 'insert')
+    const writes = calls.filter((entry) => entry.op === 'single')
+    expect(writes.map((entry) => entry.write)).toEqual(['insert', 'update'])
   })
 
   it('pulls by user and updated_at with a quoted keyset for equal timestamps', async () => {

@@ -30,5 +30,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  }
 }

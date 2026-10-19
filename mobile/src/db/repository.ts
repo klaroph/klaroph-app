@@ -28,6 +28,7 @@ type RunResult = { changes: number }
 export type KlaroDb = BaseSQLiteDatabase<'sync', RunResult, typeof schema>
 
 const SESSION_USER_KEY = 'session_user_id'
+const nextRevision = sql`revision + 1`
 
 type ExpenseType = 'needs' | 'wants'
 type AccountType = 'asset' | 'liability'
@@ -61,6 +62,7 @@ function mapBase(row: {
   deletedAt: string | null
   dirty: boolean
   baseUpdatedAt: string | null
+  revision: number
 }, table: SyncedTable, values: Record<string, string | null>): SyncRow {
   return {
     table,
@@ -71,6 +73,7 @@ function mapBase(row: {
     deleted_at: row.deletedAt,
     dirty: row.dirty,
     base_updated_at: row.baseUpdatedAt,
+    revision: row.revision,
     values,
   }
 }
@@ -230,7 +233,7 @@ export class KlaroRepository implements LocalStore {
   }
 
   adoptUnassigned(userId: string): void {
-    const patch = { userId, dirty: true }
+    const patch = { userId, dirty: true, revision: nextRevision }
     this.withTx((tx) => {
       tx.update(expenses).set(patch).where(isNull(expenses.userId)).run()
       tx.update(incomeRecords).set(patch).where(isNull(incomeRecords.userId)).run()
@@ -255,6 +258,17 @@ export class KlaroRepository implements LocalStore {
       select count(*) as n from goals
       where deleted_at is null
         and base_updated_at is null
+        and (user_id = ${userId} or user_id is null)
+    `)
+    return Number(row?.n ?? 0)
+  }
+
+  countPendingGoalDeletes(userId: string): number {
+    const row = this.db.get<{ n: number }>(sql`
+      select count(*) as n from goals
+      where deleted_at is not null
+        and dirty = 1
+        and base_updated_at is not null
         and (user_id = ${userId} or user_id is null)
     `)
     return Number(row?.n ?? 0)
@@ -352,6 +366,7 @@ export class KlaroRepository implements LocalStore {
       createdAt: now,
       updatedAt: now,
       dirty: true,
+      revision: 1,
     }).run()
     return this.requireRow('expenses', id)
   }
@@ -366,6 +381,7 @@ export class KlaroRepository implements LocalStore {
       description: input.description === undefined ? current.values.description : optionalText(input.description),
       updatedAt: this.now(),
       dirty: true,
+      revision: nextRevision,
     }).where(and(eq(expenses.id, id), isNull(expenses.deletedAt))).run()
     return this.requireRow('expenses', id)
   }
@@ -375,6 +391,7 @@ export class KlaroRepository implements LocalStore {
       deletedAt: now,
       updatedAt: now,
       dirty: true,
+      revision: nextRevision,
     }).where(and(eq(expenses.id, id), isNull(expenses.deletedAt))).run())
   }
 
@@ -397,6 +414,7 @@ export class KlaroRepository implements LocalStore {
       createdAt: now,
       updatedAt: now,
       dirty: true,
+      revision: 1,
     }).run()
     return this.requireRow('income_records', id)
   }
@@ -417,6 +435,7 @@ export class KlaroRepository implements LocalStore {
       incomeSource: input.incomeSource === undefined ? current.values.income_source : optionalText(input.incomeSource),
       updatedAt: this.now(),
       dirty: true,
+      revision: nextRevision,
     }).where(and(eq(incomeRecords.id, id), isNull(incomeRecords.deletedAt))).run()
     return this.requireRow('income_records', id)
   }
@@ -426,8 +445,8 @@ export class KlaroRepository implements LocalStore {
     if (!current || current.deleted_at) throw new DomainError('NOT_FOUND', 'Income record not found.')
     const now = this.now()
     this.withTx((tx) => {
-      tx.update(incomeRecords).set({ deletedAt: now, updatedAt: now, dirty: true }).where(eq(incomeRecords.id, id)).run()
-      tx.update(incomeAllocations).set({ deletedAt: now, updatedAt: now, dirty: true }).where(and(
+      tx.update(incomeRecords).set({ deletedAt: now, updatedAt: now, dirty: true, revision: nextRevision }).where(eq(incomeRecords.id, id)).run()
+      tx.update(incomeAllocations).set({ deletedAt: now, updatedAt: now, dirty: true, revision: nextRevision }).where(and(
         eq(incomeAllocations.incomeRecordId, id),
         isNull(incomeAllocations.deletedAt),
       )).run()
@@ -456,6 +475,7 @@ export class KlaroRepository implements LocalStore {
       createdAt: now,
       updatedAt: now,
       dirty: true,
+      revision: 1,
     }).run()
     return this.requireRow('goals', id)
   }
@@ -470,6 +490,7 @@ export class KlaroRepository implements LocalStore {
       pinnedAt: input.pinnedAt === undefined ? current.values.pinned_at : input.pinnedAt ? canonicalTimestamp(input.pinnedAt) : null,
       updatedAt: this.now(),
       dirty: true,
+      revision: nextRevision,
     }).where(and(eq(goals.id, id), isNull(goals.deletedAt))).run()
     return this.requireRow('goals', id)
   }
@@ -479,8 +500,8 @@ export class KlaroRepository implements LocalStore {
     if (!current || current.deleted_at) throw new DomainError('NOT_FOUND', 'Goal not found.')
     const now = this.now()
     this.withTx((tx) => {
-      tx.update(goals).set({ deletedAt: now, updatedAt: now, dirty: true }).where(eq(goals.id, id)).run()
-      tx.update(incomeAllocations).set({ deletedAt: now, updatedAt: now, dirty: true }).where(and(
+      tx.update(goals).set({ deletedAt: now, updatedAt: now, dirty: true, revision: nextRevision }).where(eq(goals.id, id)).run()
+      tx.update(incomeAllocations).set({ deletedAt: now, updatedAt: now, dirty: true, revision: nextRevision }).where(and(
         eq(incomeAllocations.goalId, id),
         isNull(incomeAllocations.deletedAt),
       )).run()
@@ -536,6 +557,7 @@ export class KlaroRepository implements LocalStore {
         createdAt: now,
         updatedAt: now,
         dirty: true,
+        revision: 1,
       }).run()
       if (incomeId) this.syncDisposable(tx, incomeId)
     })
@@ -559,6 +581,7 @@ export class KlaroRepository implements LocalStore {
         amount: moneyToText(amount),
         updatedAt: this.now(),
         dirty: true,
+        revision: nextRevision,
       }).where(and(eq(incomeAllocations.id, id), isNull(incomeAllocations.deletedAt))).run()
       if (incomeId) this.syncDisposable(tx, incomeId)
     })
@@ -570,7 +593,7 @@ export class KlaroRepository implements LocalStore {
     const incomeId = current.values.income_record_id
     const now = this.now()
     this.withTx((tx) => {
-      tx.update(incomeAllocations).set({ deletedAt: now, updatedAt: now, dirty: true }).where(eq(incomeAllocations.id, id)).run()
+      tx.update(incomeAllocations).set({ deletedAt: now, updatedAt: now, dirty: true, revision: nextRevision }).where(eq(incomeAllocations.id, id)).run()
       if (incomeId) this.syncDisposable(tx, incomeId)
     })
   }
@@ -591,6 +614,7 @@ export class KlaroRepository implements LocalStore {
       createdAt: now,
       updatedAt: now,
       dirty: true,
+      revision: 1,
     }).run()
     return this.requireRow('budget_plans', id)
   }
@@ -601,7 +625,7 @@ export class KlaroRepository implements LocalStore {
     }
     const now = this.now()
     this.withTx((tx) => {
-      tx.update(budgetPlans).set({ deletedAt: now, updatedAt: now, dirty: true }).where(and(
+      tx.update(budgetPlans).set({ deletedAt: now, updatedAt: now, dirty: true, revision: nextRevision }).where(and(
         isNull(budgetPlans.deletedAt),
         userId == null ? isNull(budgetPlans.userId) : eq(budgetPlans.userId, userId),
       )).run()
@@ -615,6 +639,7 @@ export class KlaroRepository implements LocalStore {
           createdAt: now,
           updatedAt: now,
           dirty: true,
+          revision: 1,
         }).run()
       }
     })
@@ -639,6 +664,7 @@ export class KlaroRepository implements LocalStore {
         note,
         updatedAt: now,
         dirty: true,
+        revision: nextRevision,
       }).where(eq(budgetOverrides.id, existing.id)).run()
       return this.requireRow('budget_overrides', existing.id)
     }
@@ -653,6 +679,7 @@ export class KlaroRepository implements LocalStore {
       createdAt: now,
       updatedAt: now,
       dirty: true,
+      revision: 1,
     }).run()
     return this.requireRow('budget_overrides', id)
   }
@@ -680,6 +707,7 @@ export class KlaroRepository implements LocalStore {
       createdAt: now,
       updatedAt: now,
       dirty: true,
+      revision: 1,
     }).run()
     return this.requireRow('financial_accounts', id)
   }
@@ -700,6 +728,7 @@ export class KlaroRepository implements LocalStore {
       notes: input.notes === undefined ? current.values.notes : optionalText(input.notes),
       updatedAt: this.now(),
       dirty: true,
+      revision: nextRevision,
     }).where(and(eq(financialAccounts.id, id), isNull(financialAccounts.deletedAt))).run()
     return this.requireRow('financial_accounts', id)
   }
@@ -709,6 +738,7 @@ export class KlaroRepository implements LocalStore {
       deletedAt: now,
       updatedAt: now,
       dirty: true,
+      revision: nextRevision,
     }).where(and(eq(financialAccounts.id, id), isNull(financialAccounts.deletedAt))).run())
   }
 
@@ -740,10 +770,19 @@ export class KlaroRepository implements LocalStore {
     return { budgetsKeptFromAccount }
   }
 
-  markSynced(table: SyncedTable, id: string, stamp: ServerStamp): void {
+  markSynced(table: SyncedTable, id: string, stamp: ServerStamp, revision: number): void {
     const local = this.getRow(table, id)
     if (!local) return
     const updatedAt = canonicalTimestamp(stamp.updated_at)
+    if (local.revision !== revision) {
+      this.patchMeta(table, id, {
+        updatedAt: local.updated_at,
+        deletedAt: local.deleted_at,
+        baseUpdatedAt: updatedAt,
+        dirty: true,
+      })
+      return
+    }
     const serverDeleted = stamp.deleted_at ? canonicalTimestamp(stamp.deleted_at) : null
     const deletedAt = serverDeleted ?? local.deleted_at
     const dirty = local.deleted_at != null && serverDeleted == null
@@ -808,6 +847,7 @@ export class KlaroRepository implements LocalStore {
       disposableAmount: moneyToText(disposable),
       updatedAt: this.now(),
       dirty: true,
+      revision: nextRevision,
     }).where(eq(incomeRecords.id, incomeId)).run()
   }
 
@@ -896,8 +936,9 @@ export class KlaroRepository implements LocalStore {
 
   /**
    * The account already has this live budget category (and month). Tombstone the
-   * other local row so the server row can be stored. Push-by-id still applies
-   * to whatever remains; the partial unique index is not a conflict target.
+   * other local row so the server row can be stored. Count it only when that
+   * local row was never acknowledged — a server replace of a synced row is not
+   * a clash. Push-by-id still applies; the partial unique index is not a conflict target.
    */
   private retireClashingBudget(db: KlaroDb, table: SyncedTable, row: ServerRow): number {
     if (row.deleted_at) return 0
@@ -931,7 +972,7 @@ export class KlaroRepository implements LocalStore {
       updatedAt: now,
       dirty: true,
     }).where(eq(budgetPlans.id, live.id)).run()
-    return 1
+    return live.baseUpdatedAt == null ? 1 : 0
   }
 
   private retireOverride(db: KlaroDb, row: ServerRow): number {
@@ -950,7 +991,7 @@ export class KlaroRepository implements LocalStore {
       updatedAt: now,
       dirty: true,
     }).where(eq(budgetOverrides.id, live.id)).run()
-    return 1
+    return live.baseUpdatedAt == null ? 1 : 0
   }
 
   private upsertServer(table: SyncedTable, row: ServerRow, deletedAt: string | null, db: KlaroDb = this.db): void {

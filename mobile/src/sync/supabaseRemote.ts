@@ -3,7 +3,7 @@ import { keysetOr, type PullPageInput } from './cursor'
 import { DomainError } from '../domain/errors'
 import type { ServerStamp, SyncedTable } from './model'
 import { fieldsFor } from './model'
-import type { RemoteSync } from './remote'
+import type { PushMode, RemoteSync } from './remote'
 import type { TokenStore } from './tokenStore'
 
 const SELECT_LIST: Record<SyncedTable, string> = {
@@ -29,23 +29,45 @@ type FilterQuery = {
   then: PromiseLike<{ data: Record<string, unknown>[] | null; error: QueryError; count: number | null }>['then']
 }
 
-type UpsertQuery = {
-  upsert: (
-    values: Record<string, unknown>,
-    options: { onConflict: string },
-  ) => {
-    select: (columns: string) => {
-      single: () => Promise<{ data: ServerStamp | null; error: QueryError }>
-    }
+type WriteResult = {
+  select: (columns: string) => {
+    single: () => Promise<{ data: ServerStamp | null; error: QueryError }>
+  }
+}
+
+type WriteQuery = {
+  insert: (values: Record<string, unknown>) => WriteResult
+  update: (values: Record<string, unknown>) => {
+    eq: (column: string, value: string) => WriteResult
   }
 }
 
 export type SyncSupabase = {
-  from: (table: SyncedTable) => FilterQuery & UpsertQuery
+  from: (table: SyncedTable) => FilterQuery & WriteQuery
 }
 
 function remoteError(error: Exclude<QueryError, null>): never {
   throw new DomainError(error.code ?? 'REMOTE', error.message)
+}
+
+function isUniqueConflict(error: unknown): boolean {
+  return error instanceof DomainError && error.code === '23505'
+}
+
+async function writeById(
+  db: SyncSupabase,
+  table: SyncedTable,
+  payload: Record<string, unknown>,
+  mode: PushMode,
+): Promise<ServerStamp> {
+  const id = String(payload.id)
+  const writing = mode === 'insert'
+    ? db.from(table).insert(payload)
+    : db.from(table).update(payload).eq('id', id)
+  const { data, error } = await writing.select('id, updated_at, deleted_at').single()
+  if (error) remoteError(error)
+  if (!data) throw new DomainError('REMOTE', 'Write returned no row.')
+  return data
 }
 
 export function createKlaroSupabase(url: string, anonKey: string, storage: SupportedStorage): SupabaseClient {
@@ -72,8 +94,11 @@ function asSyncClient(client: SupabaseClient): SyncSupabase {
 }
 
 /**
- * Push is an upsert on the primary key only. Partial unique indexes
- * (budget category, budget override month) are not conflict targets.
+ * Never-synced rows are inserted. Rows the server has already acknowledged are
+ * updated by id. An upsert would run the goal-limit trigger on its insert half
+ * and reject an edit or delete once the account is at the cap.
+ * A duplicate primary key on insert is a lost response: update that id instead.
+ * Partial unique indexes are not conflict targets.
  */
 export function createSupabaseRemote(client: SupabaseClient): RemoteSync {
   const db = asSyncClient(client)
@@ -89,15 +114,18 @@ export function createSupabaseRemote(client: SupabaseClient): RemoteSync {
       if (error) remoteError(error)
       return data ?? []
     },
-    async push(table, payload) {
-      const { data, error } = await db
-        .from(table)
-        .upsert(payload, { onConflict: 'id' })
-        .select('id, updated_at, deleted_at')
-        .single()
-      if (error) remoteError(error)
-      if (!data) throw new DomainError('REMOTE', 'Upsert returned no row.')
-      return data
+    async push(table, payload, mode) {
+      if (mode === 'update') return writeById(db, table, payload, 'update')
+      try {
+        return await writeById(db, table, payload, 'insert')
+      } catch (error) {
+        if (!isUniqueConflict(error)) throw error
+        try {
+          return await writeById(db, table, payload, 'update')
+        } catch {
+          throw error
+        }
+      }
     },
     async countLive(table, userId) {
       const { count, error } = await db

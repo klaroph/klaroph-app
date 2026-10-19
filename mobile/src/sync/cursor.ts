@@ -6,6 +6,15 @@ export const DEFAULT_OVERLAP_MS = 5 * 60 * 1000
 
 export const DEFAULT_PAGE_SIZE = 200
 
+/** PostgREST / Supabase project cap. A request above this comes back short and must not end the pull. */
+export const SERVER_MAX_ROWS = 1000
+
+export function clampPageSize(requested: number): number {
+  const size = Number.isFinite(requested) ? Math.floor(requested) : DEFAULT_PAGE_SIZE
+  if (size < 1) return 1
+  return Math.min(size, SERVER_MAX_ROWS)
+}
+
 export function pullLowerBound(cursor: string | null, overlapMs: number): string | null {
   if (cursor == null) return null
   const ms = Date.parse(cursor)

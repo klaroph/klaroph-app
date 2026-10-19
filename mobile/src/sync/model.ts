@@ -46,6 +46,8 @@ export type SyncRow = {
   deleted_at: string | null
   dirty: boolean
   base_updated_at: string | null
+  /** Local write counter. Not sent to the server. */
+  revision: number
   values: Record<string, string | null>
 }
 

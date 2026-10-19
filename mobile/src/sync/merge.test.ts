@@ -52,6 +52,7 @@ describe('push payload', () => {
     deleted_at: null,
     dirty: true,
     base_updated_at: '2026-10-01T00:00:00.000Z',
+    revision: 1,
     values: {
       name: 'Emergency',
       target_amount: '100.00',

@@ -14,6 +14,8 @@ function syncColumns() {
     deletedAt: text('deleted_at'),
     dirty: integer('dirty', { mode: 'boolean' }).notNull().default(true),
     baseUpdatedAt: text('base_updated_at'),
+    /** Device-only. Bumps on local writes so an in-flight push cannot clear a newer edit. */
+    revision: integer('revision').notNull().default(0),
   }
 }
 
