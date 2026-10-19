@@ -16,7 +16,7 @@ export type GoalRunwayResult = {
   status: GoalRunwayStatus
   saved: number
   remaining: number
-  /** Average ₱/month across contribution months used for pace (0 when no_pace/complete). */
+  /** Average pesos a month across contribution months used for pace (0 when no_pace/complete). */
   pace: number
   /** ceil(remaining / pace); null when not an estimate. Capped for display separately. */
   monthsRemaining: number | null
@@ -182,7 +182,7 @@ export function formatGoalRunwayCopy(runway: GoalRunwayResult): GoalRunwayCopy |
         : `${displayMonths} months`
 
   const paceRounded = Math.round(runway.pace)
-  const paceText = `Averaging about ${formatPeso(paceRounded, 'en-PH')}/month toward this goal.`
+  const paceText = `Averaging about ${formatPeso(paceRounded, 'en-PH')} a month toward this goal.`
 
   const primary = `About ${monthsLabel} to go`
   const secondary =

@@ -119,7 +119,7 @@ describe('formatGoalRunwayCopy', () => {
       })
     )
     expect(copy?.primary).toBe('About 6 months to go')
-    expect(copy?.secondary).toContain('₱5,000/month')
+    expect(copy?.secondary).toContain('₱5,000 a month')
   })
 
   it('notes when estimate is based on one contribution month', () => {

@@ -58,19 +58,22 @@ describe('sendPremiumConfirmationIfNew', () => {
     expect(message.to).toBe('juan@example.com')
     expect(message.subject).toBe('You’re officially KlaroPH Pro')
     expect(message.text).toContain('Hi Juan,')
-    expect(message.text).toContain('Plan: KlaroPH Pro · Monthly')
+    expect(message.text).toContain('Plan: KlaroPH Pro')
     expect(message.text).toContain('Amount paid: ₱1,430.40')
     expect(message.text).toContain('Active until: October 26, 2026')
+    expect(message.text).toContain('Nothing else will be charged.')
+    expect(message.text).not.toMatch(/Plan: KlaroPH Pro ·|\/month(?![A-Za-z])|\/year(?![A-Za-z])|\brenew|\blifetime\b/i)
     expect(message.text).not.toMatch(/sample email/i)
     expect(key).toBe('premium-confirmation-evt_1')
   })
 
-  it('reflects a founder lifetime purchase', async () => {
+  it('uses the one-time line for a paid grant', async () => {
     state.subscription = { current_period_end: '2026-10-26T04:00:00.000Z', is_lifetime: true }
     await sendPremiumConfirmationIfNew('evt_2', 'user-1', 'annual')
     const { text } = state.sendTransactionalEmail.mock.calls[0][1]
-    expect(text).toContain('Plan: KlaroPH Pro · Lifetime')
-    expect(text).not.toMatch(/Active until|renew/i)
+    expect(text).toContain('Plan: KlaroPH Pro')
+    expect(text).toContain('Pay once. No subscription. Pro stays on your account for as long as KlaroPH runs.')
+    expect(text).not.toMatch(/Active until|\/month|\/year|\brenew|\blifetime\b/i)
   })
 
   it('omits the amount when the stored payment has none', async () => {

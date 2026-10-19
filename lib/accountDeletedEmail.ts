@@ -32,7 +32,7 @@ function buildAccountDeletedHtml(logoUrl: string, baseUrl: string): string {
           <tr>
             <td style="padding: 0 32px 32px 32px;">
               <p style="margin:0 0 12px;">Your KlaroPH account and associated personal data have been successfully deleted.</p>
-              <p style="margin:0 0 12px;">This includes your profile, expenses, income records, budgets, goals, assets, liabilities, and subscription-related app data.</p>
+              <p style="margin:0 0 12px;">This includes your profile, expenses, income records, budgets, goals, assets, and liabilities.</p>
               <p style="margin:0 0 12px;">You may create a new KlaroPH account anytime using the same email address, but it will begin as a new account with no access to previously deleted data.</p>
               <p style="margin:0 0 12px;">For reference:</p>
               <p style="margin:0 0 8px;"><a href="${privacyUrl}" style="color: #2563eb;">Privacy Policy</a></p>

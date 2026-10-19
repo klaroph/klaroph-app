@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 
-const LAST_UPDATED = 'February 2025'
+const LAST_UPDATED = 'October 2026'
 
 export const metadata = {
   title: 'Terms & Conditions — KlaroPH',
@@ -71,21 +71,56 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
-          <h2>Subscription &amp; Billing</h2>
+          <h2>KlaroPH Pro</h2>
           <p>
-            KlaroPH may offer a free tier and a paid Pro plan. If you subscribe to the Pro plan, you agree to the
-            pricing and billing terms presented at the time of purchase. Payments are processed by our payment
-            provider. You may cancel your subscription in accordance with the upgrade and billing flows in the app.
-            Refunds are subject to our refund policy as stated at the time of purchase.
+            KlaroPH Pro costs ₱999, paid once. Pay once. No subscription. Pro stays on your account for as long as
+            KlaroPH runs. KlaroPH does not charge you again for that purchase.
           </p>
+          <p>
+            You can ask for a full refund within 7 days of purchase by contacting support at{' '}
+            <a href="mailto:support@klaroph.com" className="legal-link">support@klaroph.com</a>.
+            Refunds are handled manually. Pro is removed from your account when the refund goes through. A chargeback
+            removes Pro.
+          </p>
+          <p>
+            If KlaroPH closes, we will tell you at least 45 days ahead by email and with an in-app banner. Export stays
+            open until the service shuts down.
+          </p>
+          <p>
+            Any signed-in user can download klaroph-export.csv. The columns are Type, Date, Amount, and
+            Category/Source. An Income row puts the income source in Category/Source. An Expense row puts the expense
+            category in Category/Source. The file does not include the expense type, descriptions, notes, or any other
+            account data.
+          </p>
+          <p>Deleting your account ends Pro.</p>
+        </section>
+
+        <section className="legal-section">
+          <h2>Third-Party Services</h2>
+          <p>KlaroPH uses these services to run the app:</p>
+          <ul>
+            <li>Supabase stores your account and the records you save, and handles sign-in.</li>
+            <li>
+              Google sign-in is available. If you choose it, Google shares the email and basic profile used to sign
+              you in.
+            </li>
+            <li>Vercel hosts the app and runs its scheduled job.</li>
+            <li>PayMongo processes the one-time ₱999 KlaroPH Pro payment.</li>
+            <li>
+              Google Gemini writes Klaro Insight and Ask Klaro replies. The Privacy Policy states which details are
+              sent.
+            </li>
+            <li>Resend sends KlaroPH email.</li>
+          </ul>
         </section>
 
         <section className="legal-section">
           <h2>Termination</h2>
           <p>
-            We may suspend or terminate your access to KlaroPH if you breach these terms or for other operational
-            or legal reasons. You may close your account at any time. Upon termination, your right to use the service
-            ceases; we may retain or delete your data as described in our Privacy Policy.
+            KlaroPH may terminate an account only when it breaks these terms. You may close your account at any time.
+            When an account ends, the right to use KlaroPH ceases. We may retain or delete data as described in the
+            Privacy Policy. If KlaroPH closes, the 45-day notice and the open export described in the KlaroPH Pro
+            section apply.
           </p>
         </section>
 

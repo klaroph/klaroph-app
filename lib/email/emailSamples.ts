@@ -58,9 +58,9 @@ export function buildEmailSample(kind: EmailSampleKind, now: Date): RenderedEmai
       return renderPaidProEmail({
         firstName: 'Juan',
         planType: 'monthly',
-        isLifetime: false,
+        isLifetime: true,
         activeUntil: monthsFrom(now, 1),
-        amountPaid: { centavos: 19_900, currency: 'PHP' },
+        amountPaid: { centavos: 99_900, currency: 'PHP' },
         testMode: true,
       })
     case 'complimentary':

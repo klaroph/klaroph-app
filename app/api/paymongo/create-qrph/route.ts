@@ -16,8 +16,15 @@ import { buildCheckoutMetadata, resolveCheckoutGrant } from '@/lib/checkoutGrant
 
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
 
+/** Product text stored on the payment. QR Ph payment intents have no line_items field. */
 const PRO_DESCRIPTION =
-  'KlaroPH Pro: 20 goals, unlimited history, import/export, advance charts and analytics.'
+  'KlaroPH Pro. One-time purchase of ₱999. Pay once. No subscription.'
+
+/**
+ * Statement text for card and GCash. PayMongo accepts letters, numbers, spaces,
+ * and limited punctuation, so the peso sign is written as P.
+ */
+const PRO_STATEMENT_DESCRIPTOR = 'KlaroPH Pro P999 once'
 
 export async function POST(request: Request) {
   try {
@@ -33,7 +40,7 @@ export async function POST(request: Request) {
     const sub = await resolveSubscriptionState(user.id)
     if (shouldBlockNewProPurchase(sub)) {
       return NextResponse.json(
-        { error: 'User already has active subscription.' },
+        { error: 'You already have KlaroPH Pro.' },
         { status: 400 }
       )
     }
@@ -109,6 +116,7 @@ export async function POST(request: Request) {
       currency: 'PHP',
       paymentMethodAllowed: ['qrph'],
       description: PRO_DESCRIPTION,
+      statementDescriptor: PRO_STATEMENT_DESCRIPTOR,
       metadata: buildCheckoutMetadata({
         userId: user.id,
         expectedAmountCentavos: amountCentavos,
