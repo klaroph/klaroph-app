@@ -8,30 +8,30 @@ vi.mock('@/lib/supabaseAdmin', () => ({
     },
   },
 }))
-import { manilaWeekWindow, weeklyCampaignId } from './manilaWeek'
+import { manilaHalfMonth, paydayCampaignId } from './manilaHalfMonth'
 import { verifyUnsubscribeToken } from './unsubscribeToken'
 import {
-  deliverWeeklyBatch,
+  deliverPaydayBatch,
   keepOnboarded,
-  loadWeekEntries,
-  runWeeklySummary,
-  selectWeeklyRecipients,
-  sendWeeklySummaryTest,
-  weeklyGreetingName,
-  weeklySummarySendsEnabled,
-  type WeeklyPrepareResult,
-  type WeeklyRecipient,
-} from './weeklySummary'
-import { summarizeUserWeek, type LedgerEntry } from './weeklySummaryEmail'
+  loadPaydayEntries,
+  paydayGreetingName,
+  paydaySummarySendsEnabled,
+  runPaydaySummary,
+  selectPaydayRecipients,
+  sendPaydaySummaryTest,
+  type PaydayPrepareResult,
+  type PaydayRecipient,
+} from './paydaySummary'
+import { summarizePayday, type LedgerEntry } from './paydaySummaryEmail'
 import type { AudienceAuthUser, AudienceProfile } from './marketingAudience'
 
-const NOW = new Date('2026-10-19T00:00:00.000Z')
-const WINDOW = manilaWeekWindow(NOW)
-const CAMPAIGN_ID = weeklyCampaignId(WINDOW)
+const NOW = new Date('2026-10-15T00:00:00.000Z')
+const WINDOW = manilaHalfMonth(NOW)!
+const CAMPAIGN_ID = paydayCampaignId(WINDOW)
 const RECENT = '2026-10-01T00:00:00.000Z'
 const LONG_AGO = '2026-01-01T00:00:00.000Z'
 const CURRENT_AMOUNT = 864201357.89
-const PREVIOUS_AMOUNT = 975310864.12
+const OTHER_AMOUNT = 975310864.12
 
 const links = { appUrl: 'https://klaroph.com', unsubscribeSecret: 'u'.repeat(40) }
 const resend = { apiKey: 're_test', from: 'KlaroPH <hello@klaroph.com>' }
@@ -83,18 +83,18 @@ function fakeAdmin(existing: Row[] = []) {
   return { admin: admin as unknown as SupabaseClient, rows }
 }
 
-function recipient(id: string, greetingName: string | null = 'Jun'): WeeklyRecipient {
+function recipient(id: string, greetingName: string | null = 'Jun'): PaydayRecipient {
   return { userId: id, email: `${id}@example.com`, firstName: greetingName, greetingName }
 }
 
-function prepared(recipients: WeeklyRecipient[], entries: LedgerEntry[]): WeeklyPrepareResult {
+function prepared(recipients: PaydayRecipient[], entries: LedgerEntry[]): PaydayPrepareResult {
   return { ok: true, window: WINDOW, campaignId: CAMPAIGN_ID, recipients, entries }
 }
 
-describe('weekly audience', () => {
-  const now = new Date('2026-10-19T00:00:00.000Z')
+describe('payday audience', () => {
+  const now = new Date('2026-10-15T00:00:00.000Z')
   const ids = (authUsers: AudienceAuthUser[], profiles: ReturnType<typeof profile>[]) =>
-    selectWeeklyRecipients({ authUsers, profiles, now }).map((item) => item.userId)
+    selectPaydayRecipients({ authUsers, profiles, now }).map((item) => item.userId)
 
   it('includes opted-in users who have not signed in for 30 days', () => {
     expect(
@@ -134,7 +134,7 @@ describe('weekly audience', () => {
       { userId: 'subscribed', date: '2026-10-14', kind: 'expense', category: 'Groceries', amount: 10 },
       { userId: 'unsubscribed', date: '2026-10-14', kind: 'expense', category: 'Groceries', amount: CURRENT_AMOUNT },
     ]
-    const facts = summarizeUserWeek(entries, 'unsubscribed', WINDOW)
+    const facts = summarizePayday(entries, 'unsubscribed', WINDOW)
     expect(facts).not.toBeNull()
     expect(ids(authUsers, profiles)).not.toContain('unsubscribed')
   })
@@ -156,30 +156,30 @@ describe('weekly audience', () => {
   })
 
   it('greets with the display-name helper, nickname first', () => {
-    expect(weeklyGreetingName({ nickname: 'Jun', full_name: 'Juan Dela Cruz' }, 'juan@example.com')).toBe('Jun')
-    expect(weeklyGreetingName({ nickname: null, full_name: 'Juan Dela Cruz' }, 'juan@example.com')).toBe('Juan')
-    expect(weeklyGreetingName({ nickname: null, full_name: null }, 'juan@example.com')).toBe('juan')
+    expect(paydayGreetingName({ nickname: 'Jun', full_name: 'Juan Dela Cruz' }, 'juan@example.com')).toBe('Jun')
+    expect(paydayGreetingName({ nickname: null, full_name: 'Juan Dela Cruz' }, 'juan@example.com')).toBe('Juan')
+    expect(paydayGreetingName({ nickname: null, full_name: null }, 'juan@example.com')).toBe('juan')
   })
 })
 
-describe('weeklySummarySendsEnabled', () => {
-  it('sends only for the exact string true', () => {
-    expect(weeklySummarySendsEnabled({ WEEKLY_SUMMARY_SENDS_ENABLED: 'true' })).toBe(true)
+describe('paydaySummarySendsEnabled', () => {
+  it('sends only for the exact string true, under the existing env name', () => {
+    expect(paydaySummarySendsEnabled({ WEEKLY_SUMMARY_SENDS_ENABLED: 'true' })).toBe(true)
     for (const value of [undefined, '', 'TRUE', '1', ' true', 'true ']) {
-      expect(weeklySummarySendsEnabled({ WEEKLY_SUMMARY_SENDS_ENABLED: value })).toBe(false)
+      expect(paydaySummarySendsEnabled({ WEEKLY_SUMMARY_SENDS_ENABLED: value })).toBe(false)
     }
   })
 })
 
-describe('runWeeklySummary', () => {
+describe('runPaydaySummary', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
   const entries: LedgerEntry[] = [
     { userId: 'active', date: '2026-10-14', kind: 'expense', category: 'Groceries', amount: CURRENT_AMOUNT },
-    { userId: 'active', date: '2026-10-07', kind: 'expense', category: 'Groceries', amount: PREVIOUS_AMOUNT },
-    { userId: 'quiet', date: '2026-10-19', kind: 'expense', category: 'Rent', amount: 135790246.75 },
+    { userId: 'active', date: '2026-10-07', kind: 'expense', category: 'Groceries', amount: OTHER_AMOUNT },
+    { userId: 'quiet', date: '2026-10-15', kind: 'expense', category: 'Rent', amount: 135790246.75 },
   ]
 
   beforeEach(() => {
@@ -187,9 +187,24 @@ describe('runWeeklySummary', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
+  it('returns not-payday and sends nothing on the 28th, 29th, and 30th', async () => {
+    for (const day of ['28', '29', '30']) {
+      const prepare = vi.fn()
+      const deliver = vi.fn()
+      const result = await runPaydaySummary(new Date(`2026-10-${day}T00:59:00.000Z`), {
+        env: { WEEKLY_SUMMARY_SENDS_ENABLED: 'true' },
+        prepare,
+        deliver,
+      })
+      expect(result).toEqual({ status: 200, body: { skipped: 'not-payday' } })
+      expect(prepare).not.toHaveBeenCalled()
+      expect(deliver).not.toHaveBeenCalled()
+    }
+  })
+
   it('returns counts and sends nothing when the flag is off', async () => {
     const deliver = vi.fn()
-    const result = await runWeeklySummary(NOW, {
+    const result = await runPaydaySummary(NOW, {
       env: { WEEKLY_SUMMARY_SENDS_ENABLED: 'false' },
       prepare: async () => prepared([recipient('active'), recipient('quiet')], entries),
       deliver,
@@ -212,7 +227,7 @@ describe('runWeeklySummary', () => {
 
   it('does not claim or send when the flag is missing, even if delivery is configured', async () => {
     const deliver = vi.fn()
-    const result = await runWeeklySummary(NOW, {
+    const result = await runPaydaySummary(NOW, {
       env: {},
       prepare: async () => prepared([recipient('active')], entries),
       deliver,
@@ -229,11 +244,11 @@ describe('runWeeklySummary', () => {
     const options = {
       env: { WEEKLY_SUMMARY_SENDS_ENABLED: 'true' },
       prepare: async () => prepared([recipient('active'), recipient('quiet')], entries),
-      deliver: (campaignId: string, batch: Parameters<typeof deliverWeeklyBatch>[2]) =>
-        deliverWeeklyBatch(deps, campaignId, batch),
+      deliver: (campaignId: string, batch: Parameters<typeof deliverPaydayBatch>[2]) =>
+        deliverPaydayBatch(deps, campaignId, batch),
     }
-    const first = await runWeeklySummary(NOW, options)
-    const second = await runWeeklySummary(NOW, options)
+    const first = await runPaydaySummary(NOW, options)
+    const second = await runPaydaySummary(NOW, options)
 
     expect(first.body).toMatchObject({ sendsEnabled: true, eligible: 2, skippedNoActivity: 1, wouldSend: 1, sent: 1, failed: 0, skipped: 0 })
     expect(second.body).toMatchObject({ sent: 0, failed: 0, skipped: 1 })
@@ -244,23 +259,26 @@ describe('runWeeklySummary', () => {
     expect(payload).not.toContain('864201357')
     expect(payload).not.toContain('975310864')
     expect(payload).not.toMatch(/₱|peso/i)
-    expect(messages[0].subject).toBe('Your week in KlaroPH')
+    expect(`${messages[0].subject}\n${messages[0].text}`).not.toContain('%')
+    expect(messages[0].subject).toBe('Your payday summary from KlaroPH')
+    expect(messages[0].text).toContain('You logged on 2 of 15 days.')
     expect(messages[0].headers['List-Unsubscribe']).toContain('/api/email/unsubscribe?token=')
   })
 })
 
-describe('loadWeekEntries', () => {
-  it('filters by user_id and keeps Sunday while dropping the following Monday', async () => {
+describe('loadPaydayEntries', () => {
+  it('filters by user_id inside the half-month and does not load a previous window', async () => {
     const calls: { table: string; method: string; args: unknown[] }[] = []
     const rows = {
       expenses: [
-        { user_id: 'u1', date: '2026-10-18', category: 'Food', amount: 10 },
-        { user_id: 'u1', date: '2026-10-19', category: 'Rent', amount: 999 },
-        { user_id: 'stranger', date: '2026-10-18', category: 'Rent', amount: 888 },
+        { user_id: 'u1', date: '2026-09-30', category: 'Groceries', amount: 10 },
+        { user_id: 'u1', date: '2026-10-15', category: 'Rent', amount: 999 },
+        { user_id: 'stranger', date: '2026-10-14', category: 'Rent', amount: 888 },
       ],
       income_records: [
-        { user_id: 'u1', date: '2026-10-18' },
-        { user_id: 'u1', date: '2026-10-19' },
+        { user_id: 'u1', date: '2026-09-30' },
+        { user_id: 'u1', date: '2026-09-29' },
+        { user_id: 'u1', date: '2026-10-15' },
       ],
     }
     const admin = {
@@ -288,8 +306,8 @@ describe('loadWeekEntries', () => {
         return builder
       },
     }
-    const entries = await loadWeekEntries(admin as unknown as SupabaseClient, ['u1'], WINDOW)
-    expect(entries.map((entry) => `${entry.kind}:${entry.date}`).sort()).toEqual(['expense:2026-10-18', 'income:2026-10-18'])
+    const entries = await loadPaydayEntries(admin as unknown as SupabaseClient, ['u1'], WINDOW)
+    expect(entries.map((entry) => `${entry.kind}:${entry.date}`).sort()).toEqual(['expense:2026-09-30', 'income:2026-09-30'])
     expect(entries.some((entry) => entry.userId !== 'u1')).toBe(false)
 
     expect(calls.filter((call) => call.method === 'in').map((call) => call.args)).toEqual([
@@ -298,21 +316,21 @@ describe('loadWeekEntries', () => {
     ])
     const bounds = calls.filter((call) => call.method === 'gte' || call.method === 'lte')
     expect(bounds).toEqual([
-      { table: 'expenses', method: 'gte', args: ['date', '2026-10-05'] },
-      { table: 'expenses', method: 'lte', args: ['date', '2026-10-18'] },
-      { table: 'income_records', method: 'gte', args: ['date', '2026-10-12'] },
-      { table: 'income_records', method: 'lte', args: ['date', '2026-10-18'] },
+      { table: 'expenses', method: 'gte', args: ['date', '2026-09-30'] },
+      { table: 'expenses', method: 'lte', args: ['date', '2026-10-14'] },
+      { table: 'income_records', method: 'gte', args: ['date', '2026-09-30'] },
+      { table: 'income_records', method: 'lte', args: ['date', '2026-10-14'] },
     ])
     expect(calls.every((call) => call.table === 'expenses' || call.table === 'income_records')).toBe(true)
   })
 
   it('does not query when nobody is eligible', async () => {
     const admin = { from: () => { throw new Error('should not query') } }
-    expect(await loadWeekEntries(admin as unknown as SupabaseClient, [], WINDOW)).toEqual([])
+    expect(await loadPaydayEntries(admin as unknown as SupabaseClient, [], WINDOW)).toEqual([])
   })
 })
 
-describe('sendWeeklySummaryTest', () => {
+describe('sendPaydaySummaryTest', () => {
   const env = {
     RESEND_API_KEY: 're_test',
     MARKETING_UNSUBSCRIBE_SECRET: 'u'.repeat(40),
@@ -322,12 +340,17 @@ describe('sendWeeklySummaryTest', () => {
 
   it('sends one [TEST] message to MARKETING_TEST_EMAIL and nowhere else', async () => {
     const sendBatch = vi.fn().mockResolvedValue({ ok: true, ids: ['e-test'] })
-    const result = await sendWeeklySummaryTest(NOW, { env, sendBatch })
+    const result = await sendPaydaySummaryTest(NOW, { env, sendBatch })
     expect(result).toEqual({ status: 200, body: { ok: true, mode: 'test' } })
     expect(sendBatch).toHaveBeenCalledTimes(1)
     const messages = sendBatch.mock.calls[0][1]
     expect(messages.map((message: { to: string }) => message.to)).toEqual(['founder@example.com'])
-    expect(messages[0].subject).toBe('[TEST] Your week in KlaroPH')
+    expect(messages[0].subject).toBe('[TEST] Your payday summary from KlaroPH')
+    expect(messages[0].text).toContain('You logged on 8 of 15 days.')
+    expect(messages[0].tags).toEqual([
+      { name: 'category', value: 'marketing' },
+      { name: 'campaign', value: 'half-2026-10-a' },
+    ])
     expect(messages[0].headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click')
     const oneClick = messages[0].headers['List-Unsubscribe'].match(/^<(.+)>$/)?.[1] ?? ''
     const token = decodeURIComponent(new URL(oneClick).searchParams.get('token') ?? '')
@@ -335,9 +358,18 @@ describe('sendWeeklySummaryTest', () => {
     expect(JSON.stringify(result.body)).not.toContain('founder@example.com')
   })
 
+  it('still sends the sample on a day that is not a payday, without mailing the audience', async () => {
+    const sendBatch = vi.fn().mockResolvedValue({ ok: true, ids: ['e-test'] })
+    const result = await sendPaydaySummaryTest(new Date('2026-10-28T00:00:00.000Z'), { env, sendBatch })
+    expect(result).toEqual({ status: 200, body: { ok: true, mode: 'test' } })
+    const messages = sendBatch.mock.calls[0][1]
+    expect(messages.map((message: { to: string }) => message.to)).toEqual(['founder@example.com'])
+    expect(messages[0].tags[1]).toEqual({ name: 'campaign', value: 'payday-summary-test' })
+  })
+
   it('refuses when the test inbox is not configured', async () => {
     const sendBatch = vi.fn()
-    const result = await sendWeeklySummaryTest(NOW, { env: { ...env, MARKETING_TEST_EMAIL: '' }, sendBatch })
+    const result = await sendPaydaySummaryTest(NOW, { env: { ...env, MARKETING_TEST_EMAIL: '' }, sendBatch })
     expect(result.status).toBe(400)
     expect(sendBatch).not.toHaveBeenCalled()
   })

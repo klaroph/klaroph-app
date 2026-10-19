@@ -1,6 +1,6 @@
 {
   "crons": [
     { "path": "/api/cron/founder-report", "schedule": "0 2 * * *" },
-    { "path": "/api/cron/week-in-pesos", "schedule": "0 0 * * 1" }
+    { "path": "/api/cron/payday-summary", "schedule": "0 0 15,28-31 * *" }
   ]
 }

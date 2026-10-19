@@ -1,8 +1,10 @@
 /**
- * Server-only weekly summary. Recipients are opted-in users (confirmed email,
+ * Server-only payday summary. Recipients are opted-in users (confirmed email,
  * not a tester, not banned or deleted, not unsubscribed, onboarding completed),
- * then people who logged something in the covered Manila week.
+ * then people who logged something in the covered Manila half-month.
  * The message itself never includes amounts.
+ *
+ * The send flag stays WEEKLY_SUMMARY_SENDS_ENABLED so existing env does not change.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -18,31 +20,30 @@ import {
   type AudienceProfile,
   type MarketingRecipient,
 } from '@/lib/email/marketingAudience'
-import { manilaWeekWindow, weeklyCampaignId, manilaDateInRange, type ManilaWeekWindow } from '@/lib/email/manilaWeek'
+import { manilaDateInRange, manilaHalfMonth, paydayCampaignId, type ManilaHalfMonthWindow } from '@/lib/email/manilaHalfMonth'
 import { getResendConfig, sendCampaignBatch, type ResendConfig } from '@/lib/email/resend'
 import { getUnsubscribeSecret } from '@/lib/email/unsubscribeToken'
 import {
-  buildWeeklySummaryMessage,
-  partitionWeeklyActivity,
+  buildPaydaySummaryMessage,
+  partitionPaydayActivity,
   type LedgerEntry,
-  type WeeklySummaryFacts,
-} from '@/lib/email/weeklySummaryEmail'
+  type PaydaySummaryFacts,
+} from '@/lib/email/paydaySummaryEmail'
 
 /** Test sends use a token for a non-existent user, so the unsubscribe link is inert. */
 const TEST_RECIPIENT_USER_ID = '00000000-0000-0000-0000-000000000000'
 const PAGE_SIZE = 1000
+const SAMPLE_LOGGED_DAYS = 8
 
-const TEST_FACTS: WeeklySummaryFacts = { entryCount: 3, direction: 'same', topCategory: 'Groceries' }
+export type PaydayProfile = AudienceProfile & { onboarding_completed?: boolean | null }
 
-export type WeeklyProfile = AudienceProfile & { onboarding_completed?: boolean | null }
+export type PaydayRecipient = MarketingRecipient & { greetingName: string | null }
 
-export type WeeklyRecipient = MarketingRecipient & { greetingName: string | null }
-
-export type WeeklyPrepareResult =
-  | { ok: true; window: ManilaWeekWindow; campaignId: string; recipients: WeeklyRecipient[]; entries: LedgerEntry[] }
+export type PaydayPrepareResult =
+  | { ok: true; window: ManilaHalfMonthWindow; campaignId: string; recipients: PaydayRecipient[]; entries: LedgerEntry[] }
   | { ok: false; error: string }
 
-export type WeeklySummaryBody = {
+export type PaydaySummaryBody = {
   ok?: boolean
   error?: string
   mode?: 'test'
@@ -53,10 +54,11 @@ export type WeeklySummaryBody = {
   wouldSend?: number
   sent?: number
   failed?: number
-  skipped?: number
+  /** Already-claimed count after a send, or the literal skip when today is not a payday. */
+  skipped?: number | 'not-payday'
 }
 
-export type WeeklySummaryOutcome = { status: number; body: WeeklySummaryBody }
+export type PaydaySummaryOutcome = { status: number; body: PaydaySummaryBody }
 
 type ProfileBits = {
   id: string
@@ -74,7 +76,7 @@ type ExpenseRow = {
 
 type IncomeRow = { user_id?: string; date?: string }
 
-export function weeklySummarySendsEnabled(env: Record<string, string | undefined> = process.env): boolean {
+export function paydaySummarySendsEnabled(env: Record<string, string | undefined> = process.env): boolean {
   return env.WEEKLY_SUMMARY_SENDS_ENABLED === 'true'
 }
 
@@ -90,9 +92,9 @@ export function keepOnboarded<T extends { userId: string }>(
  * Marketing audience with every existing eligibility filter except the 30-day
  * sign-in window, plus onboarding_completed === true.
  */
-export function selectWeeklyRecipients(input: {
+export function selectPaydayRecipients(input: {
   authUsers: AudienceAuthUser[]
-  profiles: WeeklyProfile[]
+  profiles: PaydayProfile[]
   now: Date
   excludeUserIds?: ReadonlySet<string>
 }): MarketingRecipient[] {
@@ -108,12 +110,17 @@ export function selectWeeklyRecipients(input: {
   )
 }
 
-export function weeklyGreetingName(
+export function paydayGreetingName(
   profile: { nickname?: string | null; full_name?: string | null } | undefined,
   email: string,
 ): string | null {
   const name = displayName({ nickname: profile?.nickname, fullName: profile?.full_name, email }, '', { firstName: true })
   return name || null
+}
+
+function sampleFacts(window: ManilaHalfMonthWindow | null): PaydaySummaryFacts {
+  const windowDays = window?.dayCount ?? 15
+  return { loggedDays: Math.min(SAMPLE_LOGGED_DAYS, windowDays), windowDays, topCategory: 'Groceries' }
 }
 
 function deliveryConfig(
@@ -153,11 +160,11 @@ async function loadProfileBits(admin: SupabaseClient, userIds: readonly string[]
   )
 }
 
-/** Expenses across both weeks, income in the covered week. Explicit user_id filter, then date bounds. */
-export async function loadWeekEntries(
+/** Income and expenses inside the covered half-month only. Explicit user_id filter, then date bounds. */
+export async function loadPaydayEntries(
   admin: SupabaseClient,
   userIds: readonly string[],
-  window: ManilaWeekWindow,
+  window: ManilaHalfMonthWindow,
 ): Promise<LedgerEntry[]> {
   if (userIds.length === 0) return []
   const ids = [...userIds]
@@ -168,7 +175,7 @@ export async function loadWeekEntries(
         .from('expenses')
         .select('id, user_id, date, category, amount')
         .in('user_id', ids)
-        .gte('date', window.previous.start)
+        .gte('date', window.covered.start)
         .lte('date', window.covered.end)
         .order('id', { ascending: true })
         .range(from, to),
@@ -188,9 +195,7 @@ export async function loadWeekEntries(
   const entries: LedgerEntry[] = []
   for (const row of expenses) {
     if (!row.user_id || !row.date || !allowed.has(row.user_id)) continue
-    const inCovered = manilaDateInRange(row.date, window.covered)
-    const inPrevious = manilaDateInRange(row.date, window.previous)
-    if (!inCovered && !inPrevious) continue
+    if (!manilaDateInRange(row.date, window.covered)) continue
     entries.push({
       userId: row.user_id,
       date: row.date,
@@ -207,29 +212,30 @@ export async function loadWeekEntries(
   return entries
 }
 
-async function prepareWeeklySend(admin: SupabaseClient, now: Date): Promise<WeeklyPrepareResult> {
-  const window = manilaWeekWindow(now)
-  const campaignId = weeklyCampaignId(window)
+async function preparePaydaySend(admin: SupabaseClient, now: Date): Promise<PaydayPrepareResult> {
+  const window = manilaHalfMonth(now)
+  if (!window) return { ok: false, error: 'not-payday' }
+  const campaignId = paydayCampaignId(window)
   try {
     const audience = await loadMarketingAudience(admin, campaignId, 'all', now)
     if (!audience.ok) return { ok: false, error: audience.error }
     const profiles = await loadProfileBits(admin, audience.recipients.map((recipient) => recipient.userId))
     const byId = new Map(profiles.map((profile) => [profile.id, profile]))
-    const recipients: WeeklyRecipient[] = keepOnboarded(audience.recipients, profiles).map((recipient) => ({
+    const recipients: PaydayRecipient[] = keepOnboarded(audience.recipients, profiles).map((recipient) => ({
       ...recipient,
-      greetingName: weeklyGreetingName(byId.get(recipient.userId), recipient.email),
+      greetingName: paydayGreetingName(byId.get(recipient.userId), recipient.email),
     }))
-    const entries = await loadWeekEntries(admin, recipients.map((recipient) => recipient.userId), window)
+    const entries = await loadPaydayEntries(admin, recipients.map((recipient) => recipient.userId), window)
     return { ok: true, window, campaignId, recipients, entries }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Failed to load the weekly summary.' }
+    return { ok: false, error: e instanceof Error ? e.message : 'Failed to load the payday summary.' }
   }
 }
 
-export async function deliverWeeklyBatch(
+export async function deliverPaydayBatch(
   deps: { admin: SupabaseClient; resend: ResendConfig; links: CampaignLinkConfig; sendBatch?: typeof sendCampaignBatch; pause?: (ms: number) => Promise<void> },
   campaignId: string,
-  batch: readonly { recipient: WeeklyRecipient; facts: WeeklySummaryFacts }[],
+  batch: readonly { recipient: PaydayRecipient; facts: PaydaySummaryFacts }[],
 ): Promise<CampaignSendSummary> {
   const byId = new Map(batch.map((item) => [item.recipient.userId, item]))
   return sendClaimedRecipients(
@@ -238,34 +244,37 @@ export async function deliverWeeklyBatch(
     batch.map((item) => item.recipient),
     (recipient) => {
       const item = byId.get(recipient.userId)
-      if (!item) throw new Error('missing weekly summary')
-      return buildWeeklySummaryMessage(item.facts, item.recipient, deps.links, campaignId)
+      if (!item) throw new Error('missing payday summary')
+      return buildPaydaySummaryMessage(item.facts, item.recipient, deps.links, campaignId)
     },
   )
 }
 
-export type WeeklySummaryDeps = {
+export type PaydaySummaryDeps = {
   env?: Record<string, string | undefined>
   admin?: SupabaseClient
-  prepare?: (now: Date) => Promise<WeeklyPrepareResult>
+  prepare?: (now: Date) => Promise<PaydayPrepareResult>
   deliver?: (
     campaignId: string,
-    batch: { recipient: WeeklyRecipient; facts: WeeklySummaryFacts }[],
+    batch: { recipient: PaydayRecipient; facts: PaydaySummaryFacts }[],
   ) => Promise<CampaignSendSummary>
 }
 
-export async function runWeeklySummary(now: Date, deps: WeeklySummaryDeps = {}): Promise<WeeklySummaryOutcome> {
+export async function runPaydaySummary(now: Date, deps: PaydaySummaryDeps = {}): Promise<PaydaySummaryOutcome> {
+  const window = manilaHalfMonth(now)
+  if (!window) return { status: 200, body: { skipped: 'not-payday' } }
+
   const env = deps.env ?? process.env
-  const prepare = deps.prepare ?? ((at: Date) => prepareWeeklySend(deps.admin ?? supabaseAdmin, at))
+  const prepare = deps.prepare ?? ((at: Date) => preparePaydaySend(deps.admin ?? supabaseAdmin, at))
   const prepared = await prepare(now)
   if (!prepared.ok) {
-    console.error(`[weekly-summary] ${prepared.error}`)
-    return { status: 500, body: { error: 'Failed to load the weekly summary.' } }
+    console.error(`[payday-summary] ${prepared.error}`)
+    return { status: 500, body: { error: 'Failed to load the payday summary.' } }
   }
 
-  const { skippedNoActivity, wouldSend } = partitionWeeklyActivity(prepared.recipients, prepared.entries, prepared.window)
-  const sendsEnabled = weeklySummarySendsEnabled(env)
-  const counts: WeeklySummaryBody = {
+  const { skippedNoActivity, wouldSend } = partitionPaydayActivity(prepared.recipients, prepared.entries, prepared.window)
+  const sendsEnabled = paydaySummarySendsEnabled(env)
+  const counts: PaydaySummaryBody = {
     ok: true,
     sendsEnabled,
     campaignId: prepared.campaignId,
@@ -276,7 +285,7 @@ export async function runWeeklySummary(now: Date, deps: WeeklySummaryDeps = {}):
 
   if (!sendsEnabled || wouldSend.length === 0) {
     console.info(
-      `[weekly-summary ${prepared.campaignId}] sendsEnabled=${sendsEnabled} eligible=${counts.eligible} skippedNoActivity=${counts.skippedNoActivity} wouldSend=${counts.wouldSend}`,
+      `[payday-summary ${prepared.campaignId}] sendsEnabled=${sendsEnabled} eligible=${counts.eligible} skippedNoActivity=${counts.skippedNoActivity} wouldSend=${counts.wouldSend}`,
     )
     return { status: 200, body: counts }
   }
@@ -286,14 +295,14 @@ export async function runWeeklySummary(now: Date, deps: WeeklySummaryDeps = {}):
       ? await deps.deliver(prepared.campaignId, wouldSend)
       : await deliverConfigured(env, deps.admin ?? supabaseAdmin, prepared.campaignId, wouldSend)
     if ('configError' in summary) {
-      console.error(`[weekly-summary ${prepared.campaignId}] ${summary.configError}`)
+      console.error(`[payday-summary ${prepared.campaignId}] ${summary.configError}`)
       return { status: 500, body: { error: summary.configError } }
     }
-    console.info(`[weekly-summary ${prepared.campaignId}] sent=${summary.sent} failed=${summary.failed} skipped=${summary.skipped}`)
+    console.info(`[payday-summary ${prepared.campaignId}] sent=${summary.sent} failed=${summary.failed} skipped=${summary.skipped}`)
     return { status: 200, body: { ...counts, ...summary } }
   } catch (e) {
-    console.error(`[weekly-summary ${prepared.campaignId}] ${e instanceof Error ? e.message : 'send failed'}`)
-    return { status: 500, body: { error: 'Weekly summary send failed.' } }
+    console.error(`[payday-summary ${prepared.campaignId}] ${e instanceof Error ? e.message : 'send failed'}`)
+    return { status: 500, body: { error: 'Payday summary send failed.' } }
   }
 }
 
@@ -301,18 +310,18 @@ async function deliverConfigured(
   env: Record<string, string | undefined>,
   admin: SupabaseClient,
   campaignId: string,
-  batch: { recipient: WeeklyRecipient; facts: WeeklySummaryFacts }[],
+  batch: { recipient: PaydayRecipient; facts: PaydaySummaryFacts }[],
 ): Promise<CampaignSendSummary | { configError: string }> {
   const config = deliveryConfig(env)
   if (!config.ok) return { configError: config.error }
-  return deliverWeeklyBatch({ admin, resend: config.resend, links: config.links }, campaignId, batch)
+  return deliverPaydayBatch({ admin, resend: config.resend, links: config.links }, campaignId, batch)
 }
 
 /** One [TEST] message to MARKETING_TEST_EMAIL. The address is never taken from the caller. */
-export async function sendWeeklySummaryTest(
+export async function sendPaydaySummaryTest(
   now: Date,
   options?: { env?: Record<string, string | undefined>; sendBatch?: typeof sendCampaignBatch },
-): Promise<WeeklySummaryOutcome> {
+): Promise<PaydaySummaryOutcome> {
   const env = options?.env ?? process.env
   const testEmail = env.MARKETING_TEST_EMAIL?.trim().toLowerCase()
   if (!isValidMarketingEmail(testEmail)) {
@@ -321,9 +330,10 @@ export async function sendWeeklySummaryTest(
   const config = deliveryConfig(env)
   if (!config.ok) return { status: 500, body: { error: config.error } }
 
-  const campaignId = weeklyCampaignId(manilaWeekWindow(now))
-  const message = buildWeeklySummaryMessage(
-    TEST_FACTS,
+  const window = manilaHalfMonth(now)
+  const campaignId = window ? paydayCampaignId(window) : 'payday-summary-test'
+  const message = buildPaydaySummaryMessage(
+    sampleFacts(window),
     { userId: TEST_RECIPIENT_USER_ID, email: testEmail, greetingName: null },
     config.links,
     campaignId,
@@ -335,7 +345,7 @@ export async function sendWeeklySummaryTest(
     `${campaignId}-test-${Date.now()}`,
   )
   if (!result.ok) {
-    console.error(`[weekly-summary ${campaignId}] test send failed: ${result.error}`)
+    console.error(`[payday-summary ${campaignId}] test send failed: ${result.error}`)
     return { status: 502, body: { error: 'Test send failed.' } }
   }
   return { status: 200, body: { ok: true, mode: 'test' } }
