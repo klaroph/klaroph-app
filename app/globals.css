@@ -221,10 +221,8 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* Portaled outside main content, so the drawer keeps its own notch insets.
-     Child padding stays; bottom inset stays on .sidebar-footer. */
+  /* Portaled outside main content. Top and left only: a right inset shrinks this left drawer. */
   padding-top: max(0px, env(safe-area-inset-top, 0px));
-  padding-right: max(0px, env(safe-area-inset-right, 0px));
   padding-left: max(0px, env(safe-area-inset-left, 0px));
 }
 
