@@ -1,3 +1,5 @@
+import { DomainError } from '../domain/errors'
+import { FREE_PLAN_CAP, GOAL_LIMIT_REACHED, goalAdoptionBlockMessage, type ResolvedPlanCap } from '../domain/planLimits'
 import { DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
 import type { LocalStore } from './localStore'
 import {
@@ -11,6 +13,7 @@ import {
   type TableCounts,
 } from './model'
 import type { RemoteSync } from './remote'
+import { budgetsKeptFromAccountLine } from './summary'
 
 export type SyncError = {
   table: SyncedTable
@@ -23,11 +26,18 @@ export type SyncReport = {
   pulled: number
   pushed: number
   errors: SyncError[]
+  /** User-facing merge lines, such as "1 budget kept from your account". */
+  summary: string[]
 }
 
 export type SignInPreview = {
   local: TableCounts
   server: TableCounts
+  /**
+   * Set when unsynced device goals plus account goals exceed the plan.
+   * Adoption and sync must not run while this is set.
+   */
+  goalLimitMessage: string | null
 }
 
 type Phase = {
@@ -66,46 +76,82 @@ export class SyncEngine {
     this.pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE
   }
 
-  /** Local vs server live counts. Does not upload or delete either side. */
-  async preview(userId: string): Promise<SignInPreview> {
+  /** Local vs server live counts. Does not upload, adopt, or delete either side. */
+  async preview(userId: string, plan: ResolvedPlanCap = FREE_PLAN_CAP): Promise<SignInPreview> {
     const server = emptyCounts()
     for (const table of SYNCED_TABLES) {
       server[table] = await this.remote.countLive(table, userId)
     }
-    return { local: this.local.countLive(userId), server }
+    return {
+      local: this.local.countLive(userId),
+      server,
+      goalLimitMessage: this.goalLimitMessage(userId, server.goals, plan),
+    }
   }
 
-  /** Assign the signed-in user to local-only rows. Call this only after confirmation. */
-  adopt(userId: string): void {
+  /**
+   * Assign the signed-in user to local-only rows. Refuses when the combined
+   * goals would exceed the plan, and does not assign any rows in that case.
+   */
+  async adopt(userId: string, plan: ResolvedPlanCap = FREE_PLAN_CAP): Promise<void> {
+    const serverGoals = await this.remote.countLive('goals', userId)
+    const message = this.goalLimitMessage(userId, serverGoals, plan)
+    if (message) throw new DomainError(GOAL_LIMIT_REACHED, message)
     this.local.adoptUnassigned(userId)
   }
 
-  async sync(userId: string): Promise<SyncReport> {
-    const report: SyncReport = { pulled: 0, pushed: 0, errors: [] }
+  async sync(userId: string, plan: ResolvedPlanCap = FREE_PLAN_CAP): Promise<SyncReport> {
+    const report: SyncReport = { pulled: 0, pushed: 0, errors: [], summary: [] }
+    const serverGoals = await this.remote.countLive('goals', userId)
+    const message = this.goalLimitMessage(userId, serverGoals, plan)
+    if (message) {
+      report.errors.push({ table: 'goals', message, code: GOAL_LIMIT_REACHED })
+      return report
+    }
+    const budgetsKept = { n: 0 }
     try {
-      await this.pullAll(userId, report)
+      await this.pullAll(userId, report, budgetsKept)
     } catch (error) {
       report.errors.push({ table: 'expenses', message: errorMessage(error), code: errorCode(error) })
-      return report
+      return this.withSummary(report, budgetsKept.n)
     }
     const errorsAfterPull = report.errors.length
     await this.pushAll(userId, report)
-    if (report.errors.length > errorsAfterPull) return report
+    if (report.errors.length > errorsAfterPull) return this.withSummary(report, budgetsKept.n)
     try {
-      await this.pullAll(userId, report)
+      await this.pullAll(userId, report, budgetsKept)
     } catch (error) {
       report.errors.push({ table: 'expenses', message: errorMessage(error), code: errorCode(error) })
     }
+    return this.withSummary(report, budgetsKept.n)
+  }
+
+  private goalLimitMessage(userId: string, serverGoals: number, plan: ResolvedPlanCap): string | null {
+    return goalAdoptionBlockMessage({
+      plan,
+      localGoals: this.local.countUnsyncedLiveGoals(userId),
+      serverGoals,
+    })
+  }
+
+  private withSummary(report: SyncReport, budgetsKept: number): SyncReport {
+    const line = budgetsKeptFromAccountLine(budgetsKept)
+    if (line) report.summary.push(line)
     return report
   }
 
-  private async pullAll(userId: string, report: SyncReport): Promise<void> {
+  private async pullAll(userId: string, report: SyncReport, budgetsKept: { n: number }): Promise<void> {
     for (const table of SYNCED_TABLES) {
-      await this.pullTable(userId, table, report)
+      await this.pullTable(userId, table, report, budgetsKept)
     }
   }
 
-  private async pullTable(userId: string, table: SyncedTable, report: SyncReport): Promise<void> {
+  private async pullTable(
+    userId: string,
+    table: SyncedTable,
+    report: SyncReport,
+    budgetsKept: { n: number },
+  ): Promise<void> {
     const cursor = this.local.getCursor(userId, table)
     const updatedAtGte = pullLowerBound(cursor, this.overlapMs)
     let after: PullPageInput['after'] = null
@@ -140,7 +186,8 @@ export class SyncEngine {
           if (remoteRow.user_id !== userId) {
             throw new Error('Pulled a row for a different user.')
           }
-          this.local.applyServerRow(table, remoteRow)
+          const applied = this.local.applyServerRow(table, remoteRow)
+          budgetsKept.n += applied.budgetsKeptFromAccount
           report.pulled += 1
           if (maxSeen == null || Date.parse(remoteRow.updated_at) > Date.parse(maxSeen)) {
             maxSeen = remoteRow.updated_at

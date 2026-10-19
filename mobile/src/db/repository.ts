@@ -6,11 +6,11 @@ import { createId } from '../domain/ids'
 import { assertNonNegativeMoney, assertPositiveMoney, moneyToText } from '../domain/money'
 import { FREE_PLAN_MAX_GOALS, GOAL_LIMIT_REACHED } from '../domain/planLimits'
 import { canonicalTimestamp, optionalNote, optionalText, requireIsoDate, requireText } from '../domain/time'
+import { assertNever } from '../sync/assertNever'
+import type { ApplyServerResult, LocalStore } from '../sync/localStore'
 import { decidePull } from '../sync/merge'
-import type { LocalStore } from '../sync/localStore'
 import type { ServerRow, ServerStamp, SyncRow, SyncedTable, TableCounts } from '../sync/model'
 import { emptyCounts, SYNCED_TABLES } from '../sync/model'
-import { assertNever } from '../sync/assertNever'
 import {
   budgetOverrides,
   budgetPlans,
@@ -248,6 +248,16 @@ export class KlaroRepository implements LocalStore {
       counts[table] = this.countVisible(table, userId)
     }
     return counts
+  }
+
+  countUnsyncedLiveGoals(userId: string): number {
+    const row = this.db.get<{ n: number }>(sql`
+      select count(*) as n from goals
+      where deleted_at is null
+        and base_updated_at is null
+        and (user_id = ${userId} or user_id is null)
+    `)
+    return Number(row?.n ?? 0)
   }
 
   private countVisible(table: SyncedTable, userId: string): number {
@@ -702,7 +712,7 @@ export class KlaroRepository implements LocalStore {
     }).where(and(eq(financialAccounts.id, id), isNull(financialAccounts.deletedAt))).run())
   }
 
-  applyServerRow(table: SyncedTable, row: ServerRow): void {
+  applyServerRow(table: SyncedTable, row: ServerRow): ApplyServerResult {
     const local = this.getRow(table, row.id)
     const decision = decidePull(
       local && {
@@ -712,16 +722,22 @@ export class KlaroRepository implements LocalStore {
       },
       row,
     )
-    if (decision === 'keep-local') return
+    if (decision === 'keep-local') return { budgetsKeptFromAccount: 0 }
     const deletedAt = row.deleted_at ?? local?.deleted_at ?? null
+    let budgetsKeptFromAccount = 0
     try {
-      this.upsertServer(table, row, deletedAt)
+      this.db.transaction((tx) => {
+        const database = tx as unknown as KlaroDb
+        budgetsKeptFromAccount = this.retireClashingBudget(database, table, row)
+        this.upsertServer(table, row, deletedAt, database)
+      })
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new DomainError('UNIQUE_CONFLICT', `Unique constraint on ${table}.`)
       }
       throw error
     }
+    return { budgetsKeptFromAccount }
   }
 
   markSynced(table: SyncedTable, id: string, stamp: ServerStamp): void {
@@ -878,7 +894,66 @@ export class KlaroRepository implements LocalStore {
     }
   }
 
-  private upsertServer(table: SyncedTable, row: ServerRow, deletedAt: string | null): void {
+  /**
+   * The account already has this live budget category (and month). Tombstone the
+   * other local row so the server row can be stored. Push-by-id still applies
+   * to whatever remains; the partial unique index is not a conflict target.
+   */
+  private retireClashingBudget(db: KlaroDb, table: SyncedTable, row: ServerRow): number {
+    if (row.deleted_at) return 0
+    switch (table) {
+      case 'budget_plans':
+        return this.retirePlan(db, row)
+      case 'budget_overrides':
+        return this.retireOverride(db, row)
+      case 'expenses':
+      case 'income_records':
+      case 'goals':
+      case 'financial_accounts':
+      case 'income_allocations':
+        return 0
+      default:
+        return assertNever(table, 'table')
+    }
+  }
+
+  private retirePlan(db: KlaroDb, row: ServerRow): number {
+    const category = requiredValue(row, 'category')
+    const live = db.select().from(budgetPlans).where(and(
+      isNull(budgetPlans.deletedAt),
+      eq(budgetPlans.category, category),
+      eq(budgetPlans.userId, row.user_id),
+    )).get()
+    if (!live || live.id === row.id) return 0
+    const now = this.now()
+    db.update(budgetPlans).set({
+      deletedAt: now,
+      updatedAt: now,
+      dirty: true,
+    }).where(eq(budgetPlans.id, live.id)).run()
+    return 1
+  }
+
+  private retireOverride(db: KlaroDb, row: ServerRow): number {
+    const category = requiredValue(row, 'category')
+    const month = requiredValue(row, 'month')
+    const live = db.select().from(budgetOverrides).where(and(
+      isNull(budgetOverrides.deletedAt),
+      eq(budgetOverrides.category, category),
+      eq(budgetOverrides.month, month),
+      eq(budgetOverrides.userId, row.user_id),
+    )).get()
+    if (!live || live.id === row.id) return 0
+    const now = this.now()
+    db.update(budgetOverrides).set({
+      deletedAt: now,
+      updatedAt: now,
+      dirty: true,
+    }).where(eq(budgetOverrides.id, live.id)).run()
+    return 1
+  }
+
+  private upsertServer(table: SyncedTable, row: ServerRow, deletedAt: string | null, db: KlaroDb = this.db): void {
     const meta = {
       id: row.id,
       userId: row.user_id,
@@ -890,7 +965,7 @@ export class KlaroRepository implements LocalStore {
     }
     switch (table) {
       case 'expenses':
-        this.db.insert(expenses).values({
+        db.insert(expenses).values({
           ...meta,
           category: requiredValue(row, 'category'),
           type: requiredValue(row, 'type'),
@@ -910,7 +985,7 @@ export class KlaroRepository implements LocalStore {
         }).run()
         return
       case 'income_records':
-        this.db.insert(incomeRecords).values({
+        db.insert(incomeRecords).values({
           ...meta,
           totalAmount: requiredValue(row, 'total_amount'),
           disposableAmount: requiredValue(row, 'disposable_amount'),
@@ -928,7 +1003,7 @@ export class KlaroRepository implements LocalStore {
         }).run()
         return
       case 'goals':
-        this.db.insert(goals).values({
+        db.insert(goals).values({
           ...meta,
           name: requiredValue(row, 'name'),
           targetAmount: requiredValue(row, 'target_amount'),
@@ -946,7 +1021,7 @@ export class KlaroRepository implements LocalStore {
         }).run()
         return
       case 'budget_plans':
-        this.db.insert(budgetPlans).values({
+        db.insert(budgetPlans).values({
           ...meta,
           category: requiredValue(row, 'category'),
           amount: requiredValue(row, 'amount'),
@@ -962,7 +1037,7 @@ export class KlaroRepository implements LocalStore {
         }).run()
         return
       case 'budget_overrides':
-        this.db.insert(budgetOverrides).values({
+        db.insert(budgetOverrides).values({
           ...meta,
           category: requiredValue(row, 'category'),
           amount: requiredValue(row, 'amount'),
@@ -980,7 +1055,7 @@ export class KlaroRepository implements LocalStore {
         }).run()
         return
       case 'financial_accounts':
-        this.db.insert(financialAccounts).values({
+        db.insert(financialAccounts).values({
           ...meta,
           type: requiredValue(row, 'type'),
           subtype: requiredValue(row, 'subtype'),
@@ -1002,7 +1077,7 @@ export class KlaroRepository implements LocalStore {
         }).run()
         return
       case 'income_allocations':
-        this.db.insert(incomeAllocations).values({
+        db.insert(incomeAllocations).values({
           ...meta,
           incomeRecordId: row.values.income_record_id,
           goalId: requiredValue(row, 'goal_id'),

@@ -54,23 +54,23 @@ Synced tables mirror the server columns added for offline sync:
 
 `dirty` and `base_updated_at` exist only on the device. The client generates row ids. The server trigger owns `updated_at` and a tombstone's `deleted_at`, so those are not chosen by the app.
 
-`saved_amount` is stored when a goal is pulled. Repository writes never set it. Goal progress is the sum of live allocations when any exist, otherwise `saved_amount`.
+`saved_amount` is stored when a goal is pulled. Repository writes never set it. Goal progress is the sum of live allocations when any exist (a sum of zero still wins), otherwise `saved_amount`.
 
 A deposit is an `income_allocations` row with `user_id` and an optional `income_record_id`. Soft-deleting a goal or an income record tombstones its live allocations locally. The server does the same with `cascade_soft_delete_allocations`.
 
-Local-only mode (no `user_id`) enforces the free goal cap of **2**, the default in `enforce_goal_plan_limit` and the seeded `plans` row named `free`.
+Local-only mode (no `user_id`) enforces the free goal cap of **2**, the default in `enforce_goal_plan_limit` and the seeded `plans` row named `free`. Production enforces that cap with trigger `goals_enforce_plan_limit` only. The device does not apply the 300-row tool limit.
 
 ## Sync
 
 `SyncEngine` in `src/sync/engine.ts`:
 
 1. Pulls `user_id = ?` and `updated_at` at or after the cursor minus a 5 minute overlap. Pages break ties with `(updated_at, id)`. Upserts by primary key, so a repeated page is safe.
-2. Pushes dirty rows for that user by primary key (`onConflict: 'id'`). Partial unique indexes are not conflict targets.
+2. Pushes dirty rows for that user by primary key (`onConflict: 'id'`). Partial unique indexes are not conflict targets. When a live local budget plan or override uses the same category (and month) as the account row, the account row wins: the local row is soft-deleted on the device. The merge summary then includes `1 budget kept from your account` (or `N budgets` when more than one row loses).
 3. Pulls again so server stamps land locally.
 
 Delete wins over an edit. A push includes `deleted_at` only when the local row is already a tombstone, and it never sends `deleted_at: null` or `saved_amount`. A row created and deleted before it was ever acknowledged is dropped locally instead of inserted as a server tombstone.
 
-`preview(userId)` returns live local counts (this user plus rows with no user) and live server counts. It does not upload. `adopt(userId)` assigns the local-only rows after the confirmation screen says to keep both sides. There is no dedupe in v1.
+`preview(userId)` returns live local counts (this user plus rows with no user) and live server counts. It does not upload. When unsynced device goals plus live account goals exceed the resolved plan cap, `goalLimitMessage` is `Free allows N goals; you have X here and Y in your account. Remove some to continue.` `adopt` and `sync` both refuse in that case: no rows are assigned and sync does not pull or push. There is no goal picker and no partial upload. X counts device goals the server has not acknowledged yet, so goals already on the account are not counted twice. A combined total equal to the cap is allowed. There is no dedupe in v1.
 
 `activateAccount` keeps local-only data on the first sign-in. Signing in as a different user wipes the previous account's rows and token. `signOut` always clears both.
 

@@ -28,6 +28,7 @@ class FakeRemote implements RemoteSync {
   savedAmountSends = 0
   updatedAtSends = 0
   failNext = false
+  pulls = 0
   private readonly rows = new Map<string, Stored>()
   private serverMs = Date.parse('2026-10-19T00:00:00.000Z')
 
@@ -84,6 +85,7 @@ class FakeRemote implements RemoteSync {
   }
 
   async pullPage(input: PullPageInput): Promise<Record<string, unknown>[]> {
+    this.pulls += 1
     const matched = [...this.rows.values()]
       .filter((row) => row.table === input.table && !row.hidden && row.user_id === input.userId)
       .filter((row) => input.updatedAtGte == null || Date.parse(row.updated_at) >= Date.parse(input.updatedAtGte))
@@ -211,7 +213,7 @@ describe('sync engine', () => {
     expect(remote.payloads).toHaveLength(0)
     expect(repo.getRow('expenses', local.id)?.user_id).toBeNull()
 
-    engine.adopt(USER_A)
+    await engine.adopt(USER_A)
     const report = await engine.sync(USER_A)
     expect(report.errors).toEqual([])
     expect(await remote.countLive('expenses', USER_A)).toBe(2)
@@ -443,7 +445,7 @@ describe('sync engine', () => {
     expect(repo.getRow('expenses', fresh.id)).toBeNull()
   })
 
-  it('reports a budget category clash instead of upserting on the partial unique index', async () => {
+  it('keeps the account budget and drops the local clash', async () => {
     const { repo, remote, engine } = harness()
     const local = repo.createBudgetPlan({ userId: USER_A, category: 'Food', amount: 100 })
     remote.insert('budget_plans', {
@@ -457,9 +459,126 @@ describe('sync engine', () => {
       deleted_at: null,
     })
     const report = await engine.sync(USER_A)
-    expect(report.errors.some((error) => error.code === 'UNIQUE_CONFLICT' || error.code === '23505')).toBe(true)
-    expect(repo.getRow('budget_plans', local.id)?.deleted_at).toBeNull()
-    expect(repo.getRow('budget_plans', 'server-plan')).toBeNull()
+    expect(report.errors).toEqual([])
+    expect(report.summary).toEqual(['1 budget kept from your account'])
+    expect(repo.getRow('budget_plans', 'server-plan')?.values.amount).toBe('200.00')
+    expect(repo.listLive('budget_plans', USER_A).map((row) => row.id)).toEqual(['server-plan'])
+    expect(remote.payloads.some((entry) => entry.payload.id === local.id)).toBe(false)
+    expect(remote.get('budget_plans', 'server-plan')?.amount).toBe(200)
+  })
+
+  it('pluralizes the budget merge line when a plan and an override both clash', async () => {
+    const { repo, remote, engine } = harness()
+    repo.createBudgetPlan({ userId: USER_A, category: 'Food', amount: 100 })
+    repo.saveBudgetOverride({ userId: USER_A, category: 'Food', amount: 40, month: '2026-01-15' })
+    remote.insert('budget_plans', {
+      id: 'server-plan',
+      user_id: USER_A,
+      category: 'Food',
+      amount: 200,
+      note: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+      updated_at: '2026-10-01T00:00:00.000Z',
+      deleted_at: null,
+    })
+    remote.insert('budget_overrides', {
+      id: 'server-override',
+      user_id: USER_A,
+      category: 'Food',
+      amount: 80,
+      month: '2026-01-01',
+      note: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+      updated_at: '2026-10-01T00:00:00.000Z',
+      deleted_at: null,
+    })
+    const report = await engine.sync(USER_A)
+    expect(report.errors).toEqual([])
+    expect(report.summary).toEqual(['2 budgets kept from your account'])
+    expect(repo.getRow('budget_plans', 'server-plan')?.values.amount).toBe('200.00')
+    expect(repo.getRow('budget_overrides', 'server-override')?.values.amount).toBe('80.00')
+    expect(repo.listLive('budget_plans', USER_A)).toHaveLength(1)
+    expect(repo.listLive('budget_overrides', USER_A)).toHaveLength(1)
+  })
+
+  it('blocks adoption and sync when device goals plus account goals exceed the plan', async () => {
+    const { repo, remote, engine } = harness()
+    const first = repo.createGoal({ userId: null, name: 'Emergency', targetAmount: 100 })
+    const second = repo.createGoal({ userId: null, name: 'Tuition', targetAmount: 200 })
+    const expense = repo.createExpense({
+      userId: null,
+      category: 'Groceries',
+      type: 'needs',
+      amount: 20,
+      date: '2026-02-01',
+    })
+    remote.insert('goals', {
+      id: 'server-goal',
+      user_id: USER_A,
+      name: 'Vacation',
+      target_amount: 500,
+      saved_amount: 0,
+      pinned_at: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+      updated_at: '2026-10-01T00:00:00.000Z',
+      deleted_at: null,
+    })
+    const blocked = 'Free allows 2 goals; you have 2 here and 1 in your account. Remove some to continue.'
+    const preview = await engine.preview(USER_A)
+    expect(preview.goalLimitMessage).toBe(blocked)
+    expect(preview.local.goals).toBe(2)
+    expect(preview.server.goals).toBe(1)
+    await expect(engine.adopt(USER_A)).rejects.toMatchObject({ code: 'GOAL_LIMIT_REACHED', message: blocked })
+    expect(repo.getRow('goals', first.id)?.user_id).toBeNull()
+    expect(repo.getRow('goals', second.id)?.user_id).toBeNull()
+
+    const report = await engine.sync(USER_A)
+    expect(report.pulled).toBe(0)
+    expect(report.pushed).toBe(0)
+    expect(report.summary).toEqual([])
+    expect(report.errors).toEqual([{ table: 'goals', message: blocked, code: 'GOAL_LIMIT_REACHED' }])
+    expect(remote.pulls).toBe(0)
+    expect(remote.payloads).toHaveLength(0)
+    expect(repo.getRow('expenses', expense.id)?.user_id).toBeNull()
+    expect(await remote.countLive('goals', USER_A)).toBe(1)
+
+    repo.softDeleteGoal(second.id)
+    const open = await engine.preview(USER_A)
+    expect(open.goalLimitMessage).toBeNull()
+    await engine.adopt(USER_A)
+    const synced = await engine.sync(USER_A)
+    expect(synced.errors).toEqual([])
+    expect(await remote.countLive('goals', USER_A)).toBe(2)
+    expect(remote.get('goals', first.id)?.name).toBe('Emergency')
+    expect(remote.get('goals', second.id)).toBeUndefined()
+    expect(repo.getRow('goals', 'server-goal')?.values.name).toBe('Vacation')
+  })
+
+  it('uses the resolved plan cap and does not count goals that are already on the account', async () => {
+    const { repo, remote, engine } = harness()
+    repo.createGoal({ userId: USER_A, name: 'One', targetAmount: 10 })
+    repo.createGoal({ userId: USER_A, name: 'Two', targetAmount: 10 })
+    await engine.sync(USER_A)
+    remote.insert('goals', {
+      id: 'server-goal',
+      user_id: USER_A,
+      name: 'Three',
+      target_amount: 10,
+      saved_amount: 0,
+      pinned_at: null,
+      created_at: '2026-10-20T00:00:00.000Z',
+      updated_at: '2026-10-20T00:00:00.000Z',
+      deleted_at: null,
+    })
+    const underPro = await engine.preview(USER_A, { name: 'Pro', maxGoals: 20 })
+    expect(underPro.goalLimitMessage).toBeNull()
+    const overFree = await engine.preview(USER_A)
+    expect(overFree.goalLimitMessage).toBe(
+      'Free allows 2 goals; you have 0 here and 3 in your account. Remove some to continue.',
+    )
+    const again = await engine.sync(USER_A, { name: 'Pro', maxGoals: 20 })
+    expect(again.errors).toEqual([])
+    expect(repo.getRow('goals', 'server-goal')?.values.name).toBe('Three')
   })
 
   it('clears rows, cursors, and the token on sign-out', async () => {

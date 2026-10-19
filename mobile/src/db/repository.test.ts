@@ -135,6 +135,26 @@ describe('local repository', () => {
     expect(updated.values.month).toBe('2026-01-01')
     expect(updated.values.amount).toBe('12000.00')
   })
+
+  it('soft-deletes a local budget when the account already has that category', () => {
+    const { repo } = openTestRepository()
+    const local = repo.createBudgetPlan({ userId: USER, category: 'Food', amount: 100 })
+    const serverId = '22222222-2222-4222-8222-222222222222'
+    const applied = repo.applyServerRow('budget_plans', {
+      table: 'budget_plans',
+      id: serverId,
+      user_id: USER,
+      created_at: '2026-10-01T00:00:00.000Z',
+      updated_at: '2026-10-01T00:00:00.000Z',
+      deleted_at: null,
+      values: { category: 'Food', amount: '200.00', note: null },
+    })
+    expect(applied.budgetsKeptFromAccount).toBe(1)
+    expect(repo.getRow('budget_plans', local.id)?.deleted_at).toEqual(expect.any(String))
+    expect(repo.getRow('budget_plans', local.id)?.dirty).toBe(true)
+    expect(repo.getRow('budget_plans', serverId)?.values.amount).toBe('200.00')
+    expect(repo.listLive('budget_plans', USER).map((row) => row.id)).toEqual([serverId])
+  })
 })
 
 describe('local migrations', () => {

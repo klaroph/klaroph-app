@@ -1,15 +1,26 @@
 import type { ServerRow, ServerStamp, SyncRow, SyncedTable, TableCounts } from './model'
 
+export type ApplyServerResult = {
+  /** Live local budget rows tombstoned so the account row could be stored. */
+  budgetsKeptFromAccount: number
+}
+
 export interface LocalStore {
   listDirty(table: SyncedTable, userId: string): SyncRow[]
   getRow(table: SyncedTable, id: string): SyncRow | null
-  applyServerRow(table: SyncedTable, row: ServerRow): void
+  applyServerRow(table: SyncedTable, row: ServerRow): ApplyServerResult
   markSynced(table: SyncedTable, id: string, stamp: ServerStamp): void
   discardNeverSynced(table: SyncedTable, id: string): void
   getCursor(userId: string, table: SyncedTable): string | null
   setCursor(userId: string, table: SyncedTable, cursor: string): void
   /** Live rows for this user plus rows that still have no user. */
   countLive(userId: string): TableCounts
+  /**
+   * Live goals on this device that have never been acknowledged by the server.
+   * Includes rows that still have no user. Excludes goals already pulled or pushed,
+   * so a later sync does not count the same goal twice.
+   */
+  countUnsyncedLiveGoals(userId: string): number
   clearAll(): void
   adoptUnassigned(userId: string): void
   sessionUserId(): string | null
