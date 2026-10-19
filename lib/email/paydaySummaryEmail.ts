@@ -16,10 +16,10 @@ import {
 } from '@/lib/email/unsubscribeToken'
 
 export const PAYDAY_SUMMARY_SUBJECT = 'Your payday summary from KlaroPH'
-export const PAYDAY_SUMMARY_PREVIEW = 'A short recap of what you logged this pay period.'
+export const PAYDAY_SUMMARY_PREVIEW = 'A short recap of what you logged your last pay period.'
 export const PAYDAY_SUMMARY_CTA = 'See your payday summary in KlaroPH'
 
-const INTRO = 'Here is a quick look at this pay period.'
+const INTRO = 'Here is a quick look at your last pay period.'
 const FOOTER_REASON = "You're receiving this because you have a KlaroPH account."
 const DEFAULT_EXPENSE_CATEGORIES = new Set(EXPENSE_CATEGORIES.map((category) => category.value))
 

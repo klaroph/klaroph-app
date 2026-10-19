@@ -123,7 +123,7 @@ describe('renderPaydaySummaryEmail', () => {
     expect(email.subject).toBe(PAYDAY_SUMMARY_SUBJECT)
     expect(email.subject).toBe('Your payday summary from KlaroPH')
     expect(email.previewText).toBe(PAYDAY_SUMMARY_PREVIEW)
-    expect(email.previewText).toBe('A short recap of what you logged this pay period.')
+    expect(email.previewText).toBe('A short recap of what you logged your last pay period.')
     expect(email.text).toBe(
       [
         'PAYDAY SUMMARY',
@@ -131,7 +131,7 @@ describe('renderPaydaySummaryEmail', () => {
         '',
         'Hi Jun,',
         '',
-        'Here is a quick look at this pay period.',
+        'Here is a quick look at your last pay period.',
         '',
         'You logged on 8 of 15 days.',
         '',
