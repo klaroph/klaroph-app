@@ -30,7 +30,6 @@ import GoalMomentumSection from '@/components/dashboard/GoalMomentumSection'
 import KlaroInsightCard from '@/components/dashboard/KlaroInsightCard'
 import FirstIncomeAllocateCard from '@/components/dashboard/FirstIncomeAllocateCard'
 import { deriveMonthInsights } from '@/lib/dashboardInsight'
-import { computeMonthMoneySummary } from '@/lib/monthMoneySummary'
 import { useDashboardMonthMoney } from '@/hooks/useDashboardMonthMoney'
 import { useDashboardProfile } from '@/contexts/DashboardProfileContext'
 import { displayName as resolveDisplayName } from '@/lib/displayName'
@@ -221,18 +220,6 @@ export default function DashboardPage() {
 
   const monthIncome = monthMoney?.income ?? 0
   const monthExpenses = monthMoney?.expenses ?? 0
-  // One summary for Home and the budget card. planned is unused: moneyLeft does not
-  // subtract the plan. Remaining stays planned − spent inside BudgetOverview.
-  const monthSummary = useMemo(
-    () =>
-      computeMonthMoneySummary({
-        income: monthIncome,
-        allocated: monthMoney?.allocated ?? 0,
-        spent: monthExpenses,
-        planned: 0,
-      }),
-    [monthIncome, monthExpenses, monthMoney?.allocated],
-  )
   const insightStack = deriveMonthInsights({
     income: monthIncome,
     expenses: monthExpenses,
@@ -314,7 +301,6 @@ export default function DashboardPage() {
       <div className="dash-one-glance-row dash-one-glance-row--main max-lg:order-3 w-full">
         <BudgetOverview
           spendingByCategory={monthMoney?.spendingByCategory ?? null}
-          moneyLeft={monthSummary.moneyLeft}
           selectedMonth={budgetMonth}
           budgetRefreshKey={refreshTrigger}
           maxCategories={3}
