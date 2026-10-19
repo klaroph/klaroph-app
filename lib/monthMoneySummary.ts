@@ -1,40 +1,9 @@
 /**
- * Deterministic month money picture for KlaroPH.
- * Does not touch the database — callers pass summed monthly totals.
- *
- * Money left = income − allocated − spent (never subtracts planned).
- * Budget remaining = planned − spent (separate concept).
+ * Budget health for KlaroPH.
+ * Over = spent > planned. Watch = at least 90% used, or faster than the month's pace.
  */
 
 export type BudgetHealthStatus = 'on_track' | 'watch' | 'over' | 'no_plan'
-
-export type MonthMoneySummary = {
-  income: number
-  allocated: number
-  disposable: number
-  spent: number
-  planned: number
-  moneyLeft: number
-  budgetRemaining: number
-  /** planned > disposable */
-  planExceedsDisposable: boolean
-  health: BudgetHealthStatus
-  /** 0–∞; usage as percent of planned (0 when no plan) */
-  usagePct: number
-}
-
-export type MonthMoneySummaryInput = {
-  income: number
-  allocated: number
-  spent: number
-  planned: number
-  /**
-   * Fraction of the selected calendar month already elapsed (0–1).
-   * Used only for Watch when spending is ahead of calendar pace.
-   * Omit or pass undefined when pace is unknown.
-   */
-  monthProgress?: number
-}
 
 function toFiniteNumber(n: number): number {
   const v = Number(n)
@@ -80,41 +49,5 @@ export function budgetHealthLabel(status: BudgetHealthStatus): string {
       return 'On Track'
     case 'no_plan':
       return 'No Plan'
-  }
-}
-
-/**
- * Build the month money summary from already-aggregated totals.
- * Allocations must already be limited to income dated in the month (never counted as expenses).
- */
-export function computeMonthMoneySummary(
-  input: MonthMoneySummaryInput
-): MonthMoneySummary {
-  const income = toFiniteNumber(input.income)
-  const allocated = Math.max(0, toFiniteNumber(input.allocated))
-  const spent = toFiniteNumber(input.spent)
-  const planned = Math.max(0, toFiniteNumber(input.planned))
-
-  const disposable = income - allocated
-  const moneyLeft = income - allocated - spent
-  const budgetRemaining = planned - spent
-  const usagePct = planned > 0 ? (spent / planned) * 100 : 0
-  const health = resolveBudgetHealth({
-    planned,
-    spent,
-    monthProgress: input.monthProgress,
-  })
-
-  return {
-    income,
-    allocated,
-    disposable,
-    spent,
-    planned,
-    moneyLeft,
-    budgetRemaining,
-    planExceedsDisposable: planned > disposable,
-    health,
-    usagePct,
   }
 }

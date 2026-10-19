@@ -9,18 +9,26 @@ describe('dashboard data ownership', () => {
   it('fetches the selected month once in the page and shares it with the snapshot strip and budget card', () => {
     const page = read('app/dashboard/page.tsx')
     expect(page).toContain('useDashboardMonthMoney(budgetMonth, refreshTrigger)')
-    expect(page).toContain('computeMonthMoneySummary({')
-    expect(page.match(/moneyLeft=\{monthSummary\.moneyLeft\}/g)).toHaveLength(2)
+    expect(page).not.toContain('computeMonthMoneySummary')
+    expect(page).not.toContain('moneyLeft')
     expect(page).toMatch(/<BudgetOverview\s+spendingByCategory=\{monthMoney\?\.spendingByCategory \?\? null\}/)
     const strip = read('components/dashboard/DashboardMonthStatStrip.tsx')
     expect(strip).not.toMatch(/supabase|fetch\(/)
     expect(strip).toContain('const netFlow = income - expenses')
     expect(strip).toContain('Income − expenses')
-    expect(strip).toContain('Money left')
+    expect(strip).not.toContain('moneyLeft')
+    expect(strip).not.toContain('Money left')
+    expect(strip.match(/className="dash-stat-card/g)).toHaveLength(4)
+    expect(strip).toContain('Total Income')
+    expect(strip).toContain('Total Expenses')
+    expect(strip).toContain('Net Flow')
+    expect(strip).toContain('Active Goals')
     const budget = read('components/dashboard/BudgetOverview.tsx')
     expect(budget).toContain('const remaining = totalBudget - totalSpent')
     expect(budget).toContain('>Remaining<')
-    expect(budget).toContain('Money left')
+    expect(budget).not.toContain('Money left')
+    expect(budget).not.toContain('moneyLeft')
+    expect(budget).not.toContain('MoneyLeftRow')
   })
 
   it('derives the goals page count from the goal list instead of a second goals query', () => {
@@ -33,6 +41,15 @@ describe('dashboard layout stability', () => {
   it('renders first-viewport dashboard cards directly (no dynamic placeholder that sizes differently)', () => {
     const page = read('app/dashboard/page.tsx')
     expect(page).not.toMatch(/dynamic\(\s*\(\)\s*=>\s*import\('@\/components\/dashboard\/(GoalMomentumSection|DashboardFinancialTrend)'\)/)
+  })
+
+  it('places the four snapshot cards in one desktop row and a 2×2 phone grid', () => {
+    const css = read('app/klaroph-v2.css')
+    expect(css).toMatch(/\.dash-stat-strip \{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s)
+    expect(css).not.toMatch(/grid-template-columns:\s*repeat\(5,/)
+    expect(css).toMatch(
+      /@media \(max-width:\s*1279px\) \{[^]*?\.dash-stat-strip \{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    )
   })
 })
 

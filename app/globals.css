@@ -1226,10 +1226,13 @@ select:focus-visible {
   }
 
   .dashboard-page-header .dashboard-greeting-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
   }
 
   /* Hand logo — layout box 40px; visual scale */
@@ -1777,14 +1780,6 @@ select:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-}
-.budget-health-row--money-left {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border, #e2e8f0);
-}
-.budget-money-left-standalone {
-  margin: 0 0 12px;
 }
 .budget-health-label {
   font-size: 14px;

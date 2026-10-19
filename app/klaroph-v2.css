@@ -149,12 +149,14 @@
 }
 
 .dashboard-greeting-title {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .dashboard-greeting-sub {
@@ -164,7 +166,7 @@
 /* Snapshot strip */
 .dash-stat-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
   width: 100%;
   margin-bottom: var(--space-5);
@@ -195,7 +197,6 @@
 .dash-stat-card--income { --tone: var(--pastel-sky); --tone-ink: var(--color-primary); }
 .dash-stat-card--expense { --tone: var(--pastel-coral); --tone-ink: #be123c; }
 .dash-stat-card--net { --tone: var(--pastel-lavender); --tone-ink: #6d28d9; }
-.dash-stat-card--left { --tone: var(--pastel-mint); --tone-ink: #047857; }
 .dash-stat-card--goals { --tone: var(--pastel-peach); --tone-ink: #b45309; }
 .dash-stat-body { position: relative; min-width: 0; flex: 1; }
 .dash-stat-label {

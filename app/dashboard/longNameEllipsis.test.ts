@@ -7,11 +7,20 @@ function source(relative: string) {
 }
 
 describe('long stored names in the sidebar and on Home', () => {
-  it('ellipsizes the sidebar name and the Home greeting without cutting the stored value', () => {
+  it('clamps the Home greeting to two lines and ellipsizes only the sidebar name', () => {
     const sidebarCss = source('app/globals.css')
-    const homeCss = `${source('app/klaroph-v2.css')}\n${sidebarCss}`
+    const homeCss = source('app/klaroph-v2.css')
     expect(sidebarCss).toMatch(/\.sidebar-user-name \{[^}]*text-overflow:\s*ellipsis[^}]*\}/s)
-    expect(homeCss).toMatch(/\.dashboard-greeting-title \{[^}]*text-overflow:\s*ellipsis[^}]*\}/s)
+    expect(homeCss).toMatch(
+      /\.dashboard-greeting-title \{\s*display:\s*-webkit-box;[^}]*-webkit-line-clamp:\s*2;[^}]*line-clamp:\s*2;/s,
+    )
+    expect(homeCss).not.toMatch(/\.dashboard-greeting-title \{[^}]*white-space:\s*nowrap/)
+    expect(sidebarCss).toMatch(
+      /\.dashboard-page-header \.dashboard-greeting-title \{[^}]*-webkit-line-clamp:\s*2;[^}]*line-clamp:\s*2;/s,
+    )
+    expect(sidebarCss).not.toMatch(
+      /\.dashboard-page-header \.dashboard-greeting-title \{[^}]*white-space:\s*nowrap/,
+    )
 
     const sidebar = source('components/layout/Sidebar.tsx')
     const home = source('app/dashboard/page.tsx')
