@@ -83,10 +83,15 @@ async function claimRecipients(
   return chunk.filter((r) => claimed.has(r.userId))
 }
 
-export async function sendCampaign(
+/**
+ * Claim each recipient, then send. `toMessage` builds one email per claimed user.
+ * Shared by registered campaigns and the weekly summary (which is not a CAMPAIGNS entry).
+ */
+export async function sendClaimedRecipients(
   deps: CampaignSendDeps,
-  campaign: MarketingCampaign,
-  recipients: MarketingRecipient[]
+  campaignId: string,
+  recipients: MarketingRecipient[],
+  toMessage: (recipient: MarketingRecipient) => CampaignMessage
 ): Promise<CampaignSendSummary> {
   const sendBatch = deps.sendBatch ?? sendCampaignBatch
   const pause = deps.pause ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
@@ -95,27 +100,27 @@ export async function sendCampaign(
   for (let i = 0; i < recipients.length; i += RESEND_BATCH_LIMIT) {
     if (i > 0) await pause(BATCH_PAUSE_MS)
     const chunk = recipients.slice(i, i + RESEND_BATCH_LIMIT)
-    const claimed = await claimRecipients(deps.admin, campaign.id, chunk)
+    const claimed = await claimRecipients(deps.admin, campaignId, chunk)
     summary.skipped += chunk.length - claimed.length
     if (claimed.length === 0) continue
 
     const userIds = claimed.map((r) => r.userId)
     const result = await sendBatch(
       deps.resend,
-      claimed.map((r) => buildCampaignMessage(campaign, r, deps.links)),
-      batchIdempotencyKey(campaign.id, userIds)
+      claimed.map((r) => toMessage(r)),
+      batchIdempotencyKey(campaignId, userIds)
     )
 
     if (!result.ok) {
       summary.failed += claimed.length
-      console.error(`[campaign ${campaign.id}] batch of ${claimed.length} failed: ${result.error}`)
+      console.error(`[campaign ${campaignId}] batch of ${claimed.length} failed: ${result.error}`)
       const { error } = await deps.admin
         .from('marketing_email_sends')
         .delete()
-        .eq('campaign_id', campaign.id)
+        .eq('campaign_id', campaignId)
         .eq('status', 'pending')
         .in('user_id', userIds)
-      if (error) console.error(`[campaign ${campaign.id}] could not release claims: ${error.message}`)
+      if (error) console.error(`[campaign ${campaignId}] could not release claims: ${error.message}`)
       continue
     }
 
@@ -123,7 +128,7 @@ export async function sendCampaign(
     const sentAt = new Date().toISOString()
     const { error } = await deps.admin.from('marketing_email_sends').upsert(
       claimed.map((r, idx) => ({
-        campaign_id: campaign.id,
+        campaign_id: campaignId,
         user_id: r.userId,
         status: 'sent',
         resend_email_id: result.ids[idx] ?? null,
@@ -132,8 +137,18 @@ export async function sendCampaign(
       { onConflict: 'campaign_id,user_id' }
     )
     // Rows stay 'pending' on failure, which still blocks a resend — safe by design.
-    if (error) console.error(`[campaign ${campaign.id}] could not mark batch sent: ${error.message}`)
+    if (error) console.error(`[campaign ${campaignId}] could not mark batch sent: ${error.message}`)
   }
 
   return summary
+}
+
+export async function sendCampaign(
+  deps: CampaignSendDeps,
+  campaign: MarketingCampaign,
+  recipients: MarketingRecipient[]
+): Promise<CampaignSendSummary> {
+  return sendClaimedRecipients(deps, campaign.id, recipients, (recipient) =>
+    buildCampaignMessage(campaign, recipient, deps.links)
+  )
 }

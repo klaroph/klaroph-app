@@ -24,6 +24,7 @@ const COLOR = {
   testInk: '#6b5200',
   positive: '#15803d',
   warning: '#b45309',
+  neutral: '#64748b',
 }
 
 export type EmailDetailRow = { label: string; value: string }
@@ -44,8 +45,8 @@ export type TransactionalEmailContent = {
   testNotice?: string
 }
 
-/** Operational tone sets the eyebrow color: attention (Klaro blue), positive (money in), warning (needs action). */
-export type OperationalTone = 'attention' | 'positive' | 'warning'
+/** Operational tone sets the eyebrow color: attention (Klaro blue), positive (money in), warning (needs action), neutral (no status color). */
+export type OperationalTone = 'attention' | 'positive' | 'warning' | 'neutral'
 
 /** A block of the operational card. Any combination of rows, bullet items and body text; empty parts are skipped. */
 export type OperationalSection = {
@@ -67,6 +68,8 @@ export type OperationalEmailContent = {
   cta: { label: string; url: string }
   footerReason: string
   testNotice?: string
+  /** Marketing mail only. Transactional callers leave this unset. */
+  unsubscribeUrl?: string
 }
 
 const esc = escapeHtml
@@ -106,7 +109,19 @@ function ctaButton(cta: { label: string; url: string }): string {
               </table>`
 }
 
-function shell(input: { title: string; preheader: string; testNotice?: string; card: string; footer: string[] }): string {
+function unsubscribeLink(url?: string): string {
+  if (!url) return ''
+  return `<p style="margin:10px 0 0; font-size:12px; line-height:1.5;"><a href="${esc(url)}" style="color:${COLOR.muted}; text-decoration:underline;">Unsubscribe from KlaroPH updates</a></p>`
+}
+
+function shell(input: {
+  title: string
+  preheader: string
+  testNotice?: string
+  card: string
+  footer: string[]
+  unsubscribeUrl?: string
+}): string {
   const testBanner = input.testNotice
     ? `<tr>
           <td style="padding:0 0 16px;">
@@ -145,7 +160,7 @@ function shell(input: { title: string; preheader: string; testNotice?: string; c
             <td align="center" style="padding:24px 16px 0;">
               <p style="margin:0 0 8px; font-size:13px; line-height:1.5; color:${COLOR.muted};"><strong style="color:${COLOR.ink};">KlaroPH</strong> · Clearer money habits start here. · <a href="https://klaroph.com" style="color:${COLOR.primary}; text-decoration:none;">klaroph.com</a></p>
               <p style="margin:0; font-size:12px; line-height:1.5; color:${COLOR.muted};">${esc(reason)}</p>
-              ${notes.map((n) => `<p style="margin:10px 0 0; font-size:12px; line-height:1.5; color:${COLOR.muted};">${esc(n)}</p>`).join('')}
+              ${notes.map((n) => `<p style="margin:10px 0 0; font-size:12px; line-height:1.5; color:${COLOR.muted};">${esc(n)}</p>`).join('')}${unsubscribeLink(input.unsubscribeUrl)}
             </td>
           </tr>
         </table>
@@ -249,7 +264,12 @@ function operationalSection(s: OperationalSection): string {
               </table>`
 }
 
-const TONE_COLOR: Record<OperationalTone, string> = { attention: COLOR.primary, positive: COLOR.positive, warning: COLOR.warning }
+const TONE_COLOR: Record<OperationalTone, string> = {
+  attention: COLOR.primary,
+  positive: COLOR.positive,
+  warning: COLOR.warning,
+  neutral: COLOR.neutral,
+}
 
 /** Compact operational card: tone eyebrow, headline, short intro, stacked sections, one CTA. */
 export function renderOperationalEmail(c: OperationalEmailContent): { html: string; text: string } {
@@ -261,7 +281,14 @@ export function renderOperationalEmail(c: OperationalEmailContent): { html: stri
               <div style="height:8px; line-height:8px;">&nbsp;</div>
               ${ctaButton(c.cta)}`
 
-  const html = shell({ title: c.headline, preheader: c.preheader, testNotice: c.testNotice, card, footer: [c.footerReason] })
+  const html = shell({
+    title: c.headline,
+    preheader: c.preheader,
+    testNotice: c.testNotice,
+    card,
+    footer: [c.footerReason],
+    unsubscribeUrl: c.unsubscribeUrl,
+  })
 
   const text = [
     ...(c.testNotice ? [c.testNotice, ''] : []),
@@ -281,6 +308,7 @@ export function renderOperationalEmail(c: OperationalEmailContent): { html: stri
     '',
     TEXT_FOOTER,
     c.footerReason,
+    ...(c.unsubscribeUrl ? [`Unsubscribe: ${c.unsubscribeUrl}`] : []),
   ].join('\n')
 
   return { html, text }

@@ -3,7 +3,7 @@ import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 
 export const metadata = {
   title: 'Email preferences — KlaroPH',
-  description: 'Unsubscribe from KlaroPH product updates.',
+  description: 'Unsubscribe from KlaroPH product updates and the weekly summary.',
   robots: { index: false, follow: false },
 }
 
@@ -13,7 +13,7 @@ type PageProps = { searchParams: Promise<SearchParams> }
 const STATUS_COPY: Record<string, { title: string; body: string }> = {
   done: {
     title: "You're unsubscribed",
-    body: "You won't receive KlaroPH product updates anymore. Account and security emails, like password resets and payment receipts, will still reach you.",
+    body: "You won't receive KlaroPH product updates or the weekly summary anymore. Account and security emails, like password resets and payment receipts, will still reach you.",
   },
   invalid: {
     title: 'This link is not valid',
@@ -51,8 +51,8 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
             <h1 className="legal-title">Unsubscribe from KlaroPH updates?</h1>
             <section className="legal-section">
               <p>
-                You&apos;ll stop receiving product news and announcements. Account and security emails will still
-                reach you.
+                You&apos;ll stop receiving product news, announcements, and the weekly summary. Account and security
+                emails will still reach you.
               </p>
               <form method="post" action="/api/email/unsubscribe">
                 <input type="hidden" name="token" value={token} />

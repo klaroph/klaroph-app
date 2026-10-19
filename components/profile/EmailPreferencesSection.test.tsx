@@ -12,7 +12,8 @@ describe('EmailPreferencesCard', () => {
     const html = render(true)
     expect(html).toContain('role="switch"')
     expect(html).toContain('aria-checked="true"')
-    expect(html).toContain('Product updates')
+    expect(html).toContain('Product updates and weekly summary')
+    expect(html).toContain('weekly summary of what you logged')
     expect(html).toContain('You can change this anytime.')
   })
 

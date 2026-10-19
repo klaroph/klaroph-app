@@ -16,10 +16,10 @@ export function EmailPreferencesCard({ productUpdates, saving, error, onToggle }
       <div className="email-pref-row">
         <div style={{ minWidth: 0 }}>
           <p id="email-pref-product-updates" style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
-            Product updates
+            Product updates and weekly summary
           </p>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>
-            Get occasional updates about new KlaroPH features, improvements, and useful resources.
+            Get occasional updates about new KlaroPH features, and a weekly summary of what you logged.
           </p>
           <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-muted)' }} aria-live="polite">
             {error ?? 'You can change this anytime.'}
