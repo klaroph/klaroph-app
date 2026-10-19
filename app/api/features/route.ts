@@ -34,7 +34,7 @@ function toFeaturesResponse(
     budget_trial_days_left,
     is_grace: plan.is_grace,
     can_create_goals: plan.can_create_goals,
-    isPro: plan.plan_name === 'pro',
+    isPro: isLifetime || plan.plan_name === 'pro',
     isLifetime,
     subscriptionStatus,
     currentPeriodEnd,
@@ -80,8 +80,10 @@ export async function GET() {
 
     const sub = await resolveSubscriptionState(user.id)
     const plan = await resolveUserPlanFromSubscription(sub)
-    const subscriptionStatus =
-      sub.state === 'ACTIVE'
+    const isLifetime = sub.isLifetime === true
+    const subscriptionStatus = isLifetime
+      ? 'active'
+      : sub.state === 'ACTIVE'
         ? 'active'
         : sub.state === 'GRACE'
           ? 'grace'
@@ -89,7 +91,6 @@ export async function GET() {
             ? 'expired'
             : 'none'
     const currentPeriodEnd = sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null
-    const isLifetime = sub.isLifetime === true
 
     const planLabel = plan.plan_name === 'pro' ? 'pro' : 'free'
     const userCreatedAt = (user as { created_at?: string }).created_at ?? null

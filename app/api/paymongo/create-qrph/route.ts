@@ -11,12 +11,13 @@ import {
 } from '@/lib/paymongo'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { shouldBlockNewProPurchase } from '@/lib/subscriptionStateCore'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
+import { getSubscriptionPricing, TESTER_PRICE_CENTAVOS } from '@/lib/getSubscriptionPricing'
 import { buildCheckoutMetadata, resolveCheckoutGrant } from '@/lib/checkoutGrant'
-import { parsePromoCodeFromBody, resolveVoucherForCheckout } from '@/lib/voucherForCheckout'
 
 const QRPH_EXPIRY_SECONDS = 600 // 10 minutes
+
+const PRO_DESCRIPTION =
+  'KlaroPH Pro: 20 goals, unlimited history, import/export, advance charts and analytics.'
 
 export async function POST(request: Request) {
   try {
@@ -30,16 +31,7 @@ export async function POST(request: Request) {
     }
 
     const sub = await resolveSubscriptionState(user.id)
-    let planName: string | null = null
-    if ((sub.state === 'ACTIVE' || sub.state === 'GRACE') && sub.planId) {
-      const { data: plan } = await supabaseAdmin
-        .from('plans')
-        .select('name')
-        .eq('id', sub.planId)
-        .single()
-      planName = (plan as { name?: string } | null)?.name ?? null
-    }
-    if (shouldBlockNewProPurchase(sub, planName)) {
+    if (shouldBlockNewProPurchase(sub)) {
       return NextResponse.json(
         { error: 'User already has active subscription.' },
         { status: 400 }
@@ -48,7 +40,6 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}))
     const existingPaymentIntentId = typeof body?.payment_intent_id === 'string' ? body.payment_intent_id.trim() : null
-    const plan_type = body?.plan_type === 'annual' ? 'annual' : 'monthly'
 
     const billing = {
       name: user.user_metadata?.full_name ?? user.email ?? 'Customer',
@@ -56,7 +47,6 @@ export async function POST(request: Request) {
     }
 
     if (existingPaymentIntentId) {
-      // Generate new QR for existing payment intent (after expiry)
       const existing = await retrievePaymentIntent(existingPaymentIntentId)
       const metadata = (existing.data.attributes.metadata ?? {}) as Record<string, string>
       if (metadata.user_id !== user.id) {
@@ -87,60 +77,33 @@ export async function POST(request: Request) {
       })
     }
 
-    // New QRPH session: create intent + method + attach (pricing from DB profile.user_type only)
-    const promoCodeParam = parsePromoCodeFromBody(body?.promoCode)
-    const resolved = await resolveVoucherForCheckout(promoCodeParam)
-    const promo = resolved?.promo ?? null
-    const appliedPromo = resolved?.applied ?? null
-
     const pricing = await getSubscriptionPricing(user.id)
-    const baseCentavos = plan_type === 'annual' ? pricing.annualCentavos : pricing.monthlyCentavos
-    console.log('[CheckoutPromo] paymongo/create-qrph route', {
-      plan_type,
-      baseCentavos,
-      baseCentavosSource: plan_type === 'annual' ? 'annualCentavos' : 'monthlyCentavos',
-      monthlyCentavos: pricing.monthlyCentavos,
-      annualCentavos: pricing.annualCentavos,
-    })
-    const { grant, amountCentavos } = resolveCheckoutGrant({
-      planType: plan_type,
-      baseCentavos,
-      promo,
-      appliedPromoCode: appliedPromo?.code ?? null,
-      context: 'paymongo/create-qrph',
-    })
+    const { amountCentavos } = resolveCheckoutGrant(pricing.amountCentavos)
     if (amountCentavos <= 0) {
       return NextResponse.json(
         { error: 'Payment amount must be greater than zero.' },
         { status: 400 }
       )
     }
-    if (amountCentavos < PAYMONGO_MIN_AMOUNT_CENTAVOS) {
+    if (amountCentavos !== TESTER_PRICE_CENTAVOS && amountCentavos < PAYMONGO_MIN_AMOUNT_CENTAVOS) {
       return NextResponse.json(
         {
-          error: paymongoBelowMinimumMessage(
-            amountCentavos,
-            pricing.isTesterPricing,
-            'qrph',
-            { baseCentavos }
-          ),
+          error: paymongoBelowMinimumMessage(amountCentavos, pricing.isTesterPricing, 'qrph', {
+            baseCentavos: amountCentavos,
+          }),
         },
         { status: 400 }
       )
     }
+
     const intent = await createPaymentIntent({
       amount: amountCentavos,
       currency: 'PHP',
       paymentMethodAllowed: ['qrph'],
-      description: plan_type === 'annual'
-        ? 'KlaroPH Pro Annual: 20 goals, unlimited history, import/export, advance charts and analytics.'
-        : 'KlaroPH Pro Monthly: 20 goals, unlimited history, import/export, advance charts and analytics.',
+      description: PRO_DESCRIPTION,
       metadata: buildCheckoutMetadata({
         userId: user.id,
-        planType: plan_type,
-        grant,
         expectedAmountCentavos: amountCentavos,
-        appliedPromoCode: appliedPromo?.code ?? null,
       }),
     })
 
@@ -164,7 +127,6 @@ export async function POST(request: Request) {
       payment_intent_id: intent.data.id,
       image_url: imageUrl,
       expires_at_epoch: expiresAtEpoch,
-      ...(appliedPromo ? { appliedPromo } : {}),
     })
   } catch (err) {
     if (err instanceof PayMongoError) {

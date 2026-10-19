@@ -28,8 +28,10 @@ export type SubscriptionStateRow = {
 }
 
 /**
- * Prepaid Pro entitlement from a subscriptions row.
- * Lifetime access is independent of current_period_end.
+ * Pro entitlement from a subscriptions row.
+ * is_lifetime is Pro on its own: the period end is not read.
+ * A row without that flag still uses its period (complimentary access, or a
+ * monthly or annual row that has not bought the one-time plan yet).
  * auto_renew is stored metadata only — it does not mean KlaroPH charges automatically.
  */
 export function normalizeSubscriptionFromRow(
@@ -48,14 +50,14 @@ export function normalizeSubscriptionFromRow(
   const rawGracePeriodUntil = data.grace_period_until
   const graceUntil =
     rawGracePeriodUntil != null ? new Date(rawGracePeriodUntil) : null
-  const isLifetime = Boolean(data.is_lifetime)
+  const isLifetime = data.is_lifetime === true
 
   let state: SubscriptionState = 'NONE'
 
-  if (!status) {
-    state = 'NONE'
-  } else if (status === 'active' && isLifetime) {
+  if (isLifetime) {
     state = 'ACTIVE'
+  } else if (!status) {
+    state = 'NONE'
   } else if (status === 'active' && currentPeriodEnd && currentPeriodEnd > now) {
     state = 'ACTIVE'
   } else if (status === 'past_due' && graceUntil && now < graceUntil) {
@@ -82,17 +84,10 @@ export function normalizeSubscriptionFromRow(
   }
 }
 
-export function isPremiumPlanName(planName: string | null | undefined): boolean {
-  const name = (planName ?? '').trim().toLowerCase()
-  return name === 'pro' || name === 'clarity_premium'
-}
-
-/** True when the user already has valid prepaid Pro (including lifetime and grace). */
-export function shouldBlockNewProPurchase(
-  sub: NormalizedSubscription,
-  planName: string | null | undefined
-): boolean {
-  if (sub.state !== 'ACTIVE' && sub.state !== 'GRACE') return false
-  if (planName == null || String(planName).trim() === '') return true
-  return isPremiumPlanName(planName)
+/**
+ * Only an existing lifetime row blocks another purchase.
+ * An active monthly or annual period can still buy the one-time plan.
+ */
+export function shouldBlockNewProPurchase(sub: NormalizedSubscription): boolean {
+  return sub.isLifetime
 }

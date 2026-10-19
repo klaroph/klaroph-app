@@ -2,35 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Modal from '../ui/Modal'
-import {
-  readKlaroPromo,
-  readKlaroPromoCode,
-  type KlaroPromoVoucher,
-} from '@/lib/klaroPromoStorage'
-import { PRO_ANNUAL_PESOS as ANNUAL_PESOS, PRO_MONTHLY_PESOS as MONTHLY_PESOS, formatPlanPeso } from '@/lib/planPricing'
+import { PRO_ONE_TIME_LINE, PRO_ONE_TIME_PESOS, formatPlanPeso } from '@/lib/planPricing'
 
 const POLL_INTERVAL_MS = 3500
-
-/** Matches UpgradeModal / server checkout (pesos; final rounded for display). */
-function computeFinalPesos(original: number, promo: KlaroPromoVoucher | null) {
-  if (promo?.offer === 'lifetime' && typeof promo.finalPesos === 'number') {
-    return {
-      original,
-      final: promo.finalPesos,
-      showDiscount: false,
-      isFounderLifetime: true,
-    }
-  }
-  if (!promo) return { original, final: original, showDiscount: false, isFounderLifetime: false }
-  if (promo.type === 'percentage') {
-    const pct = Math.min(100, Math.max(0, promo.value))
-    const final = Math.round(original * (1 - pct / 100))
-    return { original, final, showDiscount: final < original, isFounderLifetime: false }
-  }
-  const off = Math.min(original, Math.max(0, promo.value))
-  const final = Math.round(original - off)
-  return { original, final, showDiscount: final < original, isFounderLifetime: false }
-}
 
 type PaymentQRModalProps = {
   isOpen: boolean
@@ -40,13 +14,6 @@ type PaymentQRModalProps = {
   refreshSubscription: () => Promise<void>
   /** When true (after webhook), show success state. */
   isPro: boolean
-  /** Plan type for payment intent (amount + metadata). Default monthly. */
-  planType?: 'monthly' | 'annual'
-  /**
-   * When set (including null), used for strikethrough/discount display — same as Upgrade at click time.
-   * When undefined, falls back to readKlaroPromo() (e.g. regenerate QR).
-   */
-  promoOverride?: KlaroPromoVoucher | null
 }
 
 type ViewState = 'loading' | 'qr' | 'expired' | 'success' | 'error'
@@ -57,8 +24,6 @@ export default function PaymentQRModal({
   onSuccess,
   refreshSubscription,
   isPro,
-  planType = 'monthly',
-  promoOverride,
 }: PaymentQRModalProps) {
   const [viewState, setViewState] = useState<ViewState>('loading')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -70,9 +35,7 @@ export default function PaymentQRModal({
 
   const fetchQr = useCallback(
     async (intentId?: string) => {
-      const body = intentId
-        ? { payment_intent_id: intentId }
-        : { plan_type: planType, promoCode: readKlaroPromoCode() }
+      const body = intentId ? { payment_intent_id: intentId } : {}
       const res = await fetch('/api/paymongo/create-qrph', {
         method: 'POST',
         credentials: 'include',
@@ -92,7 +55,7 @@ export default function PaymentQRModal({
       setError(null)
       setViewState('qr')
     },
-    [planType],
+    [],
   )
 
   useEffect(() => {
@@ -150,14 +113,6 @@ export default function PaymentQRModal({
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  const basePeso = planType === 'annual' ? ANNUAL_PESOS : MONTHLY_PESOS
-  const promoForDisplay =
-    promoOverride !== undefined ? promoOverride : readKlaroPromo()?.promo ?? null
-  const { final: finalPeso, showDiscount: showPromoDiscount, isFounderLifetime } = computeFinalPesos(
-    basePeso,
-    promoForDisplay
-  )
-
   const title =
     viewState === 'success'
       ? 'Payment received'
@@ -203,33 +158,11 @@ export default function PaymentQRModal({
 
         {viewState === 'qr' && (
           <>
-            <p style={{ margin: '0 0 20px', fontSize: 22, fontWeight: 700, color: 'var(--color-primary)' }}>
-              {isFounderLifetime ? (
-                <span>PHP {Math.round(finalPeso).toLocaleString('en-PH')} Lifetime Access</span>
-              ) : showPromoDiscount ? (
-                <>
-                  <span
-                    style={{
-                      textDecoration: 'line-through',
-                      opacity: 0.55,
-                      fontWeight: 600,
-                      marginRight: 10,
-                      color: 'var(--text-secondary)',
-                    }}
-                    aria-hidden
-                  >
-                    {formatPlanPeso(basePeso)}
-                  </span>
-                  <span>{formatPlanPeso(finalPeso)}</span>
-                </>
-              ) : (
-                <span>{formatPlanPeso(basePeso)}</span>
-              )}{' '}
-              {!isFounderLifetime && (
-                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                  / {planType === 'annual' ? 'year' : 'month'}
-                </span>
-              )}
+            <p style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, color: 'var(--color-primary)' }}>
+              {formatPlanPeso(PRO_ONE_TIME_PESOS)}
+            </p>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {PRO_ONE_TIME_LINE}
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               {imageUrl && (

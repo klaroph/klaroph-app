@@ -1,63 +1,15 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 import Modal from '../ui/Modal'
 import PlanFeaturePremiumIcon from '../ui/PlanFeaturePremiumIcon'
 import {
   PLAN_SECTION_TOOLS_LABEL,
   PRO_PLAN_TOOLS,
 } from '@/lib/planFeatures'
-import {
-  clearKlaroPromo,
-  readKlaroPromo,
-  writeKlaroPromo,
-  type KlaroPromoVoucher,
-} from '@/lib/klaroPromoStorage'
-import {
-  PRO_ANNUAL_PESOS as ANNUAL_PESOS,
-  PRO_MONTHLY_PESOS as MONTHLY_PESOS,
-  formatPlanPeso as formatPeso,
-} from '@/lib/planPricing'
+import { PRO_ONE_TIME_LINE, PRO_ONE_TIME_PESOS, formatPlanPeso } from '@/lib/planPricing'
 import { KLARO_AI_CHAT_LIMITS } from '@/lib/ai/chatLimits'
 import { KLARO_AI_LIMITS } from '@/lib/ai/limits'
-
-function formatExpiryDate(planType: 'monthly' | 'annual') {
-  const d = new Date()
-  if (planType === 'annual') {
-    d.setFullYear(d.getFullYear() + 1)
-  } else {
-    d.setMonth(d.getMonth() + 1)
-  }
-  return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
-}
-
-function computePricing(original: number, promo: KlaroPromoVoucher | null) {
-  if (promo?.offer === 'lifetime' && typeof promo.finalPesos === 'number') {
-    return {
-      original,
-      final: promo.finalPesos,
-      discountLabel: null as string | null,
-      specialLabel: 'Founder price',
-    }
-  }
-  if (!promo) {
-    return {
-      original,
-      final: original,
-      discountLabel: null as string | null,
-      specialLabel: null as string | null,
-    }
-  }
-  if (promo.type === 'percentage') {
-    const pct = Math.min(100, Math.max(0, promo.value))
-    const final = original * (1 - pct / 100)
-    return { original, final, discountLabel: `-${pct}%`, specialLabel: null as string | null }
-  }
-  const off = Math.min(original, Math.max(0, promo.value))
-  const final = original - off
-  return { original, final, discountLabel: formatPeso(-off), specialLabel: null as string | null }
-}
 
 type UpgradeModalProps = {
   isOpen: boolean
@@ -65,8 +17,8 @@ type UpgradeModalProps = {
   onUpgrade?: () => void
   /** Optional context message (e.g. import quota exhausted). */
   message?: string
-  /** When provided, both Monthly and Annual use QRPH modal; called with selected planType. */
-  onOpenPaymentModal?: (planType: 'monthly' | 'annual', promo: KlaroPromoVoucher | null) => void
+  /** Opens the QR Ph payment screen. */
+  onOpenPaymentModal?: () => void
 }
 
 /** Table rows: strongest Pro differentiators first, then shared, then tools. Same wording as landing. */
@@ -185,208 +137,21 @@ function UpgradeTableRows() {
 }
 
 function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: UpgradeModalProps) {
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const pathname = usePathname()
-
-  const [loading, setLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
-  const [planType, setPlanType] = useState<'monthly' | 'annual'>('annual')
 
-  const [promoInput, setPromoInput] = useState('')
-  /** Normalized code after successful redeem; sent to checkout APIs (not trusted for amount). */
-  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null)
-  const [isApplying, setIsApplying] = useState(false)
-  const [promo, setPromo] = useState<KlaroPromoVoucher | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [urlApplyFailed, setUrlApplyFailed] = useState(false)
-  const hasAutoApplied = useRef(false)
-  const lastModalOpen = useRef(false)
-
-  const applyPromoWithCode = useCallback(
-    async (rawCode: string, opts?: { fromUrl?: boolean }): Promise<boolean> => {
-      const code = rawCode.trim().toUpperCase()
-      setPromoInput(code)
-
-      if (!code) {
-        if (opts?.fromUrl) setUrlApplyFailed(true)
-        else {
-          setError('Invalid or expired code')
-          setPromo(null)
-          setAppliedPromoCode(null)
-          clearKlaroPromo()
-        }
-        return false
-      }
-
-      setError(null)
-      setUrlApplyFailed(false)
-      setIsApplying(true)
-      try {
-        const res = await fetch('/api/vouchers/validate', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          if (opts?.fromUrl) setUrlApplyFailed(true)
-          else setError('Invalid or expired code')
-          setPromo(null)
-          setAppliedPromoCode(null)
-          clearKlaroPromo()
-          return false
-        }
-        if (data?.success && data?.voucher?.type && typeof data.voucher?.value === 'number') {
-          const v = data.voucher as { type: 'percentage' | 'fixed'; value: number }
-          const offer: 'lifetime' | null = data.offer === 'lifetime' ? 'lifetime' : null
-          const finalPesos: number | null =
-            offer === 'lifetime' && typeof data.finalPesos === 'number' ? data.finalPesos : null
-          const applied: KlaroPromoVoucher = { type: v.type, value: v.value, offer, finalPesos }
-          setPromo(applied)
-          setAppliedPromoCode(code)
-          writeKlaroPromo({ promoCode: code, promo: applied })
-          setError(null)
-          setUrlApplyFailed(false)
-          if (opts?.fromUrl && pathname) {
-            router.replace(pathname, { scroll: false })
-          }
-          return true
-        }
-        if (opts?.fromUrl) setUrlApplyFailed(true)
-        else setError('Invalid or expired code')
-        setPromo(null)
-        setAppliedPromoCode(null)
-        clearKlaroPromo()
-        return false
-      } catch {
-        if (opts?.fromUrl) setUrlApplyFailed(true)
-        else setError('Invalid or expired code')
-        setPromo(null)
-        setAppliedPromoCode(null)
-        clearKlaroPromo()
-        return false
-      } finally {
-        setIsApplying(false)
-      }
-    },
-    [pathname, router]
-  )
-
-  useEffect(() => {
-    if (!isOpen) {
-      hasAutoApplied.current = false
-      lastModalOpen.current = false
-      setPromoInput('')
-      setAppliedPromoCode(null)
-      setPromo(null)
-      setError(null)
-      setUrlApplyFailed(false)
-      setIsApplying(false)
-      setCheckoutError(null)
+  const handleUpgrade = () => {
+    if (!onOpenPaymentModal) {
+      setCheckoutError('Payment is unavailable right now.')
       return
     }
-    const stored = readKlaroPromo()
-    if (stored) {
-      setPromoInput(stored.promoCode)
-      if (stored.promo) {
-        setPromo(stored.promo)
-        setAppliedPromoCode(stored.promoCode)
-      } else {
-        setPromo(null)
-        setAppliedPromoCode(null)
-      }
-    }
-  }, [isOpen])
-
-  /** Redeem pre-saved landing code once when modal transitions closed → open (logged-in session). */
-  useEffect(() => {
-    if (!isOpen) {
-      lastModalOpen.current = false
-      return
-    }
-    const justOpened = !lastModalOpen.current
-    lastModalOpen.current = true
-    if (!justOpened) return
-    const stored = readKlaroPromo()
-    if (!stored?.promoCode) return
-    if (stored.promo && stored.promo.offer !== undefined) return
-    void applyPromoWithCode(stored.promoCode, { fromUrl: false })
-  }, [isOpen, applyPromoWithCode])
-
-  useEffect(() => {
-    if (!isOpen || hasAutoApplied.current) return
-    const urlCode = searchParams.get('code')?.trim().toUpperCase() ?? ''
-    if (!urlCode) return
-    if (readKlaroPromo()) {
-      hasAutoApplied.current = true
-      return
-    }
-
-    hasAutoApplied.current = true
-    setPromoInput(urlCode)
-    void applyPromoWithCode(urlCode, { fromUrl: true })
-  }, [isOpen, searchParams, applyPromoWithCode])
-
-  const originalPrice = planType === 'monthly' ? MONTHLY_PESOS : ANNUAL_PESOS
-  const { final: finalPrice, discountLabel, specialLabel } = computePricing(originalPrice, promo)
-  const isFounderLifetime = promo?.offer === 'lifetime'
-  const expiryText = isFounderLifetime
-    ? 'No expiry (Lifetime Access)'
-    : formatExpiryDate(planType)
-
-  const handleApplyPromo = () => {
-    void applyPromoWithCode(promoInput, { fromUrl: false })
-  }
-
-  const handleUpgrade = async () => {
-    const bundle = readKlaroPromo()
-    const effectiveCode = appliedPromoCode ?? bundle?.promoCode ?? null
-    if (promo && effectiveCode) {
-      writeKlaroPromo({ promoCode: effectiveCode, promo })
-    }
-
-    if (onOpenPaymentModal) {
-      onOpenPaymentModal(planType, promo)
-      onClose()
-      return
-    }
-    setLoading(true)
     setCheckoutError(null)
-    try {
-      const res = await fetch('/api/payments/create-checkout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planType,
-          promoCode: effectiveCode,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setCheckoutError(data.error ?? 'Failed to start checkout.')
-        setLoading(false)
-        return
-      }
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url
-      } else {
-        setCheckoutError('No checkout URL returned.')
-        setLoading(false)
-      }
-    } catch {
-      setCheckoutError('Network error. Please try again.')
-      setLoading(false)
-    }
+    onOpenPaymentModal()
+    onClose()
   }
 
   const handleClose = () => {
-    if (!loading) {
-      setCheckoutError(null)
-      onClose()
-    }
+    setCheckoutError(null)
+    onClose()
   }
 
   return (
@@ -412,93 +177,8 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
         </div>
 
         <div className="upgrade-modal-checkout">
-          <fieldset className="upgrade-modal-plans">
-            <legend className="sr-only">Billing period</legend>
-            <label className={`upgrade-modal-plan${planType === 'monthly' ? ' is-selected' : ''}`}>
-              <input type="radio" name="plan" checked={planType === 'monthly'} onChange={() => setPlanType('monthly')} />
-              <span className="upgrade-modal-plan-name">Monthly</span>
-              <span className="upgrade-modal-plan-price">{formatPeso(MONTHLY_PESOS)} / month</span>
-            </label>
-            <label className={`upgrade-modal-plan${planType === 'annual' ? ' is-selected' : ''}`}>
-              <input type="radio" name="plan" checked={planType === 'annual'} onChange={() => setPlanType('annual')} />
-              <span className="upgrade-modal-plan-badge">Best value</span>
-              <span className="upgrade-modal-plan-name">Annual</span>
-              <span className="upgrade-modal-plan-price">{formatPeso(ANNUAL_PESOS)} / year</span>
-            </label>
-          </fieldset>
-          <p className="upgrade-modal-expiry">
-            Access until: <strong>{expiryText}</strong>
-          </p>
-
-          <div className="upgrade-modal-promo">
-            <label htmlFor="upgrade-promo-code" className="upgrade-modal-promo-label">
-              Have a promo code?
-            </label>
-            <div className="upgrade-modal-promo-row">
-              <input
-                id="upgrade-promo-code"
-                type="text"
-                className="upgrade-modal-promo-input"
-                value={promoInput}
-                onChange={(e) => setPromoInput(e.target.value)}
-                placeholder="Enter code"
-                autoComplete="off"
-                disabled={isApplying}
-              />
-              <button
-                type="button"
-                onClick={handleApplyPromo}
-                disabled={isApplying}
-                className="btn-secondary"
-              >
-                {isApplying ? 'Applying…' : 'Apply'}
-              </button>
-            </div>
-            {promo && (
-              <p className="upgrade-modal-promo-ok" role="status">
-                {promo.offer === 'lifetime' && typeof promo.finalPesos === 'number'
-                  ? `🎉 Founder promo applied! Final price is ${formatPeso(promo.finalPesos)}`
-                  : promo.type === 'percentage'
-                  ? `🎉 Promo applied! You got ${promo.value}% off`
-                  : `🎉 Promo applied! You got ${formatPeso(promo.value)} off`}
-              </p>
-            )}
-            {error && !promo && (
-              <p className="upgrade-modal-promo-error" role="alert">{error}</p>
-            )}
-            {urlApplyFailed && !promo && !error && (
-              <p className="upgrade-modal-promo-hint">
-                The code from your link couldn&apos;t be applied. You can try another code above.
-              </p>
-            )}
-          </div>
-
-          {promo && (
-            <dl className="upgrade-modal-summary">
-              {!isFounderLifetime && (
-                <div>
-                  <dt>Original price</dt>
-                  <dd>{formatPeso(originalPrice)}</dd>
-                </div>
-              )}
-              {discountLabel && (
-                <div>
-                  <dt>Discount</dt>
-                  <dd className="is-accent">{discountLabel}</dd>
-                </div>
-              )}
-              {specialLabel && (
-                <div>
-                  <dt>Offer</dt>
-                  <dd className="is-accent">{specialLabel}</dd>
-                </div>
-              )}
-              <div className="upgrade-modal-summary-total">
-                <dt>Final price</dt>
-                <dd>{formatPeso(finalPrice)}</dd>
-              </div>
-            </dl>
-          )}
+          <p className="upgrade-modal-plan-price">{formatPlanPeso(PRO_ONE_TIME_PESOS)}</p>
+          <p className="upgrade-modal-lead">{PRO_ONE_TIME_LINE}</p>
 
           {checkoutError && (
             <p className="upgrade-modal-checkout-error" role="alert">{checkoutError}</p>
@@ -508,15 +188,13 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
             <button
               type="button"
               onClick={handleUpgrade}
-              disabled={loading}
               className="klaro-upgrade-cta"
             >
-              {loading ? 'Redirecting to payment…' : 'Choose Pro'}
+              Choose Pro
             </button>
             <button
               type="button"
               onClick={handleClose}
-              disabled={loading}
               className="btn-ghost"
             >
               Maybe later
@@ -529,9 +207,5 @@ function UpgradeModalInner({ isOpen, onClose, message, onOpenPaymentModal }: Upg
 }
 
 export default function UpgradeModal(props: UpgradeModalProps) {
-  return (
-    <Suspense fallback={null}>
-      <UpgradeModalInner {...props} />
-    </Suspense>
-  )
+  return <UpgradeModalInner {...props} />
 }

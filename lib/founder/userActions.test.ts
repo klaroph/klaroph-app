@@ -109,6 +109,23 @@ describe('grantComplimentaryPro', () => {
     expect(writes[0].row.is_lifetime).toBe(false)
   })
 
+  it('refuses to write over a lifetime row even when the plan name would not count as Pro', async () => {
+    const subscription = freeSub({
+      is_lifetime: true,
+      plan_name: 'free',
+      status: 'expired',
+      current_period_end: daysFromNow(-400),
+    })
+    const { store } = grantStore(account({ subscription }))
+    const mail = okMail()
+    expect(await grantComplimentaryPro({ store, mail, now: NOW }, { userId: TARGET, duration: '3m' })).toEqual({
+      ok: false,
+      message: 'This user already has Pro. Nothing was changed.',
+    })
+    expect(store.applyGrant).not.toHaveBeenCalled()
+    expect(mail).not.toHaveBeenCalled()
+  })
+
   it('refuses users who already have Pro — paid, lifetime, complimentary or in grace — without writing or emailing', async () => {
     const proSubs = [
       freeSub({ plan_id: PRO_PLAN, plan_name: 'pro', payment_provider: 'paymongo', plan_type: 'monthly' }),

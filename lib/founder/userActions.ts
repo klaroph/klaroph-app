@@ -76,7 +76,8 @@ export async function grantComplimentaryPro(
 
   const account = await deps.store.getAccount(input.userId)
   if (!account) return NOT_FOUND
-  if (isPro(planKind(account.subscription ?? undefined, deps.now))) {
+  // Lifetime is the paid entitlement. A complimentary grant is time-limited and must not write that row.
+  if (account.subscription?.is_lifetime === true || isPro(planKind(account.subscription ?? undefined, deps.now))) {
     return { ok: false, message: 'This user already has Pro. Nothing was changed.' }
   }
 
