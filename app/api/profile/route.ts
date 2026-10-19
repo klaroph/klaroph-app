@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
+import { plainDbError } from '@/lib/apiError'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { nicknameForWrite } from '@/lib/displayName'
 import type { ProfileWithComputed } from '@/types/profile'
+
+/** Unselected selects post "". Those columns only allow NULL or a known value. */
+const BLANK_TO_NULL = new Set<string>(['financial_stage', 'risk_comfort'])
 
 const PROFILE_SELECT =
   'id, full_name, onboarding_completed, nickname, avatar_url, monthly_income_range, primary_goal_category, financial_stage, savings_confidence, risk_comfort, motivation_type, dream_statement, streak_days, clarity_level, badges_json, updated_at'
@@ -165,7 +169,8 @@ export async function PATCH(request: Request) {
           }
           updates[key] = parsed.nickname
         } else if (typeof v === 'string' || v === null) {
-          updates[key] = v
+          updates[key] =
+            BLANK_TO_NULL.has(key) && (v === null || v.trim() === '') ? null : v
         }
       }
     }
@@ -182,7 +187,10 @@ export async function PATCH(request: Request) {
       .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(
+        { error: plainDbError(error, 'save', 'PATCH /api/profile update error:') },
+        { status: 500 }
+      )
     }
 
     const [{ data: completion }, { data: clarity }] = await Promise.all([
