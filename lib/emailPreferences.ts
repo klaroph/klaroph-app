@@ -1,6 +1,6 @@
 /**
  * Marketing email preference, stored only as profiles.marketing_emails_unsubscribed_at
- * (NULL = subscribed). One switch covers product updates and the weekly summary.
+ * (NULL = subscribed). One switch covers product updates and the payday summary.
  * Uses the caller's RLS-scoped client, so a user can only touch their own row.
  */
 

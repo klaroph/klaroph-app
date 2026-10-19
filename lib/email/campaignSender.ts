@@ -85,7 +85,7 @@ async function claimRecipients(
 
 /**
  * Claim each recipient, then send. `toMessage` builds one email per claimed user.
- * Shared by registered campaigns and the weekly summary (which is not a CAMPAIGNS entry).
+ * Shared by registered campaigns and the payday summary (which is not a CAMPAIGNS entry).
  */
 export async function sendClaimedRecipients(
   deps: CampaignSendDeps,
