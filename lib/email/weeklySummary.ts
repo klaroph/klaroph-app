@@ -1,7 +1,8 @@
 /**
- * Server-only weekly summary. Recipients come from the marketing audience
- * (active, subscribed) plus onboarding_completed, then from people who logged
- * something in the covered Manila week. The message itself never includes amounts.
+ * Server-only weekly summary. Recipients are opted-in users (confirmed email,
+ * not a tester, not banned or deleted, not unsubscribed, onboarding completed),
+ * then people who logged something in the covered Manila week.
+ * The message itself never includes amounts.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -31,7 +32,7 @@ import {
 const TEST_RECIPIENT_USER_ID = '00000000-0000-0000-0000-000000000000'
 const PAGE_SIZE = 1000
 
-const TEST_FACTS: WeeklySummaryFacts = { entryCount: 3, direction: 'same', topCategory: 'Food' }
+const TEST_FACTS: WeeklySummaryFacts = { entryCount: 3, direction: 'same', topCategory: 'Groceries' }
 
 export type WeeklyProfile = AudienceProfile & { onboarding_completed?: boolean | null }
 
@@ -85,7 +86,10 @@ export function keepOnboarded<T extends { userId: string }>(
   return recipients.filter((recipient) => onboarded.has(recipient.userId))
 }
 
-/** Active marketing audience, plus onboarding_completed === true. Unsubscribed users are already excluded. */
+/**
+ * Marketing audience with every existing eligibility filter except the 30-day
+ * sign-in window, plus onboarding_completed === true.
+ */
 export function selectWeeklyRecipients(input: {
   authUsers: AudienceAuthUser[]
   profiles: WeeklyProfile[]
@@ -96,7 +100,7 @@ export function selectWeeklyRecipients(input: {
     selectEligibleRecipients({
       authUsers: input.authUsers,
       profiles: input.profiles,
-      segment: 'active',
+      segment: 'all',
       now: input.now,
       excludeUserIds: input.excludeUserIds,
     }),
@@ -207,7 +211,7 @@ async function prepareWeeklySend(admin: SupabaseClient, now: Date): Promise<Week
   const window = manilaWeekWindow(now)
   const campaignId = weeklyCampaignId(window)
   try {
-    const audience = await loadMarketingAudience(admin, campaignId, 'active', now)
+    const audience = await loadMarketingAudience(admin, campaignId, 'all', now)
     if (!audience.ok) return { ok: false, error: audience.error }
     const profiles = await loadProfileBits(admin, audience.recipients.map((recipient) => recipient.userId))
     const byId = new Map(profiles.map((profile) => [profile.id, profile]))

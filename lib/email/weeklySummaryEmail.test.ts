@@ -65,11 +65,11 @@ describe('spendingDirection', () => {
 describe('summarizeUserWeek', () => {
   it('counts a Sunday Manila entry and excludes the following Monday', () => {
     const facts = summarizeUserWeek(
-      [expense('2026-10-18', COVERED_AMOUNT, 'Food'), expense('2026-10-19', MONDAY_AMOUNT, 'Rent')],
+      [expense('2026-10-18', COVERED_AMOUNT, 'Groceries'), expense('2026-10-19', MONDAY_AMOUNT, 'Rent 15000')],
       'u1',
       WINDOW,
     )
-    expect(facts).toEqual({ entryCount: 1, direction: null, topCategory: 'Food' })
+    expect(facts).toEqual({ entryCount: 1, direction: null, topCategory: 'Groceries' })
   })
 
   it('counts Sunday income and ignores income dated the following Monday', () => {
@@ -96,7 +96,7 @@ describe('summarizeUserWeek', () => {
       WINDOW,
     )
     const same = summarizeUserWeek(
-      [expense('2026-10-14', COVERED_AMOUNT), expense('2026-10-07', COVERED_AMOUNT, 'Transport')],
+      [expense('2026-10-14', COVERED_AMOUNT), expense('2026-10-07', COVERED_AMOUNT, 'Dining Out')],
       'u1',
       WINDOW,
     )
@@ -109,26 +109,26 @@ describe('summarizeUserWeek', () => {
   it('breaks category ties alphabetically and ignores another user', () => {
     const facts = summarizeUserWeek(
       [
-        expense('2026-10-14', 100, 'Transport'),
-        expense('2026-10-15', 100, 'Bills'),
+        expense('2026-10-14', 100, 'Groceries'),
+        expense('2026-10-15', 100, 'Dining Out'),
         expense('2026-10-14', 999, 'Rent', 'someone-else'),
       ],
       'u1',
       WINDOW,
     )
-    expect(facts?.topCategory).toBe('Bills')
+    expect(facts?.topCategory).toBe('Dining Out')
     expect(facts?.entryCount).toBe(2)
   })
 
   it('skips a previous week with zero expense entries instead of calling spending higher', () => {
-    const facts = summarizeUserWeek([expense('2026-10-14', COVERED_AMOUNT, 'Food')], 'u1', WINDOW)
+    const facts = summarizeUserWeek([expense('2026-10-14', COVERED_AMOUNT, 'Groceries')], 'u1', WINDOW)
     expect(facts?.direction).toBeNull()
     const email = renderFacts(facts!)
     for (const surface of surfaces(email)) {
       expect(surface).not.toMatch(/higher|lower|about the same/i)
     }
-    expect(email.text).toContain('You logged 1 entry this week.')
-    expect(email.text).toContain('Your top spending category was Food.')
+    expect(email.text).toContain('You logged 1 entry last week.')
+    expect(email.text).toContain('Your top spending category was Groceries.')
   })
 })
 
@@ -138,7 +138,7 @@ describe('partitionWeeklyActivity', () => {
       [{ userId: 'quiet' }, { userId: 'income-only' }, { userId: 'expense-only' }],
       [
         { userId: 'income-only', date: '2026-10-13', kind: 'income' },
-        expense('2026-10-13', 40, 'Food', 'expense-only'),
+        expense('2026-10-13', 40, 'Groceries', 'expense-only'),
         expense('2026-10-19', MONDAY_AMOUNT, 'Rent', 'quiet'),
         expense('2026-10-06', PREVIOUS_AMOUNT, 'Rent', 'quiet'),
       ],
@@ -167,7 +167,7 @@ describe('renderWeeklySummaryEmail', () => {
         '',
         'Here is a quick look at last week.',
         '',
-        'You logged 3 entries this week.',
+        'You logged 3 entries last week.',
         '',
         'Spending was higher than the week before.',
         '',
@@ -186,22 +186,44 @@ describe('renderWeeklySummaryEmail', () => {
     expect(email.html).toContain('href="https://klaroph.com/dashboard"')
     expect(email.html).toContain('Unsubscribe from KlaroPH updates')
     expect(email.html).toContain('alt="KlaroPH"')
+    expect(email.html).toContain('color:#64748b;">Weekly summary')
+    expect(email.html).not.toContain('color:#0038A8;">Weekly summary')
   })
 
-  it('falls back to a neutral greeting and escapes the name and category', () => {
+  it('falls back to a neutral greeting and escapes the name', () => {
     expect(renderFacts(facts, null).text).toContain('Hi there,')
-    const email = renderFacts({ ...facts, topCategory: '<Food>' }, '<Jun>')
+    const email = renderFacts(facts, '<Jun>')
     expect(email.html).toContain('Hi &lt;Jun&gt;,')
-    expect(email.html).toContain('&lt;Food&gt;')
     expect(email.html).not.toContain('<Jun>')
-    expect(email.html).not.toContain('<Food>')
+  })
+
+  it('omits a top category that is not one of the default names, including one that contains an amount', () => {
+    const facts = summarizeUserWeek(
+      [
+        expense('2026-10-14', 15000, 'Rent 15000'),
+        expense('2026-10-15', 10, 'Groceries'),
+        expense('2026-10-07', 20, 'Rent 15000'),
+      ],
+      'u1',
+      WINDOW,
+    )
+    expect(facts?.topCategory).toBeNull()
+    const email = renderFacts({ entryCount: facts!.entryCount, direction: facts!.direction, topCategory: 'Rent 15000' })
+    expect(email.text).not.toContain('top spending category')
+    expect(email.text).not.toContain('Others')
+    expect(email.text).toContain('You logged 2 entries last week.')
+    for (const surface of surfaces(email)) expect(surface).not.toContain('15000')
+
+    const named = summarizeUserWeek([expense('2026-10-14', 40, 'Others (Needs)')], 'u1', WINDOW)
+    expect(named?.topCategory).toBe('Others (Needs)')
+    expect(renderFacts(named!).text).toContain('Your top spending category was Others (Needs).')
   })
 
   it('keeps peso amounts out of the subject, preview, html, text, alt text, and links', () => {
     const factsFromLedger = summarizeUserWeek(
       [
         expense('2026-10-14', COVERED_AMOUNT, 'Groceries'),
-        expense('2026-10-15', 20, 'Transport'),
+        expense('2026-10-15', 20, 'Dining Out'),
         { userId: 'u1', date: '2026-10-16', kind: 'income' },
         expense('2026-10-07', PREVIOUS_AMOUNT, 'Rent'),
         expense('2026-10-19', MONDAY_AMOUNT, 'Rent'),

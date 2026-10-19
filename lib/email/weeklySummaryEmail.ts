@@ -4,8 +4,8 @@
  * Nothing rendered here may contain a peso amount, a percentage, or an amount digit sequence.
  */
 
-import type { ManilaWeekWindow } from '@/lib/email/manilaWeek'
-import { manilaDateInRange } from '@/lib/email/manilaWeek'
+import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
+import { manilaDateInRange, type ManilaWeekWindow } from '@/lib/email/manilaWeek'
 import type { CampaignLinkConfig } from '@/lib/email/campaignSender'
 import { renderOperationalEmail } from '@/lib/email/transactionalLayout'
 import type { CampaignMessage } from '@/lib/email/resend'
@@ -21,6 +21,7 @@ export const WEEKLY_SUMMARY_CTA = 'See your week in KlaroPH'
 
 const INTRO = 'Here is a quick look at last week.'
 const FOOTER_REASON = "You're receiving this because you have a KlaroPH account."
+const DEFAULT_EXPENSE_CATEGORIES = new Set(EXPENSE_CATEGORIES.map((category) => category.value))
 
 export type SpendingDirection = 'higher' | 'lower' | 'same'
 
@@ -89,7 +90,7 @@ function comparisonLine(direction: SpendingDirection): string {
 }
 
 function entryLine(count: number): string {
-  return `You logged ${count} ${count === 1 ? 'entry' : 'entries'} this week.`
+  return `You logged ${count} ${count === 1 ? 'entry' : 'entries'} last week.`
 }
 
 function categoryLine(category: string): string {
@@ -112,7 +113,7 @@ function topCategory(expenses: readonly { category: string | null; amount: numbe
       topValue = value
     }
   }
-  return top
+  return top && DEFAULT_EXPENSE_CATEGORIES.has(top) ? top : null
 }
 
 /**
@@ -189,13 +190,14 @@ export function renderWeeklySummaryEmail(input: {
 }): RenderedWeeklySummary {
   const paragraphs = [greeting(input.greetingName), INTRO, entryLine(input.facts.entryCount)]
   if (input.facts.direction) paragraphs.push(comparisonLine(input.facts.direction))
-  if (input.facts.topCategory) paragraphs.push(categoryLine(input.facts.topCategory))
+  const category = input.facts.topCategory?.trim()
+  if (category && DEFAULT_EXPENSE_CATEGORIES.has(category)) paragraphs.push(categoryLine(category))
 
   const { html, text } = renderOperationalEmail({
     preheader: WEEKLY_SUMMARY_PREVIEW,
     label: 'Weekly summary',
     headline: WEEKLY_SUMMARY_SUBJECT,
-    tone: 'attention',
+    tone: 'neutral',
     intro: paragraphs,
     sections: [],
     cta: { label: WEEKLY_SUMMARY_CTA, url: input.links.dashboardUrl },

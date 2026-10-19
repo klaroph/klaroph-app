@@ -93,6 +93,34 @@ function prepared(recipients: WeeklyRecipient[], entries: LedgerEntry[]): Weekly
 
 describe('weekly audience', () => {
   const now = new Date('2026-10-19T00:00:00.000Z')
+  const ids = (authUsers: AudienceAuthUser[], profiles: ReturnType<typeof profile>[]) =>
+    selectWeeklyRecipients({ authUsers, profiles, now }).map((item) => item.userId)
+
+  it('includes opted-in users who have not signed in for 30 days', () => {
+    expect(
+      ids(
+        [user('recent'), user('dormant', { last_sign_in_at: LONG_AGO }), user('never', { last_sign_in_at: null })],
+        [profile('recent'), profile('dormant'), profile('never')],
+      ),
+    ).toEqual(['recent', 'dormant', 'never'])
+  })
+
+  it('requires a confirmed email', () => {
+    expect(ids([user('ready'), user('unconfirmed', { email_confirmed_at: null })], [profile('ready'), profile('unconfirmed')])).toEqual(['ready'])
+  })
+
+  it('excludes deleted and banned accounts', () => {
+    expect(
+      ids(
+        [user('ready'), user('deleted', { deleted_at: LONG_AGO }), user('banned', { banned_until: '2099-01-01T00:00:00Z' })],
+        [profile('ready'), profile('deleted'), profile('banned')],
+      ),
+    ).toEqual(['ready'])
+  })
+
+  it('excludes testers', () => {
+    expect(ids([user('ready'), user('tester')], [profile('ready'), profile('tester', { user_type: 'tester' })])).toEqual(['ready'])
+  })
 
   it('gives an unsubscribed user nothing, even when they logged entries', () => {
     const authUsers = [user('subscribed'), user('unsubscribed')]
@@ -100,31 +128,28 @@ describe('weekly audience', () => {
       profile('subscribed', { nickname: 'Jun' }),
       profile('unsubscribed', { marketing_emails_unsubscribed_at: '2026-09-01T00:00:00Z' }),
     ]
-    const chosen = selectWeeklyRecipients({ authUsers, profiles, now })
-    expect(chosen.map((item) => item.userId)).toEqual(['subscribed'])
+    expect(ids(authUsers, profiles)).toEqual(['subscribed'])
 
     const entries: LedgerEntry[] = [
-      { userId: 'subscribed', date: '2026-10-14', kind: 'expense', category: 'Food', amount: 10 },
-      { userId: 'unsubscribed', date: '2026-10-14', kind: 'expense', category: 'Food', amount: CURRENT_AMOUNT },
+      { userId: 'subscribed', date: '2026-10-14', kind: 'expense', category: 'Groceries', amount: 10 },
+      { userId: 'unsubscribed', date: '2026-10-14', kind: 'expense', category: 'Groceries', amount: CURRENT_AMOUNT },
     ]
     const facts = summarizeUserWeek(entries, 'unsubscribed', WINDOW)
     expect(facts).not.toBeNull()
-    expect(chosen.some((item) => item.userId === 'unsubscribed')).toBe(false)
+    expect(ids(authUsers, profiles)).not.toContain('unsubscribed')
   })
 
-  it('requires an active user who finished onboarding', () => {
-    const authUsers = [
-      user('ready'),
-      user('dormant', { last_sign_in_at: LONG_AGO }),
-      user('new', { last_sign_in_at: RECENT }),
-    ]
-    const profiles = [
-      profile('ready'),
-      profile('dormant'),
-      profile('new', { onboarding_completed: false }),
-      profile('missing-flag', { onboarding_completed: null }),
-    ]
-    expect(selectWeeklyRecipients({ authUsers, profiles, now }).map((item) => item.userId)).toEqual(['ready'])
+  it('requires onboarding to be completed', () => {
+    expect(
+      ids(
+        [user('ready'), user('incomplete'), user('missing')],
+        [
+          profile('ready'),
+          profile('incomplete', { onboarding_completed: false }),
+          profile('missing', { onboarding_completed: null }),
+        ],
+      ),
+    ).toEqual(['ready'])
     expect(keepOnboarded([{ userId: 'a' }, { userId: 'b' }], [{ id: 'a', onboarding_completed: true }, { id: 'b', onboarding_completed: false }])).toEqual([
       { userId: 'a' },
     ])

@@ -24,6 +24,7 @@ const COLOR = {
   testInk: '#6b5200',
   positive: '#15803d',
   warning: '#b45309',
+  neutral: '#64748b',
 }
 
 export type EmailDetailRow = { label: string; value: string }
@@ -44,8 +45,8 @@ export type TransactionalEmailContent = {
   testNotice?: string
 }
 
-/** Operational tone sets the eyebrow color: attention (Klaro blue), positive (money in), warning (needs action). */
-export type OperationalTone = 'attention' | 'positive' | 'warning'
+/** Operational tone sets the eyebrow color: attention (Klaro blue), positive (money in), warning (needs action), neutral (no status color). */
+export type OperationalTone = 'attention' | 'positive' | 'warning' | 'neutral'
 
 /** A block of the operational card. Any combination of rows, bullet items and body text; empty parts are skipped. */
 export type OperationalSection = {
@@ -263,7 +264,12 @@ function operationalSection(s: OperationalSection): string {
               </table>`
 }
 
-const TONE_COLOR: Record<OperationalTone, string> = { attention: COLOR.primary, positive: COLOR.positive, warning: COLOR.warning }
+const TONE_COLOR: Record<OperationalTone, string> = {
+  attention: COLOR.primary,
+  positive: COLOR.positive,
+  warning: COLOR.warning,
+  neutral: COLOR.neutral,
+}
 
 /** Compact operational card: tone eyebrow, headline, short intro, stacked sections, one CTA. */
 export function renderOperationalEmail(c: OperationalEmailContent): { html: string; text: string } {
