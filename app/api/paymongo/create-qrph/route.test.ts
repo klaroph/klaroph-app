@@ -4,7 +4,12 @@ const state = vi.hoisted(() => ({
   user: { id: 'user-1', email: 'juan@example.com', user_metadata: {} } as { id: string; email: string; user_metadata: Record<string, string> } | null,
   profile: { user_type: 'user' } as { user_type: string } | null,
   subscription: null as Record<string, unknown> | null,
-  intents: [] as { amount?: number; metadata?: Record<string, string> }[],
+  intents: [] as {
+    amount?: number
+    description?: string
+    statementDescriptor?: string
+    metadata?: Record<string, string>
+  }[],
   intentAmount: 99_900,
   intentGrant: 'lifetime' as string | null,
   intentStatus: 'awaiting_payment_method',
@@ -48,7 +53,12 @@ vi.mock('@/lib/supabaseAdmin', () => ({
 }))
 
 vi.mock('@/lib/paymongo', () => ({
-  createPaymentIntent: async (params: { amount?: number; metadata?: Record<string, string> }) => {
+  createPaymentIntent: async (params: {
+    amount?: number
+    description?: string
+    statementDescriptor?: string
+    metadata?: Record<string, string>
+  }) => {
     state.intents.push(params)
     return { data: { id: 'pi_1' } }
   },
@@ -113,6 +123,13 @@ describe('POST /api/paymongo/create-qrph', () => {
       expected_amount_centavos: '99900',
     })
     expect(state.intents[0].metadata).not.toHaveProperty('promoCode')
+    expect(state.intents[0].description).toBe(
+      'KlaroPH Pro. One-time purchase of ₱999. Pay once. No subscription.'
+    )
+    expect(state.intents[0].statementDescriptor).toBe('KlaroPH Pro P999 once')
+    expect(`${state.intents[0].description} ${state.intents[0].statementDescriptor}`).not.toMatch(
+      /\/month(?![A-Za-z])|\/year(?![A-Za-z])|\bmonthly\b|\bannual\b|\brenew|\blifetime\b/i
+    )
   })
 
   it('charges a tester ₱5', async () => {
@@ -122,6 +139,8 @@ describe('POST /api/paymongo/create-qrph', () => {
     expect(state.intents[0].amount).toBe(500)
     expect(state.intents[0].metadata?.expected_amount_centavos).toBe('500')
     expect(state.intents[0].metadata?.grant).toBe('lifetime')
+    expect(state.intents[0].description).toContain('₱999')
+    expect(state.intents[0].statementDescriptor).toBe('KlaroPH Pro P999 once')
   })
 
   it('lets an active monthly or annual row buy', async () => {

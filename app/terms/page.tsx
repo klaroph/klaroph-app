@@ -83,10 +83,35 @@ export default function TermsPage() {
             removes Pro.
           </p>
           <p>
-            If KlaroPH closes, we will tell you at least 45 days ahead by email and with an in-app banner. Export of
-            your income and expense records stays open until the service shuts down.
+            If KlaroPH closes, we will tell you at least 45 days ahead by email and with an in-app banner. Export stays
+            open until the service shuts down.
+          </p>
+          <p>
+            Any signed-in user can download klaroph-export.csv. The columns are Type, Date, Amount, and
+            Category/Source. An Income row puts the income source in Category/Source. An Expense row puts the expense
+            category in Category/Source. The file does not include the expense type, descriptions, notes, or any other
+            account data.
           </p>
           <p>Deleting your account ends Pro.</p>
+        </section>
+
+        <section className="legal-section">
+          <h2>Third-Party Services</h2>
+          <p>KlaroPH uses these services to run the app:</p>
+          <ul>
+            <li>Supabase stores your account and the records you save, and handles sign-in.</li>
+            <li>
+              Google sign-in is available. If you choose it, Google shares the email and basic profile used to sign
+              you in.
+            </li>
+            <li>Vercel hosts the app and runs its scheduled job.</li>
+            <li>PayMongo processes the one-time ₱999 KlaroPH Pro payment.</li>
+            <li>
+              Google Gemini writes Klaro Insight and Ask Klaro replies. The Privacy Policy states which details are
+              sent.
+            </li>
+            <li>Resend sends KlaroPH email.</li>
+          </ul>
         </section>
 
         <section className="legal-section">

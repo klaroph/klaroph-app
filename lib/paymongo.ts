@@ -216,6 +216,8 @@ export type CreatePaymentIntentParams = {
   currency?: 'PHP'
   paymentMethodAllowed?: string[]
   description?: string
+  /** Shown on card and GCash statements. PayMongo does not use it as QR Ph display text. */
+  statementDescriptor?: string
   metadata?: Record<string, string>
 }
 
@@ -255,6 +257,7 @@ export async function createPaymentIntent(
           currency: params.currency ?? 'PHP',
           payment_method_allowed: params.paymentMethodAllowed ?? ['qrph'],
           description: params.description ?? undefined,
+          statement_descriptor: params.statementDescriptor ?? undefined,
           metadata: params.metadata ?? {},
         },
       },
