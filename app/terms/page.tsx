@@ -117,9 +117,10 @@ export default function TermsPage() {
         <section className="legal-section">
           <h2>Termination</h2>
           <p>
-            We may suspend or terminate your access to KlaroPH if you breach these terms or for other operational
-            or legal reasons. You may close your account at any time. Upon termination, your right to use the service
-            ceases; we may retain or delete your data as described in our Privacy Policy.
+            KlaroPH may terminate an account only when it breaks these terms. You may close your account at any time.
+            When an account ends, the right to use KlaroPH ceases. We may retain or delete data as described in the
+            Privacy Policy. If KlaroPH closes, the 45-day notice and the open export described in the KlaroPH Pro
+            section apply.
           </p>
         </section>
 

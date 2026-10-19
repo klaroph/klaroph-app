@@ -37,9 +37,11 @@ async function readAllForUser<T>(
  * GET — Export income + expenses as CSV for any signed-in user.
  * Rows are read with the service role after the session is checked, so the
  * 90-day free-history policy and the 1,000-row cap do not truncate the file.
- * The filter is always the authenticated user id.
+ * The user id comes only from that session. Query and body ids are ignored.
  */
-export async function GET() {
+export async function GET(request?: Request) {
+  // Present so a caller can pass a query or body. Those fields are not an identity.
+  void request
   try {
     const supabase = await createSupabaseServerClient()
     const {
@@ -48,10 +50,11 @@ export async function GET() {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const userId = user.id
 
     const [incomeRows, expenseRows] = await Promise.all([
-      readAllForUser<IncomeExportRow>('income_records', 'date, total_amount, income_source', user.id),
-      readAllForUser<ExpenseExportRow>('expenses', 'date, amount, category, type', user.id),
+      readAllForUser<IncomeExportRow>('income_records', 'date, total_amount, income_source', userId),
+      readAllForUser<ExpenseExportRow>('expenses', 'date, amount, category, type', userId),
     ])
 
     const csvHeader = 'Type,Date,Amount,Category/Source\n'

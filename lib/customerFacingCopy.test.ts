@@ -104,6 +104,11 @@ describe('customer-facing Pro copy', () => {
     expect(terms).toContain('Google Gemini')
     expect(terms).toContain('Resend sends KlaroPH email')
     expect(terms).toContain('Deleting your account ends Pro')
+    expect(terms).toContain('KlaroPH may terminate an account only when it breaks these terms.')
+    expect(terms).toContain(
+      'If KlaroPH closes, the 45-day notice and the open export described in the KlaroPH Pro section apply.'
+    )
+    expect(terms).not.toMatch(/operational reasons/i)
     expect(privacy).toContain('Supabase stores your account')
     expect(privacy).toContain('Google sign-in')
     expect(privacy).toContain('Vercel hosts the app')
