@@ -9,9 +9,17 @@
 -- filter, so a later run of migration B does not grant that payment.
 --
 -- The script aborts before any write when payment_events has no
--- payment.paid or checkout_session.payment.paid row whose payment id is
--- v_payment_id and whose metadata user_id is v_user_id
--- (payload #>> '{data,attributes,data,attributes,metadata,user_id}').
+-- payment.paid or checkout_session.payment.paid row for v_payment_id and
+-- v_user_id. payment.paid matches
+--   payload #>> '{data,attributes,data,id}'
+--   and payload #>> '{data,attributes,data,attributes,metadata,user_id}'.
+-- checkout_session.payment.paid matches
+--   payload #>> '{data,attributes,data,attributes,payments,0,id}'
+--   (falling back to payload #>> '{data,attributes,data,id}')
+--   and the first present user_id of
+--   payload #>> '{data,attributes,data,attributes,payments,0,attributes,metadata,user_id}',
+--   payload #>> '{data,attributes,data,attributes,payment_intent,attributes,metadata,user_id}',
+--   payload #>> '{data,attributes,data,attributes,metadata,user_id}'.
 --
 -- Run with psql or: supabase db query -f supabase/scripts/revoke_pro_after_refund.sql
 -- See supabase/scripts/REFUND_RUNBOOK.md.
@@ -44,11 +52,26 @@ BEGIN
     SELECT 1
     FROM public.payment_events e
     WHERE e.event_type IN ('payment.paid', 'checkout_session.payment.paid')
-      AND lower(btrim(e.payload #>> '{data,attributes,data,attributes,metadata,user_id}')) = lower(v_user_id::text)
-      AND v_payment_id IN (
-        NULLIF(btrim(e.payload #>> '{data,attributes,data,id}'), ''),
-        NULLIF(btrim(e.payload #>> '{data,attributes,data,attributes,payments,0,id}'), '')
-      )
+      AND lower(btrim(
+        CASE
+          WHEN e.event_type = 'payment.paid' THEN
+            e.payload #>> '{data,attributes,data,attributes,metadata,user_id}'
+          ELSE COALESCE(
+            e.payload #>> '{data,attributes,data,attributes,payments,0,attributes,metadata,user_id}',
+            e.payload #>> '{data,attributes,data,attributes,payment_intent,attributes,metadata,user_id}',
+            e.payload #>> '{data,attributes,data,attributes,metadata,user_id}'
+          )
+        END
+      )) = lower(v_user_id::text)
+      AND v_payment_id = NULLIF(btrim(
+        CASE
+          WHEN e.event_type = 'payment.paid' THEN e.payload #>> '{data,attributes,data,id}'
+          ELSE COALESCE(
+            e.payload #>> '{data,attributes,data,attributes,payments,0,id}',
+            e.payload #>> '{data,attributes,data,id}'
+          )
+        END
+      ), '')
   ) THEN
     RAISE EXCEPTION 'payment id % was not found in payment_events for user %', v_payment_id, v_user_id;
   END IF;

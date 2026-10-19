@@ -8,7 +8,12 @@
 --
 -- A verified payer has at least one successful, non-refunded PayMongo payment
 -- in public.payment_events (payment.paid or checkout_session.payment.paid).
--- user_id is payload #>> '{data,attributes,data,attributes,metadata,user_id}'.
+-- payment.paid user_id is
+--   payload #>> '{data,attributes,data,attributes,metadata,user_id}'.
+-- checkout_session.payment.paid user_id is the first present value of
+--   payload #>> '{data,attributes,data,attributes,payments,0,attributes,metadata,user_id}',
+--   payload #>> '{data,attributes,data,attributes,payment_intent,attributes,metadata,user_id}',
+--   payload #>> '{data,attributes,data,attributes,metadata,user_id}'.
 -- Deleted accounts (no auth.users or profiles row) are skipped. Testers
 -- (profiles.user_type = tester) are skipped, including the existing tester
 -- lifetime row.
@@ -44,7 +49,15 @@ WITH raw_paid AS (
     e.event_id,
     e.event_type,
     e.processed_at,
-    btrim(e.payload #>> '{data,attributes,data,attributes,metadata,user_id}') AS user_id,
+    CASE
+      WHEN e.event_type = 'payment.paid' THEN
+        btrim(e.payload #>> '{data,attributes,data,attributes,metadata,user_id}')
+      ELSE btrim(COALESCE(
+        e.payload #>> '{data,attributes,data,attributes,payments,0,attributes,metadata,user_id}',
+        e.payload #>> '{data,attributes,data,attributes,payment_intent,attributes,metadata,user_id}',
+        e.payload #>> '{data,attributes,data,attributes,metadata,user_id}'
+      ))
+    END AS user_id,
     CASE
       WHEN e.event_type = 'payment.paid' THEN e.payload #>> '{data,attributes,data,id}'
       ELSE COALESCE(

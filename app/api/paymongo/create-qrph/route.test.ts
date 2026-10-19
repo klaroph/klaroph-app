@@ -175,6 +175,15 @@ describe('POST /api/paymongo/create-qrph', () => {
     expect(state.intents).toHaveLength(0)
   })
 
+  it('returns 410 when a stored intent has no grant metadata', async () => {
+    state.intentGrant = null
+    state.intentAmount = 99_900
+    const res = await post({ payment_intent_id: 'pi_bare' })
+    expect(res.status).toBe(410)
+    expect(state.attached).toBe(0)
+    expect(state.intents).toHaveLength(0)
+  })
+
   it('returns 410 when a stored QR is not the current one-time price', async () => {
     state.intentAmount = 99_00
     const res = await post({ payment_intent_id: 'pi_old' })

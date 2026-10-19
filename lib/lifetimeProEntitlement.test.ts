@@ -11,6 +11,7 @@ const migration = readText('supabase/migrations/20261019000003_lifetime_pro_enti
 const check = readText('supabase/scripts/lifetime_pro_entitlement_check.sql')
 const refund = readText('supabase/scripts/revoke_pro_after_refund.sql')
 const grant = readText('supabase/migrations/20261019000002_grant_lifetime_to_verified_payers.sql')
+const report = readText('supabase/scripts/one_time_pro_payer_report.sql')
 
 function sqlLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
@@ -51,6 +52,60 @@ function migrationBPayerSql(sql: string): string {
   if (start < 0 || end < start) throw new Error('migration B payer query missing')
   const body = sql.slice(start, end).trim().replace(/,\s*$/, '')
   return `${body}\nSELECT user_id FROM payers`
+}
+
+/** Detail rows from the payer report, before the category summary. */
+function reportDetailSql(sql: string): string {
+  const start = sql.indexOf('WITH raw_paid AS (')
+  const marker = 'ORDER BY category, user_id;'
+  const end = sql.indexOf(marker)
+  if (start < 0 || end < start) throw new Error('payer report detail query missing')
+  return sql.slice(start, end + marker.length)
+}
+
+/**
+ * Live checkout_session.payment.paid shape: user_id is on the nested payment
+ * and payment intent, not on the session attributes.
+ */
+function checkoutPaidPayload(userId: string, paymentId: string) {
+  return {
+    data: {
+      id: `evt_${paymentId}`,
+      type: 'event',
+      attributes: {
+        type: 'checkout_session.payment.paid',
+        livemode: true,
+        data: {
+          id: `cs_${paymentId}`,
+          type: 'checkout_session',
+          attributes: {
+            payment_intent: {
+              id: `pi_${paymentId}`,
+              type: 'payment_intent',
+              attributes: {
+                amount: 99900,
+                currency: 'PHP',
+                status: 'succeeded',
+                metadata: { user_id: userId, plan: 'pro' },
+              },
+            },
+            payments: [
+              {
+                id: paymentId,
+                type: 'payment',
+                attributes: {
+                  amount: 99900,
+                  currency: 'PHP',
+                  status: 'paid',
+                  metadata: { user_id: userId, plan: 'pro' },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+  }
 }
 
 describe('lifetime Pro database checks', () => {
@@ -185,6 +240,92 @@ describe('manual refund exclusion', () => {
         `SELECT event_id FROM public.payment_events WHERE event_type = 'manual.refund'`
       )
       expect(refunds.rows).toHaveLength(0)
+    } finally {
+      await db.close()
+    }
+  })
+
+  it('selects, lists, and refunds a checkout payer whose user id is only on the payment and payment intent', async () => {
+    const userId = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd4'
+    const paymentId = 'pay_checkout'
+    const freePlan = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3'
+    const payload = checkoutPaidPayload(userId, paymentId)
+    const sessionAttributes = payload.data.attributes.data.attributes as {
+      metadata?: { user_id?: string }
+      payments: { id: string; attributes: { metadata: { user_id: string } } }[]
+      payment_intent: { attributes: { metadata: { user_id: string } } }
+    }
+    expect(sessionAttributes.metadata).toBeUndefined()
+    expect(sessionAttributes.payments[0].id).toBe(paymentId)
+    expect(sessionAttributes.payments[0].attributes.metadata.user_id).toBe(userId)
+    expect(sessionAttributes.payment_intent.attributes.metadata.user_id).toBe(userId)
+
+    const db = new PGlite()
+    try {
+      await db.exec(`
+        CREATE SCHEMA IF NOT EXISTS auth;
+        CREATE TABLE auth.users (id uuid PRIMARY KEY);
+        CREATE TABLE public.profiles (id uuid PRIMARY KEY, user_type text);
+        CREATE TABLE public.plans (id uuid PRIMARY KEY, name text NOT NULL);
+        CREATE TABLE public.subscriptions (
+          user_id uuid PRIMARY KEY,
+          plan_id uuid,
+          status text,
+          is_lifetime boolean
+        );
+        CREATE TABLE public.payment_events (
+          event_id text PRIMARY KEY,
+          event_type text NOT NULL,
+          payload jsonb NOT NULL,
+          processed_at timestamptz NOT NULL DEFAULT now()
+        );
+      `)
+      await db.query('INSERT INTO auth.users (id) VALUES ($1::uuid)', [userId])
+      await db.query(
+        `INSERT INTO public.profiles (id, user_type) VALUES ($1::uuid, 'user')`,
+        [userId]
+      )
+      await db.query(
+        `INSERT INTO public.payment_events (event_id, event_type, payload)
+         VALUES ($1, 'checkout_session.payment.paid', $2::jsonb)`,
+        [`evt_${paymentId}`, payload]
+      )
+
+      expect(await payerIds(db)).toEqual([userId])
+
+      const detail = reportDetailSql(report).replace(/;\s*$/, '')
+      const listed = await db.query<{ user_id: string; category: string; payment_count: number }>(
+        `SELECT user_id, category, payment_count FROM (${detail}) detail`
+      )
+      expect(listed.rows).toEqual([
+        { user_id: userId, category: 'paying customer', payment_count: 1 },
+      ])
+
+      await db.query(`INSERT INTO public.plans (id, name) VALUES ($1::uuid, 'free')`, [freePlan])
+      await db.query(
+        `INSERT INTO public.subscriptions (user_id, plan_id, status, is_lifetime)
+         VALUES ($1::uuid, $2::uuid, 'active', true)`,
+        [userId, freePlan]
+      )
+      await db.exec(
+        filledRefundScript({
+          userId,
+          paymentId,
+          reason: 'duplicate',
+          operator: 'jerald',
+        })
+      )
+
+      const sub = await db.query<{ is_lifetime: boolean; status: string; plan_id: string }>(
+        `SELECT is_lifetime, status, plan_id::text AS plan_id
+         FROM public.subscriptions WHERE user_id = $1::uuid`,
+        [userId]
+      )
+      expect(sub.rows).toEqual([{ is_lifetime: false, status: 'canceled', plan_id: freePlan }])
+      const refundRow = await db.query<{ event_id: string }>(
+        `SELECT event_id FROM public.payment_events WHERE event_type = 'manual.refund'`
+      )
+      expect(refundRow.rows).toEqual([{ event_id: `manual.refund:${paymentId}` }])
     } finally {
       await db.close()
     }

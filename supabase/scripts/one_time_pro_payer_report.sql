@@ -3,10 +3,14 @@
 --
 -- Same payment rules as that migration: a successful PayMongo payment is a
 -- payment.paid or checkout_session.payment.paid row in public.payment_events
--- (the table the webhook writes). user_id is
--- payload #>> '{data,attributes,data,attributes,metadata,user_id}', the path
--- the founder dock already reads. Refunded payments are left out. A payment
--- counts as refunded when its payload says so, or when another stored event
+-- (the table the webhook writes). payment.paid reads user_id at
+-- payload #>> '{data,attributes,data,attributes,metadata,user_id}'.
+-- checkout_session.payment.paid reads the first present value of
+-- payload #>> '{data,attributes,data,attributes,payments,0,attributes,metadata,user_id}',
+-- payload #>> '{data,attributes,data,attributes,payment_intent,attributes,metadata,user_id}',
+-- payload #>> '{data,attributes,data,attributes,metadata,user_id}'.
+-- Refunded payments are left out. A payment counts as refunded when its
+-- payload says so, or when another stored event
 -- whose type contains "refund" names the same payment id.
 --
 -- Categories (one row per user_id, no email):
@@ -27,7 +31,15 @@ WITH raw_paid AS (
     e.event_id,
     e.event_type,
     e.processed_at,
-    btrim(e.payload #>> '{data,attributes,data,attributes,metadata,user_id}') AS user_id,
+    CASE
+      WHEN e.event_type = 'payment.paid' THEN
+        btrim(e.payload #>> '{data,attributes,data,attributes,metadata,user_id}')
+      ELSE btrim(COALESCE(
+        e.payload #>> '{data,attributes,data,attributes,payments,0,attributes,metadata,user_id}',
+        e.payload #>> '{data,attributes,data,attributes,payment_intent,attributes,metadata,user_id}',
+        e.payload #>> '{data,attributes,data,attributes,metadata,user_id}'
+      ))
+    END AS user_id,
     CASE
       WHEN e.event_type = 'payment.paid' THEN e.payload #>> '{data,attributes,data,id}'
       ELSE COALESCE(
@@ -180,7 +192,15 @@ WITH raw_paid AS (
     e.event_id,
     e.event_type,
     e.processed_at,
-    btrim(e.payload #>> '{data,attributes,data,attributes,metadata,user_id}') AS user_id,
+    CASE
+      WHEN e.event_type = 'payment.paid' THEN
+        btrim(e.payload #>> '{data,attributes,data,attributes,metadata,user_id}')
+      ELSE btrim(COALESCE(
+        e.payload #>> '{data,attributes,data,attributes,payments,0,attributes,metadata,user_id}',
+        e.payload #>> '{data,attributes,data,attributes,payment_intent,attributes,metadata,user_id}',
+        e.payload #>> '{data,attributes,data,attributes,metadata,user_id}'
+      ))
+    END AS user_id,
     CASE
       WHEN e.event_type = 'payment.paid' THEN e.payload #>> '{data,attributes,data,id}'
       ELSE COALESCE(

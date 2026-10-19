@@ -9,7 +9,7 @@ Refunds stay manual. There is no refund webhook. Edit `supabase/scripts/revoke_p
 supabase db query -f supabase/scripts/revoke_pro_after_refund.sql
 ```
 
-The script aborts, and changes nothing, when `payment_events` has no `payment.paid` or `checkout_session.payment.paid` row for that payment id and that user. The user id is `payload #>> '{data,attributes,data,attributes,metadata,user_id}'`. The payment id is `payload #>> '{data,attributes,data,id}'` or, for a checkout session, `payload #>> '{data,attributes,data,attributes,payments,0,id}'`.
+The script aborts, and changes nothing, when `payment_events` has no `payment.paid` or `checkout_session.payment.paid` row for that payment id and that user. A `payment.paid` row matches `payload #>> '{data,attributes,data,id}'` and `payload #>> '{data,attributes,data,attributes,metadata,user_id}'`. A checkout row matches `payload #>> '{data,attributes,data,attributes,payments,0,id}'` and the first present user id on the nested payment, the nested payment intent, or the session metadata.
 
 When that row exists, the script sets that user's subscription to `is_lifetime = false`, the free plan, and `status = 'canceled'`. In the same transaction it inserts `payment_events` with `event_type` `manual.refund` and `event_id` `manual.refund:<payment id>`. The payload stores the payment id at `data.attributes.data.id` and `data.attributes.data.attributes.payment_id`.
 
