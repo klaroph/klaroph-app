@@ -1,11 +1,11 @@
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
 import { assertBudgetEditingAllowed, budgetEditingAllowed as budgetAccessAllowsEditing, type BudgetAccess } from '../domain/budgetLock'
 import { DomainError } from '../domain/errors'
 import { goalProgressAmount } from '../domain/goalTotal'
 import { createId } from '../domain/ids'
 import { assertNonNegativeMoney, assertPositiveMoney, moneyToText } from '../domain/money'
-import { FREE_PLAN_MAX_GOALS, GOAL_CREATION_GRACE, GOAL_GRACE_BLOCK_MESSAGE, GOAL_LIMIT_REACHED } from '../domain/planLimits'
+import { FREE_PLAN_MAX_GOALS, GOAL_CREATION_GRACE, GOAL_GRACE_BLOCK_MESSAGE, GOAL_LIMIT_REACHED, type ResolvedPlanCap } from '../domain/planLimits'
 import { canonicalTimestamp, optionalNote, optionalText, requireIsoDate, requireText } from '../domain/time'
 import { assertNever } from '../sync/assertNever'
 import type { ApplyServerResult, LocalStore } from '../sync/localStore'
@@ -31,6 +31,7 @@ export type KlaroDb = BaseSQLiteDatabase<'sync', RunResult, typeof schema>
 const SESSION_USER_KEY = 'session_user_id'
 const BUDGET_ACCESS_KEY = 'budget_access'
 const GOAL_CREATES_BLOCKED_KEY = 'goal_creates_blocked'
+const KNOWN_PLAN_KEY = 'known_plan'
 const nextRevision = sql`revision + 1`
 
 type ExpenseType = 'needs' | 'wants'
@@ -145,6 +146,23 @@ function mapAllocation(row: typeof incomeAllocations.$inferSelect): SyncRow {
   })
 }
 
+function parseKnownPlan(raw: string): ResolvedPlanCap | null {
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (value == null || typeof value !== 'object' || Array.isArray(value)) return null
+    const record = value as Record<string, unknown>
+    if (typeof record.name !== 'string') return null
+    if (typeof record.maxGoals !== 'number' || !Number.isInteger(record.maxGoals) || record.maxGoals < 0) return null
+    return {
+      name: record.name,
+      maxGoals: record.maxGoals,
+      blocksNewGoals: record.blocksNewGoals === true ? true : undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
 function parseBudgetAccess(raw: string): BudgetAccess | null {
   try {
     const value: unknown = JSON.parse(raw)
@@ -241,6 +259,20 @@ export class KlaroRepository implements LocalStore {
     return this.meta(GOAL_CREATES_BLOCKED_KEY) === 'grace'
   }
 
+  setKnownPlan(plan: ResolvedPlanCap): void {
+    this.setMeta(KNOWN_PLAN_KEY, JSON.stringify({
+      name: plan.name,
+      maxGoals: plan.maxGoals,
+      blocksNewGoals: plan.blocksNewGoals === true,
+    }))
+  }
+
+  knownPlan(): ResolvedPlanCap | null {
+    const raw = this.meta(KNOWN_PLAN_KEY)
+    if (!raw) return null
+    return parseKnownPlan(raw)
+  }
+
   holdUnsyncedGoalCreates(userId: string): number {
     const pending = this.db.select({ id: goals.id }).from(goals).where(and(
       eq(goals.userId, userId),
@@ -265,6 +297,32 @@ export class KlaroRepository implements LocalStore {
       isNull(goals.baseUpdatedAt),
       eq(goals.dirty, false),
     )).run()
+  }
+
+  holdAllocationsForUnsyncedGoals(userId: string): void {
+    const unsynced = this.unsyncedLiveGoalIds(userId)
+    if (unsynced.length === 0) return
+    this.db.update(incomeAllocations).set({ dirty: false }).where(and(
+      eq(incomeAllocations.userId, userId),
+      isNull(incomeAllocations.deletedAt),
+      inArray(incomeAllocations.goalId, unsynced),
+    )).run()
+  }
+
+  releaseAllocationsForGoal(goalId: string): void {
+    this.db.update(incomeAllocations).set({ dirty: true }).where(and(
+      eq(incomeAllocations.goalId, goalId),
+      isNull(incomeAllocations.deletedAt),
+      isNull(incomeAllocations.baseUpdatedAt),
+    )).run()
+  }
+
+  private unsyncedLiveGoalIds(userId: string): string[] {
+    return this.db.select({ id: goals.id }).from(goals).where(and(
+      isNull(goals.deletedAt),
+      isNull(goals.baseUpdatedAt),
+      or(eq(goals.userId, userId), isNull(goals.userId)),
+    )).all().map((row) => row.id)
   }
 
   /** Signed-in writes use the stored clock. No clock yet, and local-only rows, stay editable. */
@@ -857,6 +915,7 @@ export class KlaroRepository implements LocalStore {
   markSynced(table: SyncedTable, id: string, stamp: ServerStamp, revision: number): void {
     const local = this.getRow(table, id)
     if (!local) return
+    const releaseDeposits = table === 'goals' && local.base_updated_at == null && local.deleted_at == null
     const updatedAt = canonicalTimestamp(stamp.updated_at)
     if (local.revision !== revision) {
       this.patchMeta(table, id, {
@@ -865,12 +924,13 @@ export class KlaroRepository implements LocalStore {
         baseUpdatedAt: updatedAt,
         dirty: true,
       })
-      return
+    } else {
+      const serverDeleted = stamp.deleted_at ? canonicalTimestamp(stamp.deleted_at) : null
+      const deletedAt = serverDeleted ?? local.deleted_at
+      const dirty = local.deleted_at != null && serverDeleted == null
+      this.patchMeta(table, id, { updatedAt, deletedAt, baseUpdatedAt: updatedAt, dirty })
     }
-    const serverDeleted = stamp.deleted_at ? canonicalTimestamp(stamp.deleted_at) : null
-    const deletedAt = serverDeleted ?? local.deleted_at
-    const dirty = local.deleted_at != null && serverDeleted == null
-    this.patchMeta(table, id, { updatedAt, deletedAt, baseUpdatedAt: updatedAt, dirty })
+    if (releaseDeposits) this.releaseAllocationsForGoal(id)
   }
 
   discardNeverSynced(table: SyncedTable, id: string): void {

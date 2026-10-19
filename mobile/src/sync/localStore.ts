@@ -1,4 +1,5 @@
 import type { BudgetAccess } from '../domain/budgetLock'
+import type { ResolvedPlanCap } from '../domain/planLimits'
 import type { ServerRow, ServerStamp, SyncRow, SyncedTable, TableCounts } from './model'
 
 export type ApplyServerResult = {
@@ -43,6 +44,9 @@ export interface LocalStore {
   /** Signed-in creates throw while past-due grace blocks new goals. `false` clears it. */
   setGoalCreatesBlocked(blocked: boolean): void
   goalCreatesBlocked(): boolean
+  /** Last plan resolved for this device. Sign-out clears it with the other meta. */
+  setKnownPlan(plan: ResolvedPlanCap): void
+  knownPlan(): ResolvedPlanCap | null
   /**
    * Clears dirty on live goals this account has never synced.
    * They stay on the device and leave the push queue.
@@ -50,4 +54,11 @@ export interface LocalStore {
   holdUnsyncedGoalCreates(userId: string): number
   /** Puts those held creates back on the push queue after grace ends. */
   releaseHeldGoalCreates(userId: string): void
+  /**
+   * Clears dirty on live allocations whose goal has not been acknowledged.
+   * They stay on the device until that goal uploads.
+   */
+  holdAllocationsForUnsyncedGoals(userId: string): void
+  /** Puts a held goal's allocations back on the push queue after the goal uploads. */
+  releaseAllocationsForGoal(goalId: string): void
 }

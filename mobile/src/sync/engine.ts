@@ -60,6 +60,11 @@ const PUSH_PHASES: readonly Phase[] = [
   { tables: PARENT_TABLES, tombstones: true },
 ]
 
+function isNonBlockingSyncError(error: SyncError): boolean {
+  if (error.code === BUDGET_LOCKED || error.code === GOAL_CREATION_GRACE) return true
+  return error.message.includes('Invalid goal in allocations')
+}
+
 function isGoalCreationGrace(error: unknown): boolean {
   if (errorCode(error) === GOAL_CREATION_GRACE) return true
   return error instanceof Error && error.message.includes(GOAL_CREATION_GRACE)
@@ -118,7 +123,7 @@ export class SyncEngine {
   async sync(userId: string, plan?: ResolvedPlanCap): Promise<SyncReport> {
     const report: SyncReport = { pulled: 0, pushed: 0, errors: [], summary: [] }
     const budgetsKept = { n: 0 }
-    let resolved = plan ?? FREE_PLAN_CAP
+    let resolved = plan ?? this.local.knownPlan() ?? FREE_PLAN_CAP
     try {
       resolved = await this.prepareAccount(userId, plan)
     } catch (error) {
@@ -136,6 +141,7 @@ export class SyncEngine {
     }
     if (resolved.blocksNewGoals === true) this.local.holdUnsyncedGoalCreates(userId)
     else this.local.releaseHeldGoalCreates(userId)
+    this.local.holdAllocationsForUnsyncedGoals(userId)
     await this.pushGoalTombstones(userId, report)
     const serverGoals = await this.remote.countLive('goals', userId)
     const message = this.goalLimitMessage(userId, serverGoals, resolved)
@@ -156,7 +162,8 @@ export class SyncEngine {
   /**
    * An omitted plan is the account cap from the caller's subscription row.
    * An explicit plan still wins for the goal cap. The budget clock always comes from the account.
-   * A failed lookup leaves the stored clock unchanged.
+   * A failed lookup leaves the stored clock and the last known plan unchanged.
+   * Sync then keeps that plan. Free is used only when this device has never resolved one.
    */
   private async prepareAccount(userId: string, plan?: ResolvedPlanCap): Promise<ResolvedPlanCap> {
     const account = await this.remote.resolveAccount(userId)
@@ -166,6 +173,7 @@ export class SyncEngine {
       simulateExpired: account.simulateBudgetExpired,
     })
     const resolved = plan ?? account.plan
+    this.local.setKnownPlan(resolved)
     this.local.setGoalCreatesBlocked(resolved.blocksNewGoals === true)
     return resolved
   }
@@ -174,9 +182,9 @@ export class SyncEngine {
     return plan.blocksNewGoals === true ? GOAL_CREATION_GRACE : GOAL_LIMIT_REACHED
   }
 
-  /** Budget-lock and grace notices stay on the report and still allow the echo pull. */
+  /** Budget-lock, grace, and a deposit waiting on its goal stay on the report and still allow the echo pull. */
   private blockingErrorCount(report: SyncReport): number {
-    return report.errors.filter((error) => error.code !== BUDGET_LOCKED && error.code !== GOAL_CREATION_GRACE).length
+    return report.errors.filter((error) => !isNonBlockingSyncError(error)).length
   }
 
   private goalLimitMessage(userId: string, serverGoals: number, plan: ResolvedPlanCap): string | null {
@@ -301,6 +309,10 @@ export class SyncEngine {
       this.local.discardNeverSynced(row.table, row.id)
       return
     }
+    if (this.allocationWaitsForGoal(row)) {
+      this.local.holdAllocationsForUnsyncedGoals(userId)
+      return
+    }
     if (this.budgetPushLocked(row.table)) {
       if (!report.errors.some((error) => error.code === BUDGET_LOCKED)) {
         report.errors.push({
@@ -325,6 +337,10 @@ export class SyncEngine {
       this.local.markSynced(row.table, row.id, stamp, revision)
       report.pushed += 1
     } catch (error) {
+      if (row.table === 'income_allocations' && this.allocationWaitsForGoal(row)) {
+        this.local.holdAllocationsForUnsyncedGoals(userId)
+        return
+      }
       if (row.table === 'goals' && mode === 'insert' && isGoalCreationGrace(error)) {
         this.local.holdUnsyncedGoalCreates(userId)
         if (!report.errors.some((entry) => entry.code === GOAL_CREATION_GRACE)) {
@@ -344,6 +360,14 @@ export class SyncEngine {
         code: errorCode(error),
       })
     }
+  }
+
+  private allocationWaitsForGoal(row: SyncRow): boolean {
+    if (row.table !== 'income_allocations' || row.deleted_at != null) return false
+    const goalId = row.values.goal_id
+    if (!goalId) return false
+    const goal = this.local.getRow('goals', goalId)
+    return goal != null && goal.deleted_at == null && goal.base_updated_at == null
   }
 
   private budgetPushLocked(table: SyncedTable): boolean {

@@ -998,4 +998,123 @@ describe('sync engine', () => {
     expect(repo.getRow('goals', goal.id)?.user_id).toBeNull()
     expect(repo.getRow('expenses', expense.id)?.user_id).toBeNull()
   })
+
+  it('holds a deposit with its unsynced goal and uploads the deposit after the goal', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 0, blocksNewGoals: true },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const goal = repo.createGoal({ userId: USER_A, name: 'Trip', targetAmount: 100, maxGoals: 20 })
+    const deposit = repo.createDeposit({ userId: USER_A, goalId: goal.id, amount: 25 })
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Fare',
+      type: 'needs',
+      amount: 15,
+      date: '2026-02-01',
+    })
+    remote.insert('expenses', {
+      id: 'late-expense',
+      user_id: USER_A,
+      category: 'Late',
+      type: 'needs',
+      amount: 1,
+      date: '2026-02-01',
+      description: null,
+      created_at: '2026-10-19T00:00:00.000Z',
+      updated_at: '2026-10-21T00:00:00.000Z',
+      deleted_at: null,
+    }, true)
+    remote.onAccepted = (table) => {
+      if (table !== 'expenses') return
+      remote.onAccepted = undefined
+      remote.reveal('expenses', 'late-expense')
+    }
+    const blocked = await engine.sync(USER_A)
+    expect(blocked.errors).toEqual([{
+      table: 'goals',
+      message: GOAL_GRACE_BLOCK_MESSAGE,
+      code: 'GOAL_CREATION_GRACE',
+    }])
+    expect(remote.modes.filter((entry) => entry.id === deposit.id)).toHaveLength(0)
+    expect(remote.get('goals', goal.id)).toBeUndefined()
+    expect(repo.getRow('goals', goal.id)?.dirty).toBe(false)
+    expect(repo.getRow('income_allocations', deposit.id)?.dirty).toBe(false)
+    expect(remote.get('expenses', expense.id)?.category).toBe('Fare')
+    expect(repo.getRow('expenses', 'late-expense')?.values.category).toBe('Late')
+
+    repo.updateDeposit(deposit.id, 30)
+    const again = await engine.sync(USER_A)
+    expect(again.errors.map((error) => error.code)).toEqual(['GOAL_CREATION_GRACE'])
+    expect(remote.modes.filter((entry) => entry.id === deposit.id)).toHaveLength(0)
+    expect(repo.getRow('income_allocations', deposit.id)?.dirty).toBe(false)
+    expect(repo.getRow('income_allocations', deposit.id)?.values.amount).toBe('30.00')
+
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const resumed = await engine.sync(USER_A)
+    expect(resumed.errors).toEqual([])
+    const goalPush = remote.modes.findIndex((entry) => entry.id === goal.id && entry.mode === 'insert')
+    const depositPush = remote.modes.findIndex((entry) => entry.id === deposit.id && entry.mode === 'insert')
+    expect(goalPush).toBeGreaterThanOrEqual(0)
+    expect(depositPush).toBeGreaterThan(goalPush)
+    expect(remote.get('income_allocations', deposit.id)?.amount).toBe(30)
+    expect(repo.getRow('income_allocations', deposit.id)?.dirty).toBe(false)
+  })
+
+  it('keeps the last grace plan when the next plan read fails', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 0, blocksNewGoals: true },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const goal = repo.createGoal({ userId: USER_A, name: 'Trip', targetAmount: 100, maxGoals: 20 })
+    const deposit = repo.createDeposit({ userId: USER_A, goalId: goal.id, amount: 25 })
+    await engine.sync(USER_A)
+    expect(repo.knownPlan()).toMatchObject({ name: 'Pro', maxGoals: 0, blocksNewGoals: true })
+
+    remote.resolveError = new DomainError('42501', 'permission denied for table subscriptions')
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Fare',
+      type: 'needs',
+      amount: 15,
+      date: '2026-02-01',
+    })
+    remote.insert('expenses', {
+      id: 'late-expense',
+      user_id: USER_A,
+      category: 'Late',
+      type: 'needs',
+      amount: 1,
+      date: '2026-02-01',
+      description: null,
+      created_at: '2026-10-19T00:00:00.000Z',
+      updated_at: '2026-10-21T00:00:00.000Z',
+      deleted_at: null,
+    }, true)
+    remote.onAccepted = (table) => {
+      if (table !== 'expenses') return
+      remote.onAccepted = undefined
+      remote.reveal('expenses', 'late-expense')
+    }
+    const report = await engine.sync(USER_A)
+    expect(report.errors.map((error) => error.code)).toEqual(['42501', 'GOAL_CREATION_GRACE'])
+    expect(remote.get('goals', goal.id)).toBeUndefined()
+    expect(remote.modes.filter((entry) => entry.id === deposit.id)).toHaveLength(0)
+    expect(repo.getRow('goals', goal.id)?.dirty).toBe(false)
+    expect(repo.getRow('income_allocations', deposit.id)?.dirty).toBe(false)
+    expect(repo.goalCreatesBlocked()).toBe(true)
+    expect(remote.get('expenses', expense.id)?.category).toBe('Fare')
+    expect(repo.getRow('expenses', 'late-expense')?.values.category).toBe('Late')
+  })
 })
