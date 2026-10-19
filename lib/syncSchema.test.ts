@@ -118,11 +118,11 @@ CREATE TABLE public.financial_accounts (
 `
 
 async function applyMigrations(db: PGlite): Promise<void> {
-  await db.exec(readMigration('20261019100000_sync_updated_at_deleted_at.sql'))
-  await db.exec(readMigration('20261019110000_income_allocations_user_id.sql'))
-  await db.exec(readMigration('20261019120000_exclude_soft_deleted_reads.sql'))
-  await db.exec(readMigration('20261019130000_soft_delete_recreate.sql'))
-  await db.exec(readMigration('20261019140000_cascade_soft_delete_allocations.sql'))
+  await db.exec(readMigration('20261019191924_sync_updated_at_deleted_at.sql'))
+  await db.exec(readMigration('20261019191934_income_allocations_user_id.sql'))
+  await db.exec(readMigration('20261019191945_exclude_soft_deleted_reads.sql'))
+  await db.exec(readMigration('20261019191946_soft_delete_recreate.sql'))
+  await db.exec(readMigration('20261019191948_cascade_soft_delete_allocations.sql'))
 }
 
 describe('sync schema migrations', () => {
@@ -307,8 +307,8 @@ describe('sync schema migrations', () => {
       INSERT INTO public.income_allocations (income_record_id, goal_id, amount)
         VALUES ('${INCOME_A}', '${GOAL_B}', 5);
     `)
-    await db.exec(readMigration('20261019100000_sync_updated_at_deleted_at.sql'))
-    await expect(db.exec(readMigration('20261019110000_income_allocations_user_id.sql'))).rejects.toThrow(
+    await db.exec(readMigration('20261019191924_sync_updated_at_deleted_at.sql'))
+    await expect(db.exec(readMigration('20261019191934_income_allocations_user_id.sql'))).rejects.toThrow(
       /does not match the goal owner/
     )
   })
