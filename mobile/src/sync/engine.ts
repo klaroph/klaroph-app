@@ -1,6 +1,13 @@
 import { BUDGET_LOCKED, BUDGET_LOCK_UPGRADE_MESSAGE } from '../domain/budgetLock'
 import { DomainError } from '../domain/errors'
-import { FREE_PLAN_CAP, GOAL_LIMIT_REACHED, goalAdoptionBlockMessage, type ResolvedPlanCap } from '../domain/planLimits'
+import {
+  FREE_PLAN_CAP,
+  GOAL_CREATION_GRACE,
+  GOAL_GRACE_BLOCK_MESSAGE,
+  GOAL_LIMIT_REACHED,
+  goalAdoptionBlockMessage,
+  type ResolvedPlanCap,
+} from '../domain/planLimits'
 import { clampPageSize, DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
 import type { LocalStore } from './localStore'
 import {
@@ -53,6 +60,11 @@ const PUSH_PHASES: readonly Phase[] = [
   { tables: PARENT_TABLES, tombstones: true },
 ]
 
+function isGoalCreationGrace(error: unknown): boolean {
+  if (errorCode(error) === GOAL_CREATION_GRACE) return true
+  return error instanceof Error && error.message.includes(GOAL_CREATION_GRACE)
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Sync failed.'
 }
@@ -99,7 +111,7 @@ export class SyncEngine {
     const resolved = await this.prepareAccount(userId, plan)
     const serverGoals = await this.remote.countLive('goals', userId)
     const message = this.goalLimitMessage(userId, serverGoals, resolved)
-    if (message) throw new DomainError(GOAL_LIMIT_REACHED, message)
+    if (message) throw new DomainError(this.goalBlockCode(resolved), message)
     this.local.adoptUnassigned(userId)
   }
 
@@ -122,11 +134,13 @@ export class SyncEngine {
       report.errors.push({ table: 'expenses', message: errorMessage(error), code: errorCode(error) })
       return this.withSummary(report, budgetsKept.n)
     }
+    if (resolved.blocksNewGoals === true) this.local.holdUnsyncedGoalCreates(userId)
+    else this.local.releaseHeldGoalCreates(userId)
     await this.pushGoalTombstones(userId, report)
     const serverGoals = await this.remote.countLive('goals', userId)
     const message = this.goalLimitMessage(userId, serverGoals, resolved)
     if (message) {
-      report.errors.push({ table: 'goals', message, code: GOAL_LIMIT_REACHED })
+      report.errors.push({ table: 'goals', message, code: this.goalBlockCode(resolved) })
     }
     const blockingBeforePush = this.blockingErrorCount(report)
     await this.pushAll(userId, report, message != null)
@@ -151,12 +165,18 @@ export class SyncEngine {
       accountCreatedAt: account.accountCreatedAt,
       simulateExpired: account.simulateBudgetExpired,
     })
-    return plan ?? account.plan
+    const resolved = plan ?? account.plan
+    this.local.setGoalCreatesBlocked(resolved.blocksNewGoals === true)
+    return resolved
   }
 
-  /** Budget-lock notices stay on the report and still allow the echo pull. */
+  private goalBlockCode(plan: ResolvedPlanCap): string {
+    return plan.blocksNewGoals === true ? GOAL_CREATION_GRACE : GOAL_LIMIT_REACHED
+  }
+
+  /** Budget-lock and grace notices stay on the report and still allow the echo pull. */
   private blockingErrorCount(report: SyncReport): number {
-    return report.errors.filter((error) => error.code !== BUDGET_LOCKED).length
+    return report.errors.filter((error) => error.code !== BUDGET_LOCKED && error.code !== GOAL_CREATION_GRACE).length
   }
 
   private goalLimitMessage(userId: string, serverGoals: number, plan: ResolvedPlanCap): string | null {
@@ -305,6 +325,18 @@ export class SyncEngine {
       this.local.markSynced(row.table, row.id, stamp, revision)
       report.pushed += 1
     } catch (error) {
+      if (row.table === 'goals' && mode === 'insert' && isGoalCreationGrace(error)) {
+        this.local.holdUnsyncedGoalCreates(userId)
+        if (!report.errors.some((entry) => entry.code === GOAL_CREATION_GRACE)) {
+          report.errors.push({
+            table: 'goals',
+            id: row.id,
+            message: GOAL_GRACE_BLOCK_MESSAGE,
+            code: GOAL_CREATION_GRACE,
+          })
+        }
+        return
+      }
       report.errors.push({
         table: row.table,
         id: row.id,

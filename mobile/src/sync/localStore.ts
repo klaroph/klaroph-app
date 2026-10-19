@@ -40,4 +40,14 @@ export interface LocalStore {
    * Local-only writes do not call this; they skip the lock because they have no account.
    */
   budgetEditingAllowed(): boolean
+  /** Signed-in creates throw while past-due grace blocks new goals. `false` clears it. */
+  setGoalCreatesBlocked(blocked: boolean): void
+  goalCreatesBlocked(): boolean
+  /**
+   * Clears dirty on live goals this account has never synced.
+   * They stay on the device and leave the push queue.
+   */
+  holdUnsyncedGoalCreates(userId: string): number
+  /** Puts those held creates back on the push queue after grace ends. */
+  releaseHeldGoalCreates(userId: string): void
 }

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { accountPlanFromSubscription, FREE_PLAN_CAP, goalAdoptionBlockMessage, type PlanConfig, type SubscriptionSnapshot } from './planLimits'
+import {
+  accountPlanFromSubscription,
+  FREE_PLAN_CAP,
+  GOAL_GRACE_BLOCK_MESSAGE,
+  goalAdoptionBlockMessage,
+  type PlanConfig,
+  type SubscriptionSnapshot,
+} from './planLimits'
 
 describe('goal adoption cap', () => {
   it('allows a combined total equal to the plan and blocks one past it', () => {
@@ -86,18 +93,27 @@ describe('subscription goal cap', () => {
     })
   })
 
-  it('keeps the free goal cap during grace and still allows full budgeting', () => {
+  it('sets a new-goal cap of 0 during past-due grace and still allows full budgeting', () => {
     expect(accountPlanFromSubscription(subscription({
       status: 'past_due',
       currentPeriodEnd: '2020-01-01T00:00:00.000Z',
       gracePeriodUntil: '2026-10-22T00:00:00.000Z',
     }), PLANS, NOW)).toEqual({
-      plan: FREE_PLAN_CAP,
+      plan: { name: 'Pro', maxGoals: 0, blocksNewGoals: true },
       fullBudgeting: true,
     })
     expect(accountPlanFromSubscription(subscription({
       status: 'past_due',
       gracePeriodUntil: '2026-10-01T00:00:00.000Z',
-    }), PLANS, NOW).fullBudgeting).toBe(false)
+    }), PLANS, NOW)).toEqual({ plan: FREE_PLAN_CAP, fullBudgeting: false })
+  })
+})
+
+describe('grace new-goal block', () => {
+  const grace = { name: 'Pro', maxGoals: 0, blocksNewGoals: true }
+
+  it('uses the past-due message only when a new goal would be added', () => {
+    expect(goalAdoptionBlockMessage({ plan: grace, localGoals: 1, serverGoals: 4 })).toBe(GOAL_GRACE_BLOCK_MESSAGE)
+    expect(goalAdoptionBlockMessage({ plan: grace, localGoals: 0, serverGoals: 4 })).toBeNull()
   })
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '../domain/budgetLock'
+import { GOAL_GRACE_BLOCK_MESSAGE } from '../domain/planLimits'
 import { isUuid } from '../domain/ids'
 import { FREE_PLAN_MAX_GOALS, GOAL_LIMIT_REACHED } from '../domain/planLimits'
 import { openTestRepository } from './testDb'
@@ -22,6 +23,19 @@ describe('local repository', () => {
     expect(expense.dirty).toBe(true)
     expect(expense.values.amount).toBe('120.50')
     expect(repo.listLive('expenses', null)).toHaveLength(1)
+  })
+
+  it('blocks a signed-in goal create during past-due grace and still allows local-only creates', () => {
+    const { repo } = openTestRepository()
+    repo.setGoalCreatesBlocked(true)
+    expect(() => repo.createGoal({ userId: USER, name: 'Trip', targetAmount: 10, maxGoals: 20 })).toThrow(
+      expect.objectContaining({ code: 'GOAL_CREATION_GRACE', message: GOAL_GRACE_BLOCK_MESSAGE }),
+    )
+    expect(repo.listLive('goals', USER)).toHaveLength(0)
+    const local = repo.createGoal({ userId: null, name: 'Local', targetAmount: 10 })
+    expect(local.user_id).toBeNull()
+    repo.setGoalCreatesBlocked(false)
+    expect(repo.createGoal({ userId: USER, name: 'Trip', targetAmount: 10, maxGoals: 20 }).user_id).toBe(USER)
   })
 
   it('stops local-only goal creation at the free plan max', () => {

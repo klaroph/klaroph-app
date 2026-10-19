@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '../domain/budgetLock'
+import { GOAL_GRACE_BLOCK_MESSAGE } from '../domain/planLimits'
 import { DomainError } from '../domain/errors'
 import { openTestRepository } from '../db/testDb'
 import type { KlaroRepository } from '../db/repository'
@@ -904,5 +905,97 @@ describe('sync engine', () => {
     expect(report.errors).toEqual([])
     expect(remote.get('budget_plans', plan.id)?.category).toBe('Food')
     expect(repo.getRow('budget_plans', plan.id)?.dirty).toBe(false)
+  })
+
+  it('blocks new goals during past-due grace, keeps edits and deletes syncing, and does not retry the create', async () => {
+    const { repo, remote, engine } = harness()
+    const grace = {
+      plan: { name: 'Pro', maxGoals: 0, blocksNewGoals: true },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const existing = repo.createGoal({ userId: USER_A, name: 'Emergency', targetAmount: 10, maxGoals: 20 })
+    await engine.sync(USER_A)
+
+    remote.account = grace
+    const created = repo.createGoal({ userId: USER_A, name: 'Trip', targetAmount: 10, maxGoals: 20 })
+    repo.updateGoal(existing.id, { name: 'Emergency fund' })
+    const blocked = await engine.sync(USER_A)
+    expect(blocked.errors).toEqual([{
+      table: 'goals',
+      message: GOAL_GRACE_BLOCK_MESSAGE,
+      code: 'GOAL_CREATION_GRACE',
+    }])
+    expect(remote.get('goals', created.id)).toBeUndefined()
+    expect(repo.getRow('goals', created.id)?.dirty).toBe(false)
+    expect(repo.getRow('goals', created.id)?.base_updated_at).toBeNull()
+    expect(remote.get('goals', existing.id)?.name).toBe('Emergency fund')
+    expect(remote.modes.filter((entry) => entry.id === existing.id).at(-1)?.mode).toBe('update')
+
+    const pushesAfterBlock = remote.payloads.length
+    const again = await engine.sync(USER_A)
+    expect(again.errors).toEqual([{
+      table: 'goals',
+      message: GOAL_GRACE_BLOCK_MESSAGE,
+      code: 'GOAL_CREATION_GRACE',
+    }])
+    expect(remote.payloads.length).toBe(pushesAfterBlock)
+    expect(remote.modes.filter((entry) => entry.id === created.id)).toHaveLength(0)
+
+    repo.softDeleteGoal(existing.id)
+    const removed = await engine.sync(USER_A)
+    expect(removed.errors.map((error) => error.code)).toEqual(['GOAL_CREATION_GRACE'])
+    expect(remote.get('goals', existing.id)?.deleted_at).toEqual(expect.any(String))
+    expect(remote.modes.filter((entry) => entry.id === existing.id).at(-1)?.mode).toBe('update')
+    expect(remote.get('goals', created.id)).toBeUndefined()
+
+    expect(() => repo.createGoal({ userId: USER_A, name: 'Another', targetAmount: 5, maxGoals: 20 })).toThrow(
+      expect.objectContaining({ code: 'GOAL_CREATION_GRACE', message: GOAL_GRACE_BLOCK_MESSAGE }),
+    )
+    expect(repo.createGoal({ userId: null, name: 'Local', targetAmount: 5 }).user_id).toBeNull()
+
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const resumed = await engine.sync(USER_A)
+    expect(resumed.errors).toEqual([])
+    expect(remote.get('goals', created.id)?.name).toBe('Trip')
+    expect(remote.modes.filter((entry) => entry.id === created.id && entry.mode === 'insert')).toHaveLength(1)
+  })
+
+  it('refuses keep-both while a new local goal is waiting out past-due grace', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 0, blocksNewGoals: true },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const goal = repo.createGoal({ userId: null, name: 'Trip', targetAmount: 10 })
+    const expense = repo.createExpense({
+      userId: null,
+      category: 'Fare',
+      type: 'needs',
+      amount: 15,
+      date: '2026-02-01',
+    })
+    const preview = await engine.preview(USER_A)
+    expect(preview.goalLimitMessage).toBe(GOAL_GRACE_BLOCK_MESSAGE)
+    await expect(engine.adopt(USER_A)).rejects.toMatchObject({
+      code: 'GOAL_CREATION_GRACE',
+      message: GOAL_GRACE_BLOCK_MESSAGE,
+    })
+    expect(repo.getRow('goals', goal.id)?.user_id).toBeNull()
+    expect(repo.getRow('expenses', expense.id)?.user_id).toBeNull()
   })
 })

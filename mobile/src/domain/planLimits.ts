@@ -19,10 +19,20 @@ export const FREE_PLAN_MAX_GOALS = 2
 
 export const GOAL_LIMIT_REACHED = 'GOAL_LIMIT_REACHED'
 
+/** Server trigger `enforce_goal_plan_limit` raises this while a subscription is past due and still in grace. */
+export const GOAL_CREATION_GRACE = 'GOAL_CREATION_GRACE'
+
+export const GOAL_GRACE_BLOCK_MESSAGE = 'Your Pro payment is past due. Update it to add goals.'
+
 /** Cap the caller resolved for this account. Free display copy uses the name "Free". */
 export type ResolvedPlanCap = {
   name: string
   maxGoals: number
+  /**
+   * Past-due grace. `maxGoals` is 0 for new inserts. Edits and deletes of
+   * goals the server has already acknowledged are not capped by this flag.
+   */
+  blocksNewGoals?: boolean
 }
 
 export const FREE_PLAN_CAP: ResolvedPlanCap = {
@@ -89,9 +99,10 @@ function instant(value: string | null): number {
  *
  * Lifetime uses the pro row, then clarity_premium, even when the subscription
  * points at free. An active period on pro or clarity_premium uses that row's
- * `max_goals`. Every other row, including past_due grace, keeps the free
- * default of 2. Grace still keeps `has_budgeting` so budget edits match the
- * web routes. A missing subscription is Free.
+ * `max_goals`. Every other row keeps the free default of 2. Past-due grace
+ * (the trigger raises `GOAL_CREATION_GRACE`) sets the new-goal cap to 0 and
+ * still keeps `has_budgeting` so budget edits match the web routes.
+ * A missing subscription is Free.
  */
 export function accountPlanFromSubscription(
   subscription: SubscriptionSnapshot | null,
@@ -138,7 +149,10 @@ export function accountPlanFromSubscription(
     && PREMIUM_PLAN_NAMES.has(planName(linked))
 
   if (inGrace) {
-    return { plan: FREE_PLAN_CAP, fullBudgeting: fullBudgeting(linked, true) }
+    return {
+      plan: { name: 'Pro', maxGoals: 0, blocksNewGoals: true },
+      fullBudgeting: fullBudgeting(linked, true),
+    }
   }
 
   return { plan: FREE_PLAN_CAP, fullBudgeting: false }
@@ -153,6 +167,9 @@ export function goalAdoptionBlockMessage(input: {
   localGoals: number
   serverGoals: number
 }): string | null {
+  if (input.plan.blocksNewGoals) {
+    return input.localGoals > 0 ? GOAL_GRACE_BLOCK_MESSAGE : null
+  }
   if (input.localGoals + input.serverGoals <= input.plan.maxGoals) return null
   return `${input.plan.name} allows ${input.plan.maxGoals} goals; you have ${input.localGoals} here and ${input.serverGoals} in your account. Remove some to continue.`
 }

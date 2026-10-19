@@ -5,7 +5,7 @@ import { DomainError } from '../domain/errors'
 import { goalProgressAmount } from '../domain/goalTotal'
 import { createId } from '../domain/ids'
 import { assertNonNegativeMoney, assertPositiveMoney, moneyToText } from '../domain/money'
-import { FREE_PLAN_MAX_GOALS, GOAL_LIMIT_REACHED } from '../domain/planLimits'
+import { FREE_PLAN_MAX_GOALS, GOAL_CREATION_GRACE, GOAL_GRACE_BLOCK_MESSAGE, GOAL_LIMIT_REACHED } from '../domain/planLimits'
 import { canonicalTimestamp, optionalNote, optionalText, requireIsoDate, requireText } from '../domain/time'
 import { assertNever } from '../sync/assertNever'
 import type { ApplyServerResult, LocalStore } from '../sync/localStore'
@@ -30,6 +30,7 @@ export type KlaroDb = BaseSQLiteDatabase<'sync', RunResult, typeof schema>
 
 const SESSION_USER_KEY = 'session_user_id'
 const BUDGET_ACCESS_KEY = 'budget_access'
+const GOAL_CREATES_BLOCKED_KEY = 'goal_creates_blocked'
 const nextRevision = sql`revision + 1`
 
 type ExpenseType = 'needs' | 'wants'
@@ -230,6 +231,40 @@ export class KlaroRepository implements LocalStore {
     const raw = this.meta(BUDGET_ACCESS_KEY)
     if (!raw) return null
     return parseBudgetAccess(raw)
+  }
+
+  setGoalCreatesBlocked(blocked: boolean): void {
+    this.setMeta(GOAL_CREATES_BLOCKED_KEY, blocked ? 'grace' : null)
+  }
+
+  goalCreatesBlocked(): boolean {
+    return this.meta(GOAL_CREATES_BLOCKED_KEY) === 'grace'
+  }
+
+  holdUnsyncedGoalCreates(userId: string): number {
+    const pending = this.db.select({ id: goals.id }).from(goals).where(and(
+      eq(goals.userId, userId),
+      isNull(goals.deletedAt),
+      isNull(goals.baseUpdatedAt),
+      eq(goals.dirty, true),
+    )).all()
+    if (pending.length === 0) return 0
+    this.db.update(goals).set({ dirty: false }).where(and(
+      eq(goals.userId, userId),
+      isNull(goals.deletedAt),
+      isNull(goals.baseUpdatedAt),
+      eq(goals.dirty, true),
+    )).run()
+    return pending.length
+  }
+
+  releaseHeldGoalCreates(userId: string): void {
+    this.db.update(goals).set({ dirty: true }).where(and(
+      eq(goals.userId, userId),
+      isNull(goals.deletedAt),
+      isNull(goals.baseUpdatedAt),
+      eq(goals.dirty, false),
+    )).run()
   }
 
   /** Signed-in writes use the stored clock. No clock yet, and local-only rows, stay editable. */
@@ -503,6 +538,9 @@ export class KlaroRepository implements LocalStore {
     pinnedAt?: string | null
     maxGoals?: number
   }): SyncRow {
+    if (input.userId != null && this.goalCreatesBlocked()) {
+      throw new DomainError(GOAL_CREATION_GRACE, GOAL_GRACE_BLOCK_MESSAGE)
+    }
     const maxGoals = input.userId == null ? FREE_PLAN_MAX_GOALS : input.maxGoals ?? FREE_PLAN_MAX_GOALS
     if (this.countGoalsTowardLimit(input.userId) >= maxGoals) {
       throw new DomainError(GOAL_LIMIT_REACHED, 'Goal count is already at the plan max_goals.')
