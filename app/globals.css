@@ -3535,6 +3535,30 @@ html { scroll-behavior: smooth; }
   .upgrade-modal-actions .klaro-upgrade-cta {
     flex: 1 1 100%;
   }
+  /* Auto columns were wider than a 360px modal and clipped Pro. Fixed tracks keep Free, Pro, and the CTA inside. */
+  .upgrade-modal-layout,
+  .upgrade-modal-table-wrap,
+  .upgrade-modal-checkout {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .upgrade-modal-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  .upgrade-modal-th-feature { width: 38%; }
+  .upgrade-modal-th-free { width: 28%; }
+  .upgrade-modal-th-pro { width: 34%; }
+  .upgrade-modal-th-feature,
+  .upgrade-modal-th-free,
+  .upgrade-modal-th-pro,
+  .upgrade-modal-feature,
+  .upgrade-modal-free,
+  .upgrade-modal-pro,
+  .upgrade-modal-section {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
 }
 
 /* Final CTA */
