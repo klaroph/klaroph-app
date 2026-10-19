@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { PGlite } from '@electric-sql/pglite'
 import { describe, expect, it } from 'vitest'
 
 function readText(file: string): string {
@@ -11,26 +12,29 @@ const check = readText('supabase/scripts/lifetime_pro_entitlement_check.sql')
 const refund = readText('supabase/scripts/revoke_pro_after_refund.sql')
 const grant = readText('supabase/migrations/20261019000002_grant_lifetime_to_verified_payers.sql')
 
-function jsonText(payload: unknown, path: string): string | null {
-  const keys = path.slice(1, -1).split(',')
-  let current: unknown = payload
-  for (const key of keys) {
-    if (current == null || typeof current !== 'object') return null
-    current = (current as Record<string, unknown>)[key]
-  }
-  return typeof current === 'string' && current.trim() ? current.trim() : null
+function sqlLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
 }
 
-/** Same payment ids migration B reads from an event whose type contains "refund". */
-function refundedPaymentIds(eventType: string, payload: unknown): string[] {
-  if (!eventType.toLowerCase().includes('refund')) return []
-  return [
-    '{data,attributes,data,id}',
-    '{data,attributes,data,attributes,payment_id}',
-    '{data,attributes,data,attributes,payment,id}',
-  ]
-    .map((path) => jsonText(payload, path))
-    .filter((id): id is string => id != null)
+/** INSERT from the refund script, with the four operator values filled in. */
+function refundInsertSql(paymentId: string, reason: string, operator: string): string {
+  const start = refund.indexOf('INSERT INTO public.payment_events')
+  const end = refund.indexOf(';', start)
+  if (start < 0 || end < 0) throw new Error('refund script insert missing')
+  return refund
+    .slice(start, end + 1)
+    .replaceAll('v_payment_id', sqlLiteral(paymentId))
+    .replaceAll('v_reason', sqlLiteral(reason))
+    .replaceAll('v_operator', sqlLiteral(operator))
+}
+
+/** Payer query from migration B, stopped before the grant write. */
+function migrationBPayerSql(sql: string): string {
+  const start = sql.indexOf('WITH raw_paid AS (')
+  const end = sql.indexOf('pro_plan AS (')
+  if (start < 0 || end < start) throw new Error('migration B payer query missing')
+  const body = sql.slice(start, end).trim().replace(/,\s*$/, '')
+  return `${body}\nSELECT user_id FROM payers`
 }
 
 describe('lifetime Pro database checks', () => {
@@ -56,35 +60,91 @@ describe('lifetime Pro database checks', () => {
 })
 
 describe('manual refund exclusion', () => {
-  it('writes a payment_events row migration B would treat as a refund of that payment', () => {
-    const paymentId = 'pay_123'
-    const payload = {
-      data: {
-        attributes: {
-          data: {
-            id: paymentId,
-            attributes: {
-              payment_id: paymentId,
-              reason: 'duplicate',
-              operator: 'jerald',
+  it('drops a payer from migration B after the refund script writes their payment id', async () => {
+    const refundedUser = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+    const keptUser = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+    const refundedPayment = 'pay_refunded'
+    const keptPayment = 'pay_kept'
+    const db = new PGlite()
+
+    try {
+      await db.exec(`
+        CREATE SCHEMA IF NOT EXISTS auth;
+        CREATE TABLE auth.users (id uuid PRIMARY KEY);
+        CREATE TABLE public.profiles (
+          id uuid PRIMARY KEY,
+          user_type text
+        );
+        CREATE TABLE public.payment_events (
+          event_id text PRIMARY KEY,
+          event_type text NOT NULL,
+          payload jsonb NOT NULL,
+          processed_at timestamptz NOT NULL DEFAULT now()
+        );
+      `)
+
+      for (const userId of [refundedUser, keptUser]) {
+        await db.query('INSERT INTO auth.users (id) VALUES ($1::uuid)', [userId])
+        await db.query(
+          `INSERT INTO public.profiles (id, user_type) VALUES ($1::uuid, 'user')`,
+          [userId]
+        )
+      }
+      await insertPaid(db, refundedUser, refundedPayment)
+      await insertPaid(db, keptUser, keptPayment)
+
+      const before = await payerIds(db)
+      expect(before).toEqual([refundedUser, keptUser].sort())
+
+      await db.exec(refundInsertSql(refundedPayment, 'duplicate charge', 'jerald'))
+
+      const written = await db.query<{
+        event_type: string
+        at_data_id: string | null
+      }>(`
+        SELECT event_type,
+               payload #>> '{data,attributes,data,id}' AS at_data_id
+        FROM public.payment_events
+        WHERE event_id = 'manual.refund:' || $1
+      `, [refundedPayment])
+      expect(written.rows).toEqual([
+        { event_type: 'manual.refund', at_data_id: refundedPayment },
+      ])
+
+      const after = await payerIds(db)
+      expect(after).toEqual([keptUser])
+    } finally {
+      await db.close()
+    }
+  })
+})
+
+async function insertPaid(db: PGlite, userId: string, paymentId: string): Promise<void> {
+  await db.query(
+    `INSERT INTO public.payment_events (event_id, event_type, payload)
+     VALUES ($1, 'payment.paid', $2::jsonb)`,
+    [
+      `evt_${paymentId}`,
+      {
+        data: {
+          attributes: {
+            data: {
+              id: paymentId,
+              attributes: {
+                amount: 99900,
+                currency: 'PHP',
+                status: 'paid',
+                metadata: { user_id: userId },
+              },
             },
           },
         },
       },
-    }
-    expect(refund).toContain("'manual.refund'")
-    expect(refund).toContain("'manual.refund:' || v_payment_id")
-    expect(refund).toContain('is_lifetime = false')
-    expect(refund).toContain("status = 'canceled'")
-    expect(refund).toContain("name = 'free'")
-    expect(grant).toContain("event_type ILIKE '%refund%'")
-    expect(grant).toContain("payload #>> '{data,attributes,data,id}'")
-    expect(grant).toContain("payload #>> '{data,attributes,data,attributes,payment_id}'")
+    ]
+  )
+}
 
-    const ids = refundedPaymentIds('manual.refund', payload)
-    expect(ids).toContain(paymentId)
-    const paidId = paymentId
-    const excluded = ids.includes(paidId)
-    expect(excluded).toBe(true)
-  })
-})
+async function payerIds(db: PGlite): Promise<string[]> {
+  const result = await db.query<{ user_id: string }>(migrationBPayerSql(grant))
+  return result.rows.map((row) => row.user_id).sort()
+}
