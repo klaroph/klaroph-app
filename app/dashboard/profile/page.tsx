@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { ProfileWithComputed } from '@/types/profile'
+import { getBrowserUser } from '@/lib/supabaseClient'
+import { displayName as resolveDisplayName } from '@/lib/displayName'
 import {
   INCOME_RANGES,
   RISK_COMFORT_OPTIONS,
@@ -32,6 +34,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [accountEmail, setAccountEmail] = useState<string | null>(null)
 
   const [form, setForm] = useState<ProfileState>({
     nickname: '',
@@ -78,6 +81,20 @@ export default function ProfilePage() {
     load()
   }, [load])
 
+  useEffect(() => {
+    let cancelled = false
+    getBrowserUser()
+      .then(({ data: userData }) => {
+        if (!cancelled) setAccountEmail(userData.user?.email ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setAccountEmail(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const save = async (updates: Partial<ProfileState>) => {
     setSaving(true)
     setError(null)
@@ -121,10 +138,14 @@ export default function ProfilePage() {
     )
   }
 
-  const displayName =
-    (form.nickname && form.nickname.trim()) ||
-    data?.profile?.full_name ||
-    'You'
+  const displayName = resolveDisplayName(
+    {
+      nickname: form.nickname,
+      fullName: data?.profile?.full_name,
+      email: accountEmail,
+    },
+    'You',
+  )
   const isComplete = (data?.profile_completion_percentage ?? 0) >= 100
 
   return (

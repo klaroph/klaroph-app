@@ -2,6 +2,12 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import OnboardingFlow from './OnboardingFlow'
 
+function metadataFullName(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') return null
+  const fullName = (metadata as { full_name?: unknown }).full_name
+  return typeof fullName === 'string' ? fullName : null
+}
+
 export const metadata = {
   title: 'Get started — KlaroPH',
   description: 'Complete your profile to get the most out of KlaroPH.',
@@ -16,7 +22,7 @@ export default async function OnboardingPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('onboarding_completed')
+    .select('onboarding_completed, full_name, nickname')
     .eq('id', session.user.id)
     .single()
 
@@ -24,9 +30,13 @@ export default async function OnboardingPage() {
     redirect('/dashboard')
   }
 
+  const profileName = profile?.full_name ?? null
+  const googleName = metadataFullName(session.user.user_metadata)
+  const fullName = profileName && !profileName.includes('@') ? profileName : (googleName ?? profileName)
+
   return (
     <div className="onboarding-page">
-      <OnboardingFlow />
+      <OnboardingFlow nickname={profile?.nickname ?? null} fullName={fullName} email={session.user.email ?? null} />
     </div>
   )
 }

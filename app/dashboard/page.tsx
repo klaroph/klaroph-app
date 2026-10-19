@@ -33,6 +33,7 @@ import { deriveMonthInsights } from '@/lib/dashboardInsight'
 import { computeMonthMoneySummary } from '@/lib/monthMoneySummary'
 import { useDashboardMonthMoney } from '@/hooks/useDashboardMonthMoney'
 import { useDashboardProfile } from '@/contexts/DashboardProfileContext'
+import { displayName as resolveDisplayName } from '@/lib/displayName'
 import { useDashboardActions } from './DashboardLayoutClient'
 
 const ManageGoalsModal = dynamic(
@@ -77,6 +78,7 @@ export default function DashboardPage() {
   }, [])
   const [goals, setGoals] = useState<GoalWithSaved[]>([])
   const [loading, setLoading] = useState(false)
+  const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [manageGoalsOpen, setManageGoalsOpen] = useState(false)
   const [addGoalOpen, setAddGoalOpen] = useState(false)
   const [aiInsight, setAiInsight] = useState<{
@@ -137,6 +139,7 @@ export default function DashboardPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await getBrowserUser()
+    setAccountEmail(user?.email ?? null)
     if (!user) {
       setGoals([])
       setLoading(false)
@@ -189,10 +192,15 @@ export default function DashboardPage() {
   const maxGoals = features?.max_goals ?? PLAN_LIMITS.free.maxGoals
   const { openAddIncome, openAddExpense } = useDashboardActions()
   const profile = useDashboardProfile()
-  const displayName =
-    profile?.profile?.nickname?.trim() ||
-    profile?.profile?.full_name?.trim()?.split(/\s+/)[0] ||
-    'there'
+  const greetingName = resolveDisplayName(
+    {
+      nickname: profile?.profile?.nickname,
+      fullName: profile?.profile?.full_name,
+      email: accountEmail,
+    },
+    'there',
+    { firstName: true },
+  )
   const hour = new Date().getHours()
   const greeting =
     hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
@@ -244,7 +252,7 @@ export default function DashboardPage() {
         <div className="min-w-0 flex-1 max-lg:w-full">
           <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
             <h2 className="dashboard-greeting-title max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0">
-              {greeting}, {displayName}!
+              {greeting}, {greetingName}!
             </h2>
             <DashboardMobileHeaderLogo />
           </div>

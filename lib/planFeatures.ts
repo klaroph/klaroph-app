@@ -37,10 +37,10 @@ export const FREE_PLAN_TOOLS = [
 
 /** Pro core features. premium: true = show premium indicator (badge/icon) */
 export const PRO_PLAN_FEATURES: ReadonlyArray<{ label: string; premium: boolean }> = [
-  { label: '20 Active Goals', premium: true },
+  { label: '20 Goals', premium: true },
   { label: 'Financial Health Insights', premium: true },
   { label: 'Monthly Budgeting', premium: true },
-  { label: 'Unlimited History & Insights', premium: true },
+  { label: 'Unlimited History', premium: true },
   { label: 'Unlimited CSV import (Income and Expenses)', premium: true },
   { label: 'Advanced Charts', premium: true },
   { label: ASK_KLARO_PRO_LABEL, premium: true },

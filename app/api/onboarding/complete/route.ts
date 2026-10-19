@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { toLocalDateString } from '@/lib/format'
+import { NICKNAME_MAX_LENGTH } from '@/lib/displayName'
 
 const VALID_FINANCIAL_STAGES = ['starter', 'stabilizing', 'building', 'scaling'] as const
 const VALID_RISK_COMFORT = ['low', 'medium', 'high'] as const
@@ -76,22 +77,27 @@ export async function POST(request: Request) {
       )
     }
 
+    const nickname =
+      typeof body?.nickname === 'string' ? body.nickname.trim().slice(0, NICKNAME_MAX_LENGTH) : ''
+    const profileUpdate = {
+      monthly_income_range,
+      monthly_income,
+      income_frequency,
+      primary_goal_category,
+      savings_confidence,
+      savings_percent,
+      financial_stage,
+      risk_comfort,
+      motivation_type,
+      dream_statement,
+      onboarding_completed: true,
+      profile_completion_percentage: 100,
+      ...(nickname ? { nickname } : {}),
+    }
+
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .update({
-        monthly_income_range,
-        monthly_income,
-        income_frequency,
-        primary_goal_category,
-        savings_confidence,
-        savings_percent,
-        financial_stage,
-        risk_comfort,
-        motivation_type,
-        dream_statement,
-        onboarding_completed: true,
-        profile_completion_percentage: 100,
-      })
+      .update(profileUpdate)
       .eq('id', user.id)
 
     if (profileError) {

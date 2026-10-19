@@ -2,8 +2,8 @@
  * KlaroPH feature entitlements — single source of truth for Free vs Pro logic.
  * All backend access rules and feature flags must align with this module and planFeatures (display).
  *
- * FREE: 2 goals, 90-day analytics, basic charts, no export, budgeting only in first 30 days.
- * PRO:  20 goals, unlimited history, advanced charts, export, full budgeting always.
+ * FREE: 2 goals, 90-day analytics, basic charts, CSV export, budgeting only in first 30 days.
+ * PRO:  20 goals, unlimited history, advanced charts, CSV export, full budgeting always.
  *
  * Paid Pro arrives as a resolved plan from is_lifetime. This module does not read a period end.
  * Complimentary access stays time-limited in subscription state, before the plan is resolved.

@@ -5,6 +5,7 @@
  */
 
 import { Resend } from 'resend'
+import { displayName } from '@/lib/displayName'
 import { getResendFrom } from '@/lib/resendFrom'
 
 const SUBJECT = 'Welcome to KlaroPH — your money, made clearer'
@@ -18,9 +19,8 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function buildWelcomeHtml(firstName: string | null, logoUrl: string): string {
-  const tokens = firstName?.trim()?.split(/\s+/).filter(Boolean)
-  const first = tokens?.[0] ?? null
+function buildWelcomeHtml(firstName: string | null, email: string, logoUrl: string): string {
+  const first = displayName({ nickname: firstName, fullName: firstName, email }, '', { firstName: true })
   const greeting = first ? `Hi ${escapeHtml(first)},` : 'Hi there,'
   return `<!DOCTYPE html>
 <html lang="en">
@@ -71,7 +71,7 @@ export async function sendWelcomeEmail(
   if (!apiKey?.trim()) return false
 
   const logoUrl = 'https://klaroph.com/logo-klaroph-blue.png'
-  const html = buildWelcomeHtml(firstName, logoUrl)
+  const html = buildWelcomeHtml(firstName, to, logoUrl)
 
   try {
     const resend = new Resend(apiKey)

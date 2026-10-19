@@ -859,6 +859,11 @@
   text-align: center;
 }
 
+.onb-welcome .onb-field {
+  width: 100%;
+  text-align: left;
+}
+
 .onb-eyebrow {
   margin: 14px 0 6px;
   font-size: 13px;
