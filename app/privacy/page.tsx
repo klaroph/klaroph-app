@@ -112,8 +112,8 @@ export default function PrivacyPage() {
             </li>
           </ul>
           <p>
-            On Google&apos;s free Gemini tier, Google may use the prompts and replies from that tier to improve its
-            products.
+            KlaroPH currently uses Google&apos;s free Gemini tier, so Google may use the prompts and replies to
+            improve its products.
           </p>
         </section>
 

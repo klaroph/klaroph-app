@@ -105,7 +105,8 @@ describe('customer-facing Pro copy', () => {
     expect(terms).toContain('Resend sends KlaroPH email')
     expect(terms).toContain('Deleting your account ends Pro')
     expect(privacy).toContain('Google Gemini')
-    expect(privacy).toContain('free Gemini tier')
-    expect(privacy).toContain('improve its products')
+    expect(privacy).toContain(
+      'KlaroPH currently uses Google&apos;s free Gemini tier, so Google may use the prompts and replies to improve its products.'
+    )
   })
 })

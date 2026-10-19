@@ -35,7 +35,6 @@ export function ToolsPricingPro() {
   return (
     <aside className="tools-pricing-col tools-pricing-col-pro">
       <div className="landing-plan-card landing-plan-pro">
-        <span className="landing-plan-badge">Most Popular</span>
         <h3>PRO PLAN</h3>
         <p className="landing-plan-price">{formatPlanPeso(PRO_ONE_TIME_PESOS)}</p>
         <p className="landing-plan-value">{PRO_ONE_TIME_LINE}</p>
