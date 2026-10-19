@@ -4,7 +4,16 @@
 
 export const KLARO_PROMO_KEY = 'klaroPromo'
 
-export type KlaroPromoVoucher = { type: 'percentage' | 'fixed'; value: number }
+export type KlaroPromoVoucher = {
+  type: 'percentage' | 'fixed'
+  value: number
+  /**
+   * Server validate result. `lifetime` is a fixed final price.
+   * Undefined means a legacy stored promo that should be validated again.
+   */
+  offer?: 'lifetime' | null
+  finalPesos?: number | null
+}
 
 export type KlaroPromoBundle = {
   promoCode: string
@@ -33,9 +42,18 @@ export function readKlaroPromo(): KlaroPromoBundle | null {
     if (pr.type !== 'percentage' && pr.type !== 'fixed') return null
     const value = Number(pr.value)
     if (!Number.isFinite(value) || value < 0) return null
+
+    const hasOffer = Object.prototype.hasOwnProperty.call(pr, 'offer')
+    const offer = pr.offer === 'lifetime' ? 'lifetime' : null
+    const finalPesosRaw = Number(pr.finalPesos)
+    const finalPesos =
+      offer === 'lifetime' && Number.isFinite(finalPesosRaw) && finalPesosRaw > 0 ? finalPesosRaw : null
+
     return {
       promoCode: code,
-      promo: { type: pr.type, value },
+      promo: hasOffer
+        ? { type: pr.type, value, offer, finalPesos }
+        : { type: pr.type, value },
     }
   } catch {
     return null
@@ -46,13 +64,26 @@ export function readKlaroPromoCode(): string | null {
   return readKlaroPromo()?.promoCode ?? null
 }
 
+function storedPromo(promo: KlaroPromoVoucher) {
+  const stored: {
+    type: KlaroPromoVoucher['type']
+    value: number
+    offer?: 'lifetime' | null
+    finalPesos?: number | null
+  } = { type: promo.type, value: promo.value }
+  if (promo.offer === undefined) return stored
+  stored.offer = promo.offer === 'lifetime' ? 'lifetime' : null
+  stored.finalPesos = promo.offer === 'lifetime' ? promo.finalPesos ?? null : null
+  return stored
+}
+
 export function writeKlaroPromo(bundle: KlaroPromoBundle) {
   if (typeof window === 'undefined') return
   localStorage.setItem(
     KLARO_PROMO_KEY,
     JSON.stringify({
       promoCode: bundle.promoCode.trim().toUpperCase(),
-      promo: bundle.promo,
+      promo: bundle.promo ? storedPromo(bundle.promo) : null,
     })
   )
 }

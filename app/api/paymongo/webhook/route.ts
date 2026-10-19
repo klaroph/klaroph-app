@@ -4,6 +4,9 @@
  * - checkout_session.payment.paid (redirect checkout)
  * - payment.paid (QRPH / payment intent flow) — see https://developers.paymongo.com/docs/qr-ph-api
  * - payment.failed (founder payment-failed alert only; no access changes)
+ *
+ * subscription.* and invoice.* events are acknowledged and stored on payment_events.
+ * They do not change subscription rows.
  */
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -12,7 +15,7 @@ import { authorizePaymongoWebhook } from '@/lib/paymongoWebhookSecurity'
 import { runClaimedWebhookHandler } from '@/lib/paymentEventIdempotency'
 import { sendPremiumConfirmationIfNew } from '@/lib/premiumConfirmationEmail'
 import { tryIncrementVoucherUsedCountFromMetadata } from '@/lib/voucherWebhookIncrement'
-import { FOUNDER_PROMO_CODE } from '@/lib/checkoutPromo'
+import { verifyPaidGrant, type CheckoutGrant } from '@/lib/checkoutGrant'
 import { extractPaidAmount } from '@/lib/email/proEmails'
 import { notifyFounderOfPayment } from '@/lib/founder/alertsServer'
 
@@ -94,24 +97,13 @@ export async function POST(request: Request) {
             break
 
           case 'subscription.activated':
-            await handleSubscriptionActivated(event)
-            break
-
           case 'subscription.updated':
-            await handleSubscriptionUpdated(event)
-            break
-
           case 'subscription.past_due':
           case 'subscription.unpaid':
-            await handleSubscriptionProblem(event)
-            break
-
           case 'subscription.invoice.paid':
-            await handleInvoicePaid(event)
-            break
-
           case 'subscription.invoice.payment_failed':
-            await handleInvoiceFailed(event)
+          case 'invoice.payment_failed':
+            acknowledgeDeadSubscriptionEvent(event)
             break
 
           case 'payment.paid':
@@ -143,45 +135,117 @@ export async function POST(request: Request) {
   }
 }
 
-// ==========================================================================
-// Event Handlers
-// ==========================================================================
+function acknowledgeDeadSubscriptionEvent(event: WebhookEvent) {
+  console.log(
+    '[Webhook] Acknowledged unused subscription/invoice event type=',
+    event.data.attributes.type,
+    'event_id=',
+    event.data.id
+  )
+}
 
-async function handleCheckoutPaid(event: WebhookEvent) {
-  const sessionData = event.data.attributes.data
-  const checkoutSessionId = sessionData.id
-  const attrs = sessionData.attributes
-  let metadata = (attrs.metadata ?? {}) as Record<string, string>
-  let userId = metadata.user_id
+function paidCentavosOf(payload: unknown): number | null {
+  const amount = extractPaidAmount(payload)
+  if (!amount || amount.currency.toUpperCase() !== 'PHP') return null
+  if (!Number.isInteger(amount.centavos) || amount.centavos <= 0) return null
+  return amount.centavos
+}
 
-  console.log('[Webhook] handleCheckoutPaid session_id=', checkoutSessionId, 'data.type=', (sessionData as { type?: string }).type, 'metadata_from_payload=', !!attrs.metadata, 'user_id_from_payload=', userId ?? '(none)')
+function paidCentavosFromAttributes(attributes: Record<string, unknown> | undefined): number | null {
+  if (!attributes) return null
+  return paidCentavosOf({
+    data: { attributes: { data: { attributes } } },
+  })
+}
 
-  // Webhook payload does not include metadata; fetch session from PayMongo API
-  if (!userId) {
-    try {
-      const session = await retrieveCheckoutSession(checkoutSessionId)
-      const apiMetadata = (session.data.attributes.metadata ?? {}) as Record<string, string>
-      userId = apiMetadata.user_id
-      metadata = apiMetadata
-      console.log('[Webhook] After fetch session: user_id=', userId ?? '(none)', 'metadata_keys=', Object.keys(apiMetadata).join(','))
-    } catch (err) {
-      console.error('[Webhook] Failed to fetch checkout session:', err)
-      throw err
+function withholdGrant(event: WebhookEvent, reason: string) {
+  console.warn(
+    '[Webhook] Grant withheld type=',
+    event.data.attributes.type,
+    'event_id=',
+    event.data.id,
+    'reason=',
+    reason
+  )
+}
+
+async function alertFounderOfPaid(event: WebhookEvent, userId: string | null, planLabel: string | null) {
+  try {
+    await notifyFounderOfPayment({
+      kind: 'paid',
+      eventId: event.data.id,
+      livemode: event.data.attributes.livemode === true,
+      userId,
+      planLabel,
+      amount: extractPaidAmount(event),
+      reason: null,
+      occurredAt: eventTime(event),
+    })
+  } catch {
+    // Founder alert failure must never block payment fulfillment
+  }
+}
+
+function planLabelFor(grant: CheckoutGrant): string {
+  switch (grant) {
+    case 'lifetime':
+      return 'Lifetime'
+    case 'annual':
+      return 'Annual'
+    case 'monthly':
+      return 'Monthly'
+    default: {
+      const unexpected: never = grant
+      return unexpected
     }
   }
+}
 
-  if (!userId) {
-    console.error('[Webhook] Checkout session metadata missing after fetch session_id=', checkoutSessionId)
-    console.log('[Webhook] Checkout session metadata missing after fetch — throwing error')
-    throw new Error('Checkout session metadata missing: user_id')
+async function existingRowIsLifetime(userId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('subscriptions')
+    .select('is_lifetime')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) {
+    console.error('[Webhook] subscription lookup failed')
+    throw error
+  }
+  return (data as { is_lifetime?: boolean | null } | null)?.is_lifetime === true
+}
+
+/**
+ * Grant Pro only when the PayMongo paid amount equals the server-expected amount
+ * for the server-set grant. A mismatch or bad metadata grants nothing and stays
+ * claimed so PayMongo does not retry.
+ */
+async function fulfillPaidPro(params: {
+  event: WebhookEvent
+  userId: string
+  metadata: Record<string, string>
+  paidCentavos: number | null
+  checkoutSessionId: string | null
+  notifyOnSuccess: boolean
+}) {
+  const decision = verifyPaidGrant(params.metadata, params.paidCentavos)
+  if (!decision.ok) {
+    withholdGrant(params.event, decision.reason)
+    await alertFounderOfPaid(params.event, params.userId, null)
+    return
   }
 
-  const planType = (metadata.plan_type === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual'
-  const promoCode = String(metadata.promoCode ?? metadata.promo_code ?? '').trim().toUpperCase()
-  const isFounderLifetime = promoCode === FOUNDER_PROMO_CODE
-  console.log('[Webhook] Subscription insert attempt user_id=', userId, 'plan_type=', planType)
+  const isLifetimeGrant = decision.grant === 'lifetime'
+  if ((await existingRowIsLifetime(params.userId)) && !isLifetimeGrant) {
+    console.log(
+      '[Webhook] Lifetime row preserved type=',
+      params.event.data.attributes.type,
+      'event_id=',
+      params.event.data.id
+    )
+    await alertFounderOfPaid(params.event, params.userId, 'Lifetime')
+    return
+  }
 
-  // Assign single premium plan (pro) only.
   const { data: premiumPlan } = await supabaseAdmin
     .from('plans')
     .select('id')
@@ -195,7 +259,7 @@ async function handleCheckoutPaid(event: WebhookEvent) {
 
   const now = new Date()
   const periodEnd = new Date(now)
-  if (planType === 'annual') {
+  if (decision.planType === 'annual') {
     periodEnd.setFullYear(periodEnd.getFullYear() + 1)
   } else {
     periodEnd.setMonth(periodEnd.getMonth() + 1)
@@ -205,36 +269,98 @@ async function handleCheckoutPaid(event: WebhookEvent) {
     .from('subscriptions')
     .upsert(
       {
-        user_id: userId,
+        user_id: params.userId,
         plan_id: premiumPlan.id,
         status: 'active',
-        plan_type: planType,
+        plan_type: decision.planType,
         payment_provider: 'paymongo',
-        paymongo_checkout_session_id: checkoutSessionId,
+        paymongo_checkout_session_id: params.checkoutSessionId,
         current_period_start: now.toISOString(),
         current_period_end: periodEnd.toISOString(),
         grace_period_until: null,
         grace_period_used: false,
-        auto_renew: !isFounderLifetime,
-        is_lifetime: isFounderLifetime,
+        auto_renew: !isLifetimeGrant,
+        is_lifetime: isLifetimeGrant,
       },
       { onConflict: 'user_id' }
     )
 
   if (error) {
-    console.error('[Webhook] Subscription assignment failed user_id=', userId, 'session_id=', checkoutSessionId, 'error=', error.message, 'code=', error.code)
+    console.error('[Webhook] Subscription assignment failed event_id=', params.event.data.id, 'code=', error.code)
     throw error
   }
 
-  console.log('[Webhook] Subscription insert/update result: success user_id=', userId, 'plan=pro plan_type=', planType, 'period_end=', periodEnd.toISOString())
+  console.log(
+    '[Webhook] Subscription upsert success event_id=',
+    params.event.data.id,
+    'grant=',
+    decision.grant,
+    'plan_type=',
+    decision.planType
+  )
 
-  await tryIncrementVoucherUsedCountFromMetadata(metadata)
+  await tryIncrementVoucherUsedCountFromMetadata(params.metadata)
 
   try {
-    await sendPremiumConfirmationIfNew(event.data.id, userId, planType)
+    await sendPremiumConfirmationIfNew(params.event.data.id, params.userId, decision.planType)
   } catch {
     // Email failure must never block payment fulfillment
   }
+
+  if (params.notifyOnSuccess) {
+    await alertFounderOfPaid(params.event, params.userId, planLabelFor(decision.grant))
+  }
+}
+
+async function handleCheckoutPaid(event: WebhookEvent) {
+  const sessionData = event.data.attributes.data
+  const checkoutSessionId = sessionData.id
+  const attrs = sessionData.attributes
+  let metadata = (attrs.metadata ?? {}) as Record<string, string>
+  let sessionAttributes: Record<string, unknown> | undefined
+  let userId = metadata.user_id
+
+  let paidCentavos = paidCentavosOf(event)
+  console.log(
+    '[Webhook] handleCheckoutPaid session_id=',
+    checkoutSessionId,
+    'metadata_from_payload=',
+    !!attrs.metadata
+  )
+
+  // Payload metadata is often omitted. Amount can be omitted too; the session is the
+  // server-stored source for both.
+  if (!userId || paidCentavos == null) {
+    try {
+      const session = await retrieveCheckoutSession(checkoutSessionId)
+      sessionAttributes = session.data.attributes as Record<string, unknown>
+      const apiMetadata = (session.data.attributes.metadata ?? {}) as Record<string, string>
+      if (apiMetadata.user_id) {
+        userId = apiMetadata.user_id
+        metadata = apiMetadata
+      }
+      if (paidCentavos == null) paidCentavos = paidCentavosFromAttributes(sessionAttributes)
+      console.log('[Webhook] After fetch session metadata_present=', Boolean(userId))
+    } catch (err) {
+      console.error('[Webhook] Failed to fetch checkout session:', err)
+      throw err
+    }
+  }
+
+  if (!userId || metadata.plan !== 'pro') {
+    withholdGrant(event, 'missing_metadata')
+    await alertFounderOfPaid(event, userId || null, null)
+    return
+  }
+
+  await fulfillPaidPro({
+    event,
+    userId,
+    metadata,
+    paidCentavos,
+    checkoutSessionId,
+    notifyOnSuccess: false,
+  })
 }
 
 /**
@@ -259,7 +385,7 @@ async function handlePaymentPaid(event: WebhookEvent) {
   try {
     const intent = await retrievePaymentIntent(paymentIntentId)
     metadata = (intent.data.attributes.metadata ?? {}) as Record<string, string>
-    console.log('[Webhook] payment.paid intent metadata keys=', Object.keys(metadata).join(','), 'user_id=', metadata.user_id ?? '(none)', 'plan=', metadata.plan ?? '(none)')
+    console.log('[Webhook] payment.paid intent metadata_present=', Boolean(metadata.user_id && metadata.plan))
   } catch (err) {
     console.error('[Webhook] Failed to fetch payment intent for payment.paid:', err)
     throw err
@@ -271,79 +397,14 @@ async function handlePaymentPaid(event: WebhookEvent) {
     return
   }
 
-  const planType = (metadata.plan_type === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual'
-  const promoCode = String(metadata.promoCode ?? metadata.promo_code ?? '').trim().toUpperCase()
-  const isFounderLifetime = promoCode === FOUNDER_PROMO_CODE
-  console.log('[Webhook] payment.paid (QRPH) subscription insert user_id=', userId, 'plan_type=', planType)
-
-  const { data: premiumPlan } = await supabaseAdmin
-    .from('plans')
-    .select('id')
-    .eq('name', 'pro')
-    .single()
-
-  if (!premiumPlan) {
-    console.error('[Webhook] payment.paid: plan (pro) not found')
-    throw new Error('Premium plan not found')
-  }
-
-  const now = new Date()
-  const periodEnd = new Date(now)
-  if (planType === 'annual') {
-    periodEnd.setFullYear(periodEnd.getFullYear() + 1)
-  } else {
-    periodEnd.setMonth(periodEnd.getMonth() + 1)
-  }
-
-  const { error } = await supabaseAdmin
-    .from('subscriptions')
-    .upsert(
-      {
-        user_id: userId,
-        plan_id: premiumPlan.id,
-        status: 'active',
-        plan_type: planType,
-        payment_provider: 'paymongo',
-        paymongo_checkout_session_id: null,
-        current_period_start: now.toISOString(),
-        current_period_end: periodEnd.toISOString(),
-        grace_period_until: null,
-        grace_period_used: false,
-        auto_renew: !isFounderLifetime,
-        is_lifetime: isFounderLifetime,
-      },
-      { onConflict: 'user_id' }
-    )
-
-  if (error) {
-    console.error('[Webhook] payment.paid subscription upsert failed user_id=', userId, 'error=', error.message)
-    throw error
-  }
-
-  console.log('[Webhook] payment.paid subscription success user_id=', userId, 'plan=pro plan_type=', planType)
-
-  await tryIncrementVoucherUsedCountFromMetadata(metadata)
-
-  try {
-    await sendPremiumConfirmationIfNew(event.data.id, userId, planType)
-  } catch {
-    // Email failure must never block payment fulfillment
-  }
-
-  try {
-    await notifyFounderOfPayment({
-      kind: 'paid',
-      eventId: event.data.id,
-      livemode: event.data.attributes.livemode === true,
-      userId,
-      planLabel: isFounderLifetime ? 'Lifetime' : planType === 'annual' ? 'Annual' : 'Monthly',
-      amount: extractPaidAmount(event),
-      reason: null,
-      occurredAt: eventTime(event),
-    })
-  } catch {
-    // Founder alert failure must never block payment fulfillment
-  }
+  await fulfillPaidPro({
+    event,
+    userId,
+    metadata,
+    paidCentavos: paidCentavosOf(event),
+    checkoutSessionId: null,
+    notifyOnSuccess: true,
+  })
 }
 
 /**
@@ -378,165 +439,4 @@ async function handlePaymentFailed(event: WebhookEvent) {
 function eventTime(event: WebhookEvent): string {
   const seconds = event.data.attributes.created_at
   return new Date(Number.isFinite(seconds) ? seconds * 1000 : Date.now()).toISOString()
-}
-
-async function handleSubscriptionActivated(event: WebhookEvent) {
-  const subData = event.data.attributes.data
-  const attrs = subData.attributes
-  const subscriptionId = subData.id
-  const customerId = attrs.customer_id as string
-
-  const { data: premiumPlan } = await supabaseAdmin.from('plans').select('id').eq('name', 'pro').single()
-  if (!premiumPlan) {
-    console.error('[Webhook] subscription.activated: plan (pro) not found')
-    throw new Error('Premium plan not found')
-  }
-
-  const { error } = await supabaseAdmin
-    .from('subscriptions')
-    .update({
-      status: 'active',
-      paymongo_subscription_id: subscriptionId,
-      paymongo_customer_id: customerId,
-      plan_id: premiumPlan.id,
-      grace_period_until: null,
-      grace_period_used: false,
-      auto_renew: true,
-    })
-    .eq('paymongo_customer_id', customerId)
-
-  if (error) {
-    console.error('[Webhook] subscription.activated update failed subscription_id=', subscriptionId, 'error=', error.message)
-    throw error
-  }
-
-  console.log('[Webhook] Subscription activated subscription_id=', subscriptionId, 'plan=pro')
-}
-
-async function handleSubscriptionUpdated(event: WebhookEvent) {
-  const subData = event.data.attributes.data
-  const attrs = subData.attributes
-  const subscriptionId = subData.id
-  const status = attrs.status as string
-
-  const updates: Record<string, unknown> = {}
-  if (status === 'cancelled' || status === 'incomplete_cancelled') {
-    updates.auto_renew = false
-    // Do not set status: keep 'active' so user retains access until current_period_end
-    console.log('[Webhook] Subscription cancelled (access until period end) subscription_id=', subscriptionId)
-  } else {
-    const dbStatus = status === 'incomplete_cancelled' ? 'canceled' : status === 'cancelled' ? 'canceled' : status
-    updates.status = dbStatus
-  }
-
-  const { error } = await supabaseAdmin
-    .from('subscriptions')
-    .update(updates)
-    .eq('paymongo_subscription_id', subscriptionId)
-
-  if (error) {
-    console.error('[Webhook] subscription.updated failed subscription_id=', subscriptionId, 'error=', error.message)
-    throw error
-  }
-
-  console.log('[Webhook] Subscription updated subscription_id=', subscriptionId, 'updates=', Object.keys(updates).join(','))
-}
-
-async function handleSubscriptionProblem(event: WebhookEvent) {
-  const subData = event.data.attributes.data
-  const subscriptionId = subData.id
-
-  const { data: sub } = await supabaseAdmin
-    .from('subscriptions')
-    .select('status, grace_period_used')
-    .eq('paymongo_subscription_id', subscriptionId)
-    .single()
-
-  const newStatus = 'past_due'
-  const updates: Record<string, unknown> = { status: newStatus }
-
-  if (sub?.status === 'active' && sub?.grace_period_used === false) {
-    const graceEnd = new Date()
-    graceEnd.setDate(graceEnd.getDate() + 3)
-    updates.grace_period_until = graceEnd.toISOString()
-    updates.grace_period_used = true
-    console.log('[Webhook] Grace period started subscription_id=', subscriptionId, 'until=', graceEnd.toISOString())
-  }
-
-  const { error } = await supabaseAdmin
-    .from('subscriptions')
-    .update(updates)
-    .eq('paymongo_subscription_id', subscriptionId)
-
-  if (error) {
-    console.error('[Webhook] subscription problem update failed subscription_id=', subscriptionId, 'error=', error.message)
-    throw error
-  }
-
-  console.log('[Webhook] Subscription marked past_due subscription_id=', subscriptionId, 'grace=', !!updates.grace_period_until)
-}
-
-async function handleInvoicePaid(event: WebhookEvent) {
-  const invoiceData = event.data.attributes.data
-  const attrs = invoiceData.attributes
-  const subscriptionId = attrs.resource_id as string
-
-  if (!subscriptionId) return
-
-  const now = new Date()
-  const periodEnd = new Date(now)
-  periodEnd.setMonth(periodEnd.getMonth() + 1)
-
-  const { error } = await supabaseAdmin
-    .from('subscriptions')
-    .update({
-      status: 'active',
-      current_period_start: now.toISOString(),
-      current_period_end: periodEnd.toISOString(),
-      grace_period_until: null,
-      grace_period_used: false,
-      auto_renew: true,
-    })
-    .eq('paymongo_subscription_id', subscriptionId)
-
-  if (error) {
-    console.error('[Webhook] invoice.paid update failed subscription_id=', subscriptionId, 'error=', error.message)
-    throw error
-  }
-
-  console.log('[Webhook] Subscription renewed via invoice subscription_id=', subscriptionId)
-}
-
-async function handleInvoiceFailed(event: WebhookEvent) {
-  const invoiceData = event.data.attributes.data
-  const attrs = invoiceData.attributes
-  const subscriptionId = attrs.resource_id as string
-
-  if (!subscriptionId) return
-
-  console.warn('[Webhook] Invoice payment failed subscription_id=', subscriptionId)
-
-  const { data: sub } = await supabaseAdmin
-    .from('subscriptions')
-    .select('status, grace_period_used')
-    .eq('paymongo_subscription_id', subscriptionId)
-    .single()
-
-  const updates: Record<string, unknown> = { status: 'past_due' }
-  if (sub?.status === 'active' && sub?.grace_period_used === false) {
-    const graceEnd = new Date()
-    graceEnd.setDate(graceEnd.getDate() + 3)
-    updates.grace_period_until = graceEnd.toISOString()
-    updates.grace_period_used = true
-    console.log('[Webhook] Grace period started subscription_id=', subscriptionId)
-  }
-
-  const { error } = await supabaseAdmin
-    .from('subscriptions')
-    .update(updates)
-    .eq('paymongo_subscription_id', subscriptionId)
-
-  if (error) {
-    console.error('[Webhook] invoice.payment_failed update failed subscription_id=', subscriptionId, 'error=', error.message)
-  }
 }

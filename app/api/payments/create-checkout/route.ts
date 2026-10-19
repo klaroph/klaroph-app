@@ -10,7 +10,7 @@ import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { shouldBlockNewProPurchase } from '@/lib/subscriptionStateCore'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getSubscriptionPricing } from '@/lib/getSubscriptionPricing'
-import { resolveCheckoutAmountCentavos } from '@/lib/checkoutPromo'
+import { buildCheckoutMetadata, resolveCheckoutGrant } from '@/lib/checkoutGrant'
 import { parsePromoCodeFromBody, resolveVoucherForCheckout } from '@/lib/voucherForCheckout'
 
 export type PlanTypeCheckout = 'monthly' | 'annual'
@@ -78,12 +78,13 @@ export async function POST(request: Request) {
       monthlyCentavos: pricing.monthlyCentavos,
       annualCentavos: pricing.annualCentavos,
     })
-    const amount = resolveCheckoutAmountCentavos(
+    const { grant, amountCentavos: amount } = resolveCheckoutGrant({
+      planType: plan_type,
       baseCentavos,
       promo,
-      appliedPromo?.code ?? null,
-      'payments/create-checkout'
-    )
+      appliedPromoCode: appliedPromo?.code ?? null,
+      context: 'payments/create-checkout',
+    })
 
     if (amount <= 0) {
       return NextResponse.json(
@@ -110,12 +111,13 @@ export async function POST(request: Request) {
       ? 'KlaroPH Pro: 12 months, 20 goals, unlimited history, import/export, advance charts and analytics.'
       : 'KlaroPH Pro: 20 goals, unlimited history, import/export, advance charts and analytics.'
 
-    const metadata: Record<string, string> = {
-      user_id: String(user.id),
-      plan: 'pro',
-      plan_type,
-      promoCode: promoCodeParam ?? '',
-    }
+    const metadata = buildCheckoutMetadata({
+      userId: user.id,
+      planType: plan_type,
+      grant,
+      expectedAmountCentavos: amount,
+      appliedPromoCode: appliedPromo?.code ?? null,
+    })
 
     console.log('[Checkout Guard] decision=allow')
     console.log(
