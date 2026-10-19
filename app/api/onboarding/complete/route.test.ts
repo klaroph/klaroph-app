@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { onboardingNamePrefill } from '@/lib/displayName'
 
 type Call = {
   table: string
@@ -188,6 +189,7 @@ describe('POST /api/onboarding/complete', () => {
       income_frequency: 'semi-monthly',
       onboarding_completed: true,
     })
+    expect(profile[0]?.payload).not.toHaveProperty('nickname')
     expect(profile[0]?.filters).toEqual({ id: 'user-1' })
 
     expect(callsTo('goals', 'insert')[0]?.payload).toEqual({
@@ -213,6 +215,34 @@ describe('POST /api/onboarding/complete', () => {
     ])
     expect(callsTo('income_allocations')).toEqual([])
     expect(state.rpcCalls).toBe(0)
+  })
+
+  it('writes a trimmed nickname and caps it at 40 characters', async () => {
+    const longName = `  ${'Maria'.repeat(12)}  `
+    const res = await post(validBody({ nickname: longName }))
+    expect(res.status).toBe(200)
+    const profile = callsTo('profiles', 'update')
+    expect(profile).toHaveLength(1)
+    expect(profile[0]?.payload).toMatchObject({ nickname: 'Maria'.repeat(8) })
+    expect((profile[0]?.payload as { nickname: string }).nickname).toHaveLength(40)
+  })
+
+  it('does not save a nickname when an email user skips the empty name field', async () => {
+    expect(
+      onboardingNamePrefill({ nickname: null, fullName: 'ada@example.com' }),
+    ).toBe('')
+    const res = await post(validBody())
+    expect(res.status).toBe(200)
+    expect(callsTo('profiles', 'update')[0]?.payload).not.toHaveProperty('nickname')
+  })
+
+  it('does not write nickname when it is missing, blank, or only spaces', async () => {
+    for (const nickname of [undefined, null, '', '   ', 12]) {
+      state.calls = []
+      const res = await post(validBody({ nickname }))
+      expect(res.status).toBe(200)
+      expect(callsTo('profiles', 'update')[0]?.payload).not.toHaveProperty('nickname')
+    }
   })
 
   it('does not insert income when the profile update fails', async () => {

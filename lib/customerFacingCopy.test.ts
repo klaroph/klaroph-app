@@ -69,10 +69,10 @@ describe('customer-facing Pro copy', () => {
   it('lists only gated Pro features and keeps CSV export on the free list', () => {
     const labels = PRO_PLAN_FEATURES.map((feature) => feature.label)
     expect(labels).toEqual([
-      '20 Active Goals',
+      '20 Goals',
       'Financial Health Insights',
       'Monthly Budgeting',
-      'Unlimited History & Insights',
+      'Unlimited History',
       'Unlimited CSV import (Income and Expenses)',
       'Advanced Charts',
       'Ask Klaro (Beta) — 30 messages/day',

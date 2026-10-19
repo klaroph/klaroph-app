@@ -5,6 +5,7 @@ import { formatWholePeso } from '@/lib/format'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { GOAL_PRESETS } from '@/lib/goalPresets'
+import { NICKNAME_MAX_LENGTH, onboardingNamePrefill } from '@/lib/displayName'
 import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
 import {
   FINANCIAL_STAGES,
@@ -49,7 +50,15 @@ const STEP_LABELS: Record<number, string> = {
 
 const SETUP_PREVIEW = ['Your income', 'A simple spending plan', 'Your first goal', 'A savings preference']
 
-export default function OnboardingFlow() {
+type OnboardingFlowProps = {
+  nickname?: string | null
+  fullName?: string | null
+}
+
+export default function OnboardingFlow({
+  nickname = null,
+  fullName = null,
+}: OnboardingFlowProps) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [income, setIncome] = useState('')
@@ -65,6 +74,9 @@ export default function OnboardingFlow() {
   const [dreamStatement, setDreamStatement] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [preferredName, setPreferredName] = useState(() =>
+    onboardingNamePrefill({ nickname, fullName }),
+  )
 
   const incomeNum = parseFloat(income.replace(/[^0-9.]/g, '')) || 0
   const monthlyIncome = toMonthlyAmount(incomeNum, frequency)
@@ -79,6 +91,7 @@ export default function OnboardingFlow() {
     const name = goalName.trim() || 'My Goal'
     const target = targetNum > 0 ? targetNum : 100000
     const primary_goal_category = presetToGoalCategory(goalPresetId)
+    const trimmedNickname = preferredName.trim().slice(0, NICKNAME_MAX_LENGTH)
     try {
       const res = await fetch('/api/onboarding/complete', {
         method: 'POST',
@@ -97,6 +110,7 @@ export default function OnboardingFlow() {
           dream_statement: dreamStatement.trim() || null,
           goal_name: name,
           goal_target_amount: target,
+          ...(trimmedNickname ? { nickname: trimmedNickname } : {}),
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -200,6 +214,19 @@ export default function OnboardingFlow() {
                   ))}
                 </ul>
               </div>
+              <label className="onb-field">
+                <span className="onb-label">What should we call you?</span>
+                <input
+                  type="text"
+                  name="nickname"
+                  autoComplete="nickname"
+                  maxLength={NICKNAME_MAX_LENGTH}
+                  value={preferredName}
+                  onChange={(e) => setPreferredName(e.target.value.slice(0, NICKNAME_MAX_LENGTH))}
+                  className="login-input"
+                  placeholder="Optional"
+                />
+              </label>
               <button type="button" onClick={() => setStep(2)} className="btn-primary onb-btn onb-btn--wide">
                 Start My Plan
               </button>

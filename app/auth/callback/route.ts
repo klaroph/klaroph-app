@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legalVersions'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { postAuthPath } from '@/lib/founderDashboardAuth'
+import { displayName } from '@/lib/displayName'
 import { sendWelcomeEmail } from '@/lib/welcomeEmail'
 
 /**
@@ -30,6 +31,7 @@ type ProfileRow = {
   terms_version: string | null
   privacy_version: string | null
   full_name: string | null
+  nickname: string | null
   welcome_email_sent_at: string | null
 }
 
@@ -90,7 +92,7 @@ export async function GET(request: Request) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const { data: row } = await supabaseAdmin
         .from('profiles')
-        .select('terms_accepted_at, privacy_accepted_at, terms_version, privacy_version, full_name, welcome_email_sent_at')
+        .select('terms_accepted_at, privacy_accepted_at, terms_version, privacy_version, full_name, nickname, welcome_email_sent_at')
         .eq('id', userId)
         .single()
       if (row) {
@@ -119,10 +121,20 @@ export async function GET(request: Request) {
     // Welcome email: send at most once per user. Failure must never block redirect.
     if (profile && profile.welcome_email_sent_at == null && data.session.user.email) {
       try {
-        const fullName = (profile?.full_name ?? data.session.user.user_metadata?.full_name ?? null) as string | null
+        const metadataName = data.session.user.user_metadata?.full_name
+        const fullName = (profile?.full_name ?? (typeof metadataName === 'string' ? metadataName : null)) as string | null
+        const greetingName = displayName(
+          {
+            nickname: profile?.nickname ?? null,
+            fullName,
+            email: data.session.user.email,
+          },
+          '',
+          { firstName: true },
+        )
         const sent = await sendWelcomeEmail(
           data.session.user.email,
-          fullName,
+          greetingName || null,
           baseUrl
         )
         if (sent) {

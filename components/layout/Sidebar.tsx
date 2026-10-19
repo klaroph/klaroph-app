@@ -11,6 +11,7 @@ import KlaroPHHandLogo from '../ui/KlaroPHHandLogo'
 import UpgradeCTA from '../ui/UpgradeCTA'
 import SupportModal from '../support/SupportModal'
 import { PRO_ONE_TIME_LINE } from '@/lib/planPricing'
+import { displayName } from '@/lib/displayName'
 
 function formatActiveUntilDate(iso: string | null): string {
   if (!iso) return ''
@@ -168,7 +169,14 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
     onDrawerClose?.()
   }
 
-  const userName = (profile?.profile?.nickname?.trim() || profile?.profile?.full_name?.trim()) || 'You'
+  const userName = displayName(
+    {
+      nickname: profile?.profile?.nickname,
+      fullName: profile?.profile?.full_name,
+      email,
+    },
+    'You',
+  )
   const clarityLevel = profile?.clarity_level ?? 1
   const activeUntil = formatActiveUntilDate(currentPeriodEnd ?? null)
 
@@ -236,7 +244,7 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
           <footer className="sidebar-footer" aria-label="Account and plan">
             <div className="sidebar-footer-inner">
               <div className="sidebar-user-block">
-                <div className="sidebar-user-name">Hi {userName}</div>
+                <div className="sidebar-user-name" title={userName}>Hi {userName}</div>
                 <div className="sidebar-clarity-badge">Clarity Level – {clarityLevel}</div>
                 {isPro && (
                   <div className="sidebar-plan-card">

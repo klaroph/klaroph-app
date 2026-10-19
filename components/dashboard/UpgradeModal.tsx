@@ -30,10 +30,10 @@ function UpgradeTableRows() {
         <td className="upgrade-modal-feature">
           <span className="plan-feature-premium">
             <PlanFeaturePremiumIcon />
-            Unlimited History &amp; Insights
+            Unlimited History
           </span>
         </td>
-        <td className="upgrade-modal-free">—</td>
+        <td className="upgrade-modal-free">90 days</td>
         <td className="upgrade-modal-pro">✓</td>
       </tr>
       <tr className="upgrade-modal-row">
@@ -87,7 +87,7 @@ function UpgradeTableRows() {
         <td className="upgrade-modal-pro">{KLARO_AI_LIMITS.PRO_DAILY_GENERATIONS}/day</td>
       </tr>
       <tr className="upgrade-modal-row">
-        <td className="upgrade-modal-feature">20 Active Goals</td>
+        <td className="upgrade-modal-feature">20 Goals</td>
         <td className="upgrade-modal-free">2</td>
         <td className="upgrade-modal-pro">✓</td>
       </tr>
