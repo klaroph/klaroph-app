@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { plainDbError } from '@/lib/apiError'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { toLocalDateString } from '@/lib/format'
@@ -102,18 +103,6 @@ export async function POST(request: Request) {
       nickname: parsedNickname.nickname,
     }
 
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .update(profileUpdate)
-      .eq('id', user.id)
-
-    if (profileError) {
-      return NextResponse.json(
-        { error: profileError.message },
-        { status: 500 }
-      )
-    }
-
     const { data: insertedGoal, error: goalError } = await supabaseAdmin
       .from('goals')
       .insert({
@@ -125,9 +114,44 @@ export async function POST(request: Request) {
       .select('id')
       .single()
 
-    if (goalError || !insertedGoal?.id) {
+    // Null when the free-plan trigger rejects the insert. That person already
+    // has goals, so onboarding continues without adding one.
+    let insertedGoalId: string | null = null
+    if ((goalError?.message ?? '').includes('GOAL_LIMIT_REACHED')) {
+      console.error('POST /api/onboarding/complete goal insert error:', goalError)
+    } else if (goalError || !insertedGoal?.id) {
       return NextResponse.json(
-        { error: goalError?.message ?? 'Could not create your goal.' },
+        {
+          error: goalError
+            ? plainDbError(goalError, 'save', 'POST /api/onboarding/complete goal insert error:')
+            : 'Could not create your goal.',
+        },
+        { status: 500 }
+      )
+    } else {
+      insertedGoalId = insertedGoal.id
+    }
+
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .update(profileUpdate)
+      .eq('id', user.id)
+
+    if (profileError) {
+      // Drop a goal this request inserted. A limit skip inserted nothing, so
+      // existing goals stay. The failed profile write leaves nickname unchanged.
+      if (insertedGoalId) {
+        const { error: rollbackGoalError } = await supabaseAdmin
+          .from('goals')
+          .delete()
+          .eq('id', insertedGoalId)
+          .eq('user_id', user.id)
+        if (rollbackGoalError) {
+          console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+        }
+      }
+      return NextResponse.json(
+        { error: plainDbError(profileError, 'save', 'POST /api/onboarding/complete profile update error:') },
         { status: 500 }
       )
     }
@@ -146,15 +170,17 @@ export async function POST(request: Request) {
       .single()
 
     if (incomeError || !insertedIncome?.id) {
-      // Profile was already marked complete and the goal row exists. Undo both
-      // so a retry does not leave a finished onboarding without this income.
-      const { error: rollbackGoalError } = await supabaseAdmin
-        .from('goals')
-        .delete()
-        .eq('id', insertedGoal.id)
-        .eq('user_id', user.id)
-      if (rollbackGoalError) {
-        console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+      // Profile was already marked complete. Drop a goal this request inserted,
+      // and clear onboarding so a retry does not finish without this income.
+      if (insertedGoalId) {
+        const { error: rollbackGoalError } = await supabaseAdmin
+          .from('goals')
+          .delete()
+          .eq('id', insertedGoalId)
+          .eq('user_id', user.id)
+        if (rollbackGoalError) {
+          console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+        }
       }
       const { error: rollbackProfileError } = await supabaseAdmin
         .from('profiles')
@@ -164,7 +190,11 @@ export async function POST(request: Request) {
         console.error('POST /api/onboarding/complete profile rollback', rollbackProfileError.message)
       }
       return NextResponse.json(
-        { error: incomeError?.message ?? 'Could not save your first income.' },
+        {
+          error: incomeError
+            ? plainDbError(incomeError, 'save', 'POST /api/onboarding/complete income insert error:')
+            : 'Could not save your first income.',
+        },
         { status: 500 }
       )
     }

@@ -4,6 +4,7 @@ const state = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
   updates: [] as unknown[],
   updateError: null as { message: string; code?: string; details?: string | null } | null,
+  readError: null as { message: string; code?: string; details?: string | null } | null,
 }))
 
 vi.mock('@/lib/supabaseServer', () => ({
@@ -25,6 +26,9 @@ vi.mock('@/lib/supabaseServer', () => ({
           return api
         },
         async single() {
+          if (payload === undefined && state.readError) {
+            return { data: null, error: state.readError }
+          }
           state.updates.push(payload)
           if (state.updateError) return { data: null, error: state.updateError }
           const nickname = (payload as { nickname?: string | null } | undefined)?.nickname
@@ -43,7 +47,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
 
 import { plainDbErrorText } from '@/lib/apiError'
 import { NICKNAME_MAX_LENGTH, NICKNAME_REQUIRED_ERROR, NICKNAME_TOO_LONG_ERROR } from '@/lib/displayName'
-import { PATCH } from './route'
+import { GET, PATCH } from './route'
 
 const patch = (body: unknown) =>
   PATCH(
@@ -57,6 +61,7 @@ beforeEach(() => {
   state.user = { id: 'user-1' }
   state.updates = []
   state.updateError = null
+  state.readError = null
 })
 
 afterEach(() => {
@@ -190,5 +195,28 @@ describe('PATCH /api/profile financial stage and risk comfort', () => {
     expect(raw).not.toContain('23514')
     expect(spy).toHaveBeenCalledWith('PATCH /api/profile update error:', updateError)
     expect(state.updates).toEqual([{ financial_stage: 'not-a-stage', risk_comfort: 'nope' }])
+  })
+})
+
+describe('GET /api/profile', () => {
+  it('returns plain text when the profile read fails', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const readError = {
+      code: '42P01',
+      message: 'relation "profiles" does not exist',
+      details: 'schema cache miss on public.profiles',
+    }
+    state.readError = readError
+    const res = await GET()
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    const raw = JSON.stringify(body)
+    expect(body).toEqual({ error: plainDbErrorText.load })
+    expect(raw).not.toContain('relation')
+    expect(raw).not.toContain('profiles')
+    expect(raw).not.toContain('42P01')
+    expect(raw).not.toContain('schema cache')
+    expect(spy).toHaveBeenCalledWith('GET /api/profile error:', readError)
+    expect(state.updates).toEqual([])
   })
 })

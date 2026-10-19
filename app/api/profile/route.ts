@@ -33,7 +33,7 @@ export async function GET() {
 
     if (profileError && profileError.code !== 'PGRST116') {
       return NextResponse.json(
-        { error: profileError.message },
+        { error: plainDbError(profileError, 'load', 'GET /api/profile error:') },
         { status: 500 }
       )
     }
