@@ -1,3 +1,4 @@
+import type { BudgetAccess } from '../domain/budgetLock'
 import type { ServerRow, ServerStamp, SyncRow, SyncedTable, TableCounts } from './model'
 
 export type ApplyServerResult = {
@@ -32,4 +33,11 @@ export interface LocalStore {
   adoptUnassigned(userId: string): void
   sessionUserId(): string | null
   setSessionUserId(userId: string | null): void
+  /** Remembers the signed-in budget clock. `null` forgets it (sign-out clears this with the other meta). */
+  setBudgetAccess(access: BudgetAccess | null): void
+  /**
+   * True when no clock is stored yet, and otherwise the web 30-day Free rule.
+   * Local-only writes do not call this; they skip the lock because they have no account.
+   */
+  budgetEditingAllowed(): boolean
 }

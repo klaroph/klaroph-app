@@ -30,6 +30,38 @@ export const FREE_PLAN_CAP: ResolvedPlanCap = {
   maxGoals: FREE_PLAN_MAX_GOALS,
 }
 
+const PRO_PLAN_NAMES = new Set(['pro', 'clarity_premium'])
+
+function featureRecord(value: unknown): Record<string, unknown> {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
+}
+
+function featurePlanName(value: unknown): string {
+  const name = featureRecord(value).plan_name
+  return typeof name === 'string' ? name.trim().toLowerCase() : 'free'
+}
+
+/**
+ * `get_user_features(p_user_id uuid) returns jsonb`.
+ * Pro and lifetime rows come back as `clarity_premium` with that plan's `max_goals`.
+ * A missing or free row uses `max_goals` from the payload, otherwise 2.
+ * Local-only mode does not call this and stays on `FREE_PLAN_CAP`.
+ */
+export function planCapFromUserFeatures(value: unknown): ResolvedPlanCap {
+  const maxRaw = featureRecord(value).max_goals
+  const maxGoals = typeof maxRaw === 'number' && Number.isInteger(maxRaw) && maxRaw > 0
+    ? maxRaw
+    : FREE_PLAN_MAX_GOALS
+  if (PRO_PLAN_NAMES.has(featurePlanName(value))) return { name: 'Pro', maxGoals }
+  return { name: 'Free', maxGoals }
+}
+
+/** Pro and lifetime include full budgeting. The RPC does not return `has_budgeting`. */
+export function fullBudgetingFromUserFeatures(value: unknown): boolean {
+  return PRO_PLAN_NAMES.has(featurePlanName(value))
+}
+
 /**
  * Blocks keep-both adoption when unsynced device goals plus live account goals
  * would exceed the plan. Equal to the cap is allowed. There is no partial upload.

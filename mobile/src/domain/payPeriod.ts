@@ -1,17 +1,16 @@
 import { DomainError } from './errors'
 
 /**
- * Payday periods in Asia/Manila (Philippines, UTC+8, no daylight saving).
- * The first half is the 1st through the 15th. The second half is the 16th
- * through the last calendar day of that month.
- *
- * This is the in-app time unit. It is not the payday-email window, which
- * fires on the 15th and the last day and covers a different inclusive range.
+ * In-app payday periods in Asia/Manila (UTC+8, no daylight saving).
+ * They match the payday email window:
+ * period A is the previous month's last day through the 14th;
+ * period B is the 15th through the day before this month's last day.
+ * The last day of a month is the start of the next month's period A.
  */
 
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
 
-export type PayHalf = 'first' | 'second'
+export type PayHalf = 'a' | 'b'
 
 export type CivilDate = {
   year: number
@@ -21,7 +20,7 @@ export type CivilDate = {
 
 export type PayPeriod = {
   half: PayHalf
-  /** Manila calendar month, YYYY-MM. */
+  /** Manila calendar month the period belongs to, YYYY-MM. */
   month: string
   /** Inclusive Manila date, YYYY-MM-DD. */
   start: string
@@ -54,6 +53,31 @@ function monthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
+function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1))
+  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1 }
+}
+
+function periodA(year: number, month: number): PayPeriod {
+  const previous = shiftMonth(year, month, -1)
+  return {
+    half: 'a',
+    month: monthKey(year, month),
+    start: ymd(previous.year, previous.month, daysInMonth(previous.year, previous.month)),
+    end: ymd(year, month, 14),
+  }
+}
+
+function periodB(year: number, month: number): PayPeriod {
+  const lastDay = daysInMonth(year, month)
+  return {
+    half: 'b',
+    month: monthKey(year, month),
+    start: ymd(year, month, 15),
+    end: ymd(year, month, lastDay - 1),
+  }
+}
+
 /** Pay period that contains a Manila calendar date. */
 export function payPeriodForCivilDate(date: CivilDate): PayPeriod {
   if (!Number.isInteger(date.year) || !Number.isInteger(date.month) || !Number.isInteger(date.day)) {
@@ -66,22 +90,12 @@ export function payPeriodForCivilDate(date: CivilDate): PayPeriod {
   if (date.day < 1 || date.day > lastDay) {
     throw new DomainError('INVALID_DATE', 'Invalid calendar date.')
   }
-
-  if (date.day <= 15) {
-    return {
-      half: 'first',
-      month: monthKey(date.year, date.month),
-      start: ymd(date.year, date.month, 1),
-      end: ymd(date.year, date.month, 15),
-    }
+  if (date.day === lastDay) {
+    const next = shiftMonth(date.year, date.month, 1)
+    return periodA(next.year, next.month)
   }
-
-  return {
-    half: 'second',
-    month: monthKey(date.year, date.month),
-    start: ymd(date.year, date.month, 16),
-    end: ymd(date.year, date.month, lastDay),
-  }
+  if (date.day <= 14) return periodA(date.year, date.month)
+  return periodB(date.year, date.month)
 }
 
 /** Pay period that contains an instant, using the Manila calendar date. */

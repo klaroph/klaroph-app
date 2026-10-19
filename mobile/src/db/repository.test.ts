@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BUDGET_LOCK_UPGRADE_MESSAGE } from '../domain/budgetLock'
 import { isUuid } from '../domain/ids'
 import { FREE_PLAN_MAX_GOALS, GOAL_LIMIT_REACHED } from '../domain/planLimits'
 import { openTestRepository } from './testDb'
@@ -154,6 +155,54 @@ describe('local repository', () => {
     expect(repo.getRow('budget_plans', local.id)?.dirty).toBe(true)
     expect(repo.getRow('budget_plans', serverId)?.values.amount).toBe('200.00')
     expect(repo.listLive('budget_plans', USER).map((row) => row.id)).toEqual([serverId])
+  })
+
+  it('locks signed-in free budget edits after 30 days and leaves local-only edits open', () => {
+    const now = new Date('2026-10-19T00:00:00.000Z')
+    const { repo } = openTestRepository({ now: () => now })
+    const locked = {
+      fullBudgeting: false,
+      accountCreatedAt: '2026-09-18T00:00:00.000Z',
+      simulateExpired: false,
+    }
+    repo.setBudgetAccess(locked)
+    expect(() => repo.createBudgetPlan({ userId: USER, category: 'Food', amount: 10 })).toThrow(
+      expect.objectContaining({ code: 'BUDGET_LOCKED', message: BUDGET_LOCK_UPGRADE_MESSAGE }),
+    )
+    expect(() => repo.replaceBudgetPlans(USER, [{ category: 'Food', amount: 10 }])).toThrow(
+      expect.objectContaining({ code: 'BUDGET_LOCKED', message: BUDGET_LOCK_UPGRADE_MESSAGE }),
+    )
+    expect(() => repo.saveBudgetOverride({
+      userId: USER,
+      category: 'Food',
+      amount: 0,
+      month: '2026-10-01',
+    })).toThrow(expect.objectContaining({ code: 'BUDGET_LOCKED', message: BUDGET_LOCK_UPGRADE_MESSAGE }))
+    expect(repo.createBudgetPlan({ userId: null, category: 'Food', amount: 10 }).user_id).toBeNull()
+
+    repo.setBudgetAccess({
+      fullBudgeting: false,
+      accountCreatedAt: '2026-09-19T00:00:00.000Z',
+      simulateExpired: false,
+    })
+    expect(repo.createBudgetPlan({ userId: USER, category: 'Rent', amount: 10 }).user_id).toBe(USER)
+
+    repo.setBudgetAccess({
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateExpired: true,
+    })
+    expect(repo.saveBudgetOverride({
+      userId: USER,
+      category: 'Rent',
+      amount: 1,
+      month: '2026-10-01',
+    }).user_id).toBe(USER)
+
+    repo.clearAll()
+    repo.setBudgetAccess(locked)
+    repo.clearAll()
+    expect(repo.createBudgetPlan({ userId: USER, category: 'Food', amount: 10 }).dirty).toBe(true)
   })
 })
 

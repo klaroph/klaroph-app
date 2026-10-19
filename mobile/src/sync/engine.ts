@@ -1,3 +1,4 @@
+import { BUDGET_LOCKED, BUDGET_LOCK_UPGRADE_MESSAGE } from '../domain/budgetLock'
 import { DomainError } from '../domain/errors'
 import { FREE_PLAN_CAP, GOAL_LIMIT_REACHED, goalAdoptionBlockMessage, type ResolvedPlanCap } from '../domain/planLimits'
 import { clampPageSize, DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
@@ -77,7 +78,8 @@ export class SyncEngine {
   }
 
   /** Local vs server live counts. Does not upload, adopt, or delete either side. */
-  async preview(userId: string, plan: ResolvedPlanCap = FREE_PLAN_CAP): Promise<SignInPreview> {
+  async preview(userId: string, plan?: ResolvedPlanCap): Promise<SignInPreview> {
+    const resolved = await this.prepareAccount(userId, plan)
     const server = emptyCounts()
     for (const table of SYNCED_TABLES) {
       server[table] = await this.remote.countLive(table, userId)
@@ -85,7 +87,7 @@ export class SyncEngine {
     return {
       local: this.local.countLive(userId),
       server,
-      goalLimitMessage: this.goalLimitMessage(userId, server.goals, plan),
+      goalLimitMessage: this.goalLimitMessage(userId, server.goals, resolved),
     }
   }
 
@@ -93,16 +95,27 @@ export class SyncEngine {
    * Assign the signed-in user to local-only rows. Refuses when the combined
    * goals would exceed the plan, and does not assign any rows in that case.
    */
-  async adopt(userId: string, plan: ResolvedPlanCap = FREE_PLAN_CAP): Promise<void> {
+  async adopt(userId: string, plan?: ResolvedPlanCap): Promise<void> {
+    const resolved = await this.prepareAccount(userId, plan)
     const serverGoals = await this.remote.countLive('goals', userId)
-    const message = this.goalLimitMessage(userId, serverGoals, plan)
+    const message = this.goalLimitMessage(userId, serverGoals, resolved)
     if (message) throw new DomainError(GOAL_LIMIT_REACHED, message)
     this.local.adoptUnassigned(userId)
   }
 
-  async sync(userId: string, plan: ResolvedPlanCap = FREE_PLAN_CAP): Promise<SyncReport> {
+  async sync(userId: string, plan?: ResolvedPlanCap): Promise<SyncReport> {
     const report: SyncReport = { pulled: 0, pushed: 0, errors: [], summary: [] }
     const budgetsKept = { n: 0 }
+    let resolved = plan ?? FREE_PLAN_CAP
+    try {
+      resolved = await this.prepareAccount(userId, plan)
+    } catch (error) {
+      report.errors.push({
+        table: 'goals',
+        message: errorMessage(error),
+        code: errorCode(error) ?? 'PLAN_UNRESOLVED',
+      })
+    }
     try {
       await this.pullAll(userId, report, budgetsKept)
     } catch (error) {
@@ -111,19 +124,39 @@ export class SyncEngine {
     }
     await this.pushGoalTombstones(userId, report)
     const serverGoals = await this.remote.countLive('goals', userId)
-    const message = this.goalLimitMessage(userId, serverGoals, plan)
+    const message = this.goalLimitMessage(userId, serverGoals, resolved)
     if (message) {
       report.errors.push({ table: 'goals', message, code: GOAL_LIMIT_REACHED })
     }
-    const errorsBeforePush = report.errors.length
+    const blockingBeforePush = this.blockingErrorCount(report)
     await this.pushAll(userId, report, message != null)
-    if (report.errors.length > errorsBeforePush) return this.withSummary(report, budgetsKept.n)
+    if (this.blockingErrorCount(report) > blockingBeforePush) return this.withSummary(report, budgetsKept.n)
     try {
       await this.pullAll(userId, report, budgetsKept)
     } catch (error) {
       report.errors.push({ table: 'expenses', message: errorMessage(error), code: errorCode(error) })
     }
     return this.withSummary(report, budgetsKept.n)
+  }
+
+  /**
+   * An omitted plan is the account cap from `get_user_features`.
+   * An explicit plan still wins for the goal cap. The budget clock always comes from the account.
+   * A failed lookup leaves the stored clock unchanged.
+   */
+  private async prepareAccount(userId: string, plan?: ResolvedPlanCap): Promise<ResolvedPlanCap> {
+    const account = await this.remote.resolveAccount(userId)
+    this.local.setBudgetAccess({
+      fullBudgeting: account.fullBudgeting,
+      accountCreatedAt: account.accountCreatedAt,
+      simulateExpired: account.simulateBudgetExpired,
+    })
+    return plan ?? account.plan
+  }
+
+  /** Budget-lock notices stay on the report and still allow the echo pull. */
+  private blockingErrorCount(report: SyncReport): number {
+    return report.errors.filter((error) => error.code !== BUDGET_LOCKED).length
   }
 
   private goalLimitMessage(userId: string, serverGoals: number, plan: ResolvedPlanCap): string | null {
@@ -248,6 +281,16 @@ export class SyncEngine {
       this.local.discardNeverSynced(row.table, row.id)
       return
     }
+    if (this.budgetPushLocked(row.table)) {
+      if (!report.errors.some((error) => error.code === BUDGET_LOCKED)) {
+        report.errors.push({
+          table: row.table,
+          message: BUDGET_LOCK_UPGRADE_MESSAGE,
+          code: BUDGET_LOCKED,
+        })
+      }
+      return
+    }
     const payload = toPushPayload(row)
     if ('deleted_at' in payload && payload.deleted_at == null) {
       throw new Error('Refusing to send a cleared deleted_at.')
@@ -269,5 +312,10 @@ export class SyncEngine {
         code: errorCode(error),
       })
     }
+  }
+
+  private budgetPushLocked(table: SyncedTable): boolean {
+    if (table !== 'budget_plans' && table !== 'budget_overrides') return false
+    return !this.local.budgetEditingAllowed()
   }
 }

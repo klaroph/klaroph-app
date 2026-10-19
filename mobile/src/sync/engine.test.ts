@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { BUDGET_LOCK_UPGRADE_MESSAGE } from '../domain/budgetLock'
 import { DomainError } from '../domain/errors'
 import { openTestRepository } from '../db/testDb'
 import type { KlaroRepository } from '../db/repository'
 import { SyncEngine } from './engine'
 import type { PullPageInput } from './cursor'
 import type { ServerStamp, SyncedTable } from './model'
-import type { PushMode, RemoteSync } from './remote'
+import type { AccountFeatures, PushMode, RemoteSync } from './remote'
 import { activateAccount, signOut } from './session'
 import { MemoryTokenStore } from './tokenStore'
 
@@ -30,6 +31,14 @@ class FakeRemote implements RemoteSync {
   failNext = false
   pulls = 0
   goalCap = Number.POSITIVE_INFINITY
+  resolveCalls = 0
+  resolveError: Error | null = null
+  account: AccountFeatures = {
+    plan: { name: 'Free', maxGoals: 2 },
+    fullBudgeting: false,
+    accountCreatedAt: new Date().toISOString(),
+    simulateBudgetExpired: false,
+  }
   readonly modes: Array<{ table: SyncedTable; mode: PushMode; id: string }> = []
   readonly limits: number[] = []
   /** Runs after the server accepts the payload and before the stamp is returned. */
@@ -154,6 +163,12 @@ class FakeRemote implements RemoteSync {
 
   async countLive(table: SyncedTable, userId: string): Promise<number> {
     return [...this.rows.values()].filter((row) => row.table === table && row.user_id === userId && row.deleted_at == null).length
+  }
+
+  async resolveAccount(): Promise<AccountFeatures> {
+    this.resolveCalls += 1
+    if (this.resolveError) throw this.resolveError
+    return this.account
   }
 
   private assertLiveUnique(table: SyncedTable, payload: Record<string, unknown>, existing: Stored | null): void {
@@ -785,5 +800,109 @@ describe('sync engine', () => {
     expect(repo.listLive('expenses', USER_A)).toHaveLength(0)
     expect(repo.sessionUserId()).toBe(USER_B)
     expect(await tokens.get('sb-klaro-auth-token')).toBe('token-b')
+  })
+
+  it('uses the account goal cap from get_user_features when sync is not given a plan', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    repo.createGoal({ userId: USER_A, name: 'One', targetAmount: 10, maxGoals: 20 })
+    repo.createGoal({ userId: USER_A, name: 'Two', targetAmount: 10, maxGoals: 20 })
+    repo.createGoal({ userId: USER_A, name: 'Three', targetAmount: 10, maxGoals: 20 })
+    const report = await engine.sync(USER_A)
+    expect(remote.resolveCalls).toBe(1)
+    expect(report.errors).toEqual([])
+    expect(remote.modes.filter((entry) => entry.table === 'goals' && entry.mode === 'insert')).toHaveLength(3)
+    expect(await remote.countLive('goals', USER_A)).toBe(3)
+  })
+
+  it('keeps the free cap and still syncs other tables when the plan lookup fails', async () => {
+    const { repo, remote, engine } = harness()
+    remote.resolveError = new DomainError('42501', 'permission denied for function get_user_features')
+    repo.createGoal({ userId: USER_A, name: 'One', targetAmount: 10, maxGoals: 20 })
+    repo.createGoal({ userId: USER_A, name: 'Two', targetAmount: 10, maxGoals: 20 })
+    repo.createGoal({ userId: USER_A, name: 'Three', targetAmount: 10, maxGoals: 20 })
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Fare',
+      type: 'needs',
+      amount: 15,
+      date: '2026-02-01',
+    })
+    const report = await engine.sync(USER_A)
+    expect(report.errors.map((error) => error.code)).toEqual(['42501', 'GOAL_LIMIT_REACHED'])
+    expect(remote.get('expenses', expense.id)?.category).toBe('Fare')
+    expect(await remote.countLive('goals', USER_A)).toBe(0)
+    expect(repo.budgetEditingAllowed()).toBe(true)
+    expect(() => repo.createBudgetPlan({ userId: USER_A, category: 'Food', amount: 10 })).not.toThrow()
+  })
+
+  it('still uploads goals under an explicit plan when the lookup fails', async () => {
+    const { repo, remote, engine } = harness()
+    remote.resolveError = new DomainError('42501', 'permission denied for function get_user_features')
+    repo.createGoal({ userId: USER_A, name: 'One', targetAmount: 10, maxGoals: 20 })
+    repo.createGoal({ userId: USER_A, name: 'Two', targetAmount: 10, maxGoals: 20 })
+    repo.createGoal({ userId: USER_A, name: 'Three', targetAmount: 10, maxGoals: 20 })
+    const report = await engine.sync(USER_A, { name: 'Pro', maxGoals: 20 })
+    expect(report.errors).toEqual([{
+      table: 'goals',
+      message: 'permission denied for function get_user_features',
+      code: '42501',
+    }])
+    expect(await remote.countLive('goals', USER_A)).toBe(3)
+  })
+
+  it('holds signed-in free budget edits after the trial and still syncs other tables', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Free', maxGoals: 2 },
+      fullBudgeting: false,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const first = repo.createBudgetPlan({ userId: USER_A, category: 'Food', amount: 100 })
+    repo.replaceBudgetPlans(USER_A, [{ category: 'Food', amount: 80 }])
+    repo.saveBudgetOverride({ userId: USER_A, category: 'Food', amount: 10, month: '2026-02-01' })
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Fare',
+      type: 'needs',
+      amount: 15,
+      date: '2026-02-01',
+    })
+    const report = await engine.sync(USER_A)
+    expect(report.errors).toEqual([{
+      table: 'budget_plans',
+      message: BUDGET_LOCK_UPGRADE_MESSAGE,
+      code: 'BUDGET_LOCKED',
+    }])
+    expect(remote.payloads.filter((entry) => entry.table === 'budget_plans' || entry.table === 'budget_overrides')).toHaveLength(0)
+    expect(remote.get('expenses', expense.id)?.category).toBe('Fare')
+    expect(repo.getRow('budget_plans', first.id)).toBeNull()
+    expect(repo.listLive('budget_plans', USER_A)[0]?.dirty).toBe(true)
+    expect(repo.listLive('budget_overrides', USER_A)[0]?.dirty).toBe(true)
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(false)
+    expect(() => repo.createBudgetPlan({ userId: USER_A, category: 'Rent', amount: 10 })).toThrow(
+      expect.objectContaining({ code: 'BUDGET_LOCKED', message: BUDGET_LOCK_UPGRADE_MESSAGE }),
+    )
+  })
+
+  it('pushes budget edits when the account has full budgeting', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: true,
+    }
+    const plan = repo.createBudgetPlan({ userId: USER_A, category: 'Food', amount: 100 })
+    const report = await engine.sync(USER_A)
+    expect(report.errors).toEqual([])
+    expect(remote.get('budget_plans', plan.id)?.category).toBe('Food')
+    expect(repo.getRow('budget_plans', plan.id)?.dirty).toBe(false)
   })
 })

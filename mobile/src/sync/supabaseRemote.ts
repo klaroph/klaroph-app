@@ -1,9 +1,10 @@
 import { createClient, type SupabaseClient, type SupportedStorage } from '@supabase/supabase-js'
 import { keysetOr, type PullPageInput } from './cursor'
 import { DomainError } from '../domain/errors'
+import { fullBudgetingFromUserFeatures, planCapFromUserFeatures } from '../domain/planLimits'
 import type { ServerStamp, SyncedTable } from './model'
 import { fieldsFor } from './model'
-import type { PushMode, RemoteSync } from './remote'
+import type { AccountFeatures, PushMode, RemoteSync } from './remote'
 import type { TokenStore } from './tokenStore'
 
 const SELECT_LIST: Record<SyncedTable, string> = {
@@ -44,6 +45,23 @@ type WriteQuery = {
 
 export type SyncSupabase = {
   from: (table: SyncedTable) => FilterQuery & WriteQuery
+}
+
+type AccountClient = {
+  rpc: (fn: 'get_user_features', args: { p_user_id: string }) => Promise<{ data: unknown; error: QueryError }>
+  auth: {
+    getUser: () => Promise<{
+      data: { user: { id: string; created_at?: string | null } | null }
+      error: QueryError
+    }>
+  }
+  from: (table: 'profiles') => {
+    select: (columns: 'simulate_budget_expired') => {
+      eq: (column: 'id', value: string) => {
+        maybeSingle: () => Promise<{ data: { simulate_budget_expired?: boolean } | null; error: QueryError }>
+      }
+    }
+  }
 }
 
 function remoteError(error: Exclude<QueryError, null>): never {
@@ -93,6 +111,10 @@ function asSyncClient(client: SupabaseClient): SyncSupabase {
   return client as unknown as SyncSupabase
 }
 
+function asAccountClient(client: SupabaseClient): AccountClient {
+  return client as unknown as AccountClient
+}
+
 /**
  * Never-synced rows are inserted. Rows the server has already acknowledged are
  * updated by id. An upsert would run the goal-limit trigger on its insert half
@@ -102,6 +124,7 @@ function asSyncClient(client: SupabaseClient): SyncSupabase {
  */
 export function createSupabaseRemote(client: SupabaseClient): RemoteSync {
   const db = asSyncClient(client)
+  const account = asAccountClient(client)
   return {
     async pullPage(input: PullPageInput) {
       let query = db.from(input.table).select(selectList(input.table)).eq('user_id', input.userId)
@@ -136,6 +159,43 @@ export function createSupabaseRemote(client: SupabaseClient): RemoteSync {
       if (error) remoteError(error)
       return count ?? 0
     },
+    async resolveAccount(userId) {
+      return readAccountFeatures(account, userId)
+    },
+  }
+}
+
+/**
+ * `get_user_features(p_user_id uuid) returns jsonb` with `plan_name` and `max_goals`.
+ * Execute is granted to service_role only today. This call uses the user session.
+ * A failure is thrown so sync can keep the Free goal cap without storing a budget clock.
+ * A profile read failure does not fail the lookup; the simulate flag stays false.
+ */
+async function readAccountFeatures(account: AccountClient, userId: string): Promise<AccountFeatures> {
+  const features = await account.rpc('get_user_features', { p_user_id: userId })
+  if (features.error) remoteError(features.error)
+  const userResult = await account.auth.getUser()
+  if (userResult.error) remoteError(userResult.error)
+  const user = userResult.data.user
+  const accountCreatedAt = user && user.id === userId ? user.created_at ?? null : null
+  let simulateBudgetExpired = false
+  try {
+    const profile = await account
+      .from('profiles')
+      .select('simulate_budget_expired')
+      .eq('id', userId)
+      .maybeSingle()
+    if (!profile.error && profile.data?.simulate_budget_expired === true) {
+      simulateBudgetExpired = true
+    }
+  } catch {
+    simulateBudgetExpired = false
+  }
+  return {
+    plan: planCapFromUserFeatures(features.data),
+    fullBudgeting: fullBudgetingFromUserFeatures(features.data),
+    accountCreatedAt,
+    simulateBudgetExpired,
   }
 }
 

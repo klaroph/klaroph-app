@@ -4,9 +4,33 @@ import { createSupabaseRemote } from './supabaseRemote'
 
 type Call = Record<string, unknown>
 
-function mockClient(options?: { insertConflict?: boolean }) {
+function mockClient(options?: {
+  insertConflict?: boolean
+  features?: unknown
+  featuresError?: { message: string; code?: string }
+  user?: { id: string; created_at?: string | null } | null
+  simulate?: boolean
+  profileError?: { message: string; code?: string }
+}) {
   const calls: Call[] = []
+  const rpcCalls: Call[] = []
   const client = {
+    rpc(fn: string, args: unknown) {
+      rpcCalls.push({ fn, args })
+      if (options?.featuresError) return Promise.resolve({ data: null, error: options.featuresError })
+      return Promise.resolve({
+        data: options?.features ?? { plan_name: 'free', max_goals: 2 },
+        error: null,
+      })
+    },
+    auth: {
+      getUser() {
+        const user = options?.user === undefined
+          ? { id: 'user-1', created_at: '2026-10-01T00:00:00.000Z' }
+          : options.user
+        return Promise.resolve({ data: { user }, error: null })
+      },
+    },
     from(table: string) {
       const state: Call = { table }
       const api = {
@@ -64,6 +88,14 @@ function mockClient(options?: { insertConflict?: boolean }) {
             error: null,
           })
         },
+        maybeSingle() {
+          calls.push({ ...state, op: 'maybeSingle', table })
+          if (options?.profileError) return Promise.resolve({ data: null, error: options.profileError })
+          return Promise.resolve({
+            data: { simulate_budget_expired: options?.simulate === true },
+            error: null,
+          })
+        },
         then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
           calls.push({ ...state, op: 'then' })
           return Promise.resolve({ data: null, error: null, count: 4 }).then(resolve, reject)
@@ -72,7 +104,7 @@ function mockClient(options?: { insertConflict?: boolean }) {
       return api
     },
   }
-  return { client: client as unknown as SupabaseClient, calls }
+  return { client: client as unknown as SupabaseClient, calls, rpcCalls }
 }
 
 describe('supabase remote', () => {
@@ -139,5 +171,41 @@ describe('supabase remote', () => {
     const call = calls.find((entry) => entry.op === 'then')
     expect(call?.selectOptions).toEqual({ count: 'exact', head: true })
     expect(call?.is).toEqual(['deleted_at', null])
+  })
+
+  it('resolves Pro from get_user_features and reads the budget clock', async () => {
+    const { client, rpcCalls, calls } = mockClient({
+      features: { plan_name: 'clarity_premium', max_goals: 20, is_grace: false },
+      user: { id: 'user-1', created_at: '2024-01-01T00:00:00.000Z' },
+      simulate: false,
+    })
+    const remote = createSupabaseRemote(client)
+    await expect(remote.resolveAccount('user-1')).resolves.toEqual({
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2024-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    })
+    expect(rpcCalls).toEqual([{ fn: 'get_user_features', args: { p_user_id: 'user-1' } }])
+    const profile = calls.find((entry) => entry.op === 'maybeSingle')
+    expect(profile?.table).toBe('profiles')
+    expect(profile?.select).toBe('simulate_budget_expired')
+    expect(profile?.eq).toEqual([['id', 'user-1']])
+  })
+
+  it('throws when get_user_features fails and ignores a profile read failure', async () => {
+    const denied = mockClient({ featuresError: { code: '42501', message: 'permission denied for function get_user_features' } })
+    await expect(createSupabaseRemote(denied.client).resolveAccount('user-1')).rejects.toMatchObject({ code: '42501' })
+
+    const { client } = mockClient({
+      features: { plan_name: 'free', max_goals: 2 },
+      profileError: { message: 'profile unavailable' },
+      simulate: true,
+    })
+    await expect(createSupabaseRemote(client).resolveAccount('user-1')).resolves.toMatchObject({
+      plan: { name: 'Free', maxGoals: 2 },
+      fullBudgeting: false,
+      simulateBudgetExpired: false,
+    })
   })
 })

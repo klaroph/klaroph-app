@@ -58,7 +58,7 @@ Synced tables mirror the server columns added for offline sync:
 
 A deposit is an `income_allocations` row with `user_id` and an optional `income_record_id`. Soft-deleting a goal or an income record tombstones its live allocations locally. The server does the same with `cascade_soft_delete_allocations`.
 
-Local-only mode (no `user_id`) enforces the free goal cap of **2**, the default in `enforce_goal_plan_limit` and the seeded `plans` row named `free`. Production enforces that cap with trigger `goals_enforce_plan_limit` only. The device does not apply the 300-row tool limit.
+Local-only mode (no `user_id`) enforces the free goal cap of **2**, the default in `enforce_goal_plan_limit` and the seeded `plans` row named `free`. Passing a higher `maxGoals` does not raise that local-only cap. Production enforces the account cap with trigger `goals_enforce_plan_limit` only. The device does not apply the 300-row tool limit.
 
 ## Sync
 
@@ -74,10 +74,16 @@ When a live local budget that has never been acknowledged uses the same category
 
 Delete wins over an edit. A push includes `deleted_at` only when the local row is already a tombstone, and it never sends `deleted_at: null` or `saved_amount`. A row created and deleted before it was ever acknowledged is dropped locally instead of inserted as a server tombstone.
 
+`preview(userId)`, `adopt`, and `sync` call `get_user_features(p_user_id)` with the signed-in session when no plan is passed. The returned `max_goals` is the cap. `plan_name` `pro` or `clarity_premium` is shown as Pro, including lifetime and grace. An explicit plan argument still overrides that cap. Local-only goal creation stays at 2.
+
+`get_user_features(uuid)` returns jsonb (`plan_name`, `max_goals`, feature flags, `is_grace`, `can_create_goals`). Execute is granted to `service_role` only. This app never sends the service role key. If the call fails, sync records the error, uses the Free goal cap, leaves the stored budget clock unchanged, and still syncs other tables. Pro features stay unavailable on the phone until `authenticated` can execute the function. This package does not add a migration for that grant.
+
+Signed-in budget creates, replacements, and override saves follow the web routes (`POST /api/budget-plan`, `POST /api/budget-overrides`, and `PATCH`/`DELETE /api/budget-overrides/:id`). Full budgeting (Pro, including lifetime and grace) can always edit. A Free account can edit for 30 days after `auth.users.created_at`. `profiles.simulate_budget_expired` pretends the account is 31 days old. Past the window, the phone keeps the rows local, skips pushing `budget_plans` and `budget_overrides`, and reports `Upgrade to continue managing budgets beyond 30 days.` Other tables still sync, and pulled budget rows still apply. Local-only rows are not locked. The clock is stored only after a successful plan lookup, so a failed lookup does not lock the budget.
+
 `preview(userId)` returns live local counts (this user plus rows with no user) and live server counts. It does not upload. When unsynced device goals plus live account goals, minus pending deletes of synced goals, exceed the resolved plan cap, `goalLimitMessage` is `Free allows N goals; you have X here and Y in your account. Remove some to continue.` `adopt` assigns nothing in that case. `sync` still pulls and still pushes every other table; it does not insert the new goals. There is no goal picker. X counts device goals the server has not acknowledged yet, so goals already on the account are not counted twice. A combined total equal to the cap is allowed. There is no dedupe in v1.
 
 `activateAccount` keeps local-only data on the first sign-in. Signing in as a different user wipes the previous account's rows and token. `signOut` always clears both.
 
 ## Not in this foundation
 
-Pro checkout, reports, exports, and any designed screens. Payday periods are calendar halves in Asia/Manila: the 1st–15th and the 16th through the last day of the month (`src/domain/payPeriod.ts`). That is separate from the payday email window in the web app.
+Pro checkout, reports, exports, and any designed screens. Payday periods (`src/domain/payPeriod.ts`) use Asia/Manila and match the payday email window. Period A is the previous month's last day through the 14th. Period B is the 15th through the day before the month's last day. The last day of a month starts the next month's period A.

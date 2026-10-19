@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
+import { assertBudgetEditingAllowed, budgetEditingAllowed as budgetAccessAllowsEditing, type BudgetAccess } from '../domain/budgetLock'
 import { DomainError } from '../domain/errors'
 import { goalProgressAmount } from '../domain/goalTotal'
 import { createId } from '../domain/ids'
@@ -28,6 +29,7 @@ type RunResult = { changes: number }
 export type KlaroDb = BaseSQLiteDatabase<'sync', RunResult, typeof schema>
 
 const SESSION_USER_KEY = 'session_user_id'
+const BUDGET_ACCESS_KEY = 'budget_access'
 const nextRevision = sql`revision + 1`
 
 type ExpenseType = 'needs' | 'wants'
@@ -142,6 +144,23 @@ function mapAllocation(row: typeof incomeAllocations.$inferSelect): SyncRow {
   })
 }
 
+function parseBudgetAccess(raw: string): BudgetAccess | null {
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (value == null || typeof value !== 'object' || Array.isArray(value)) return null
+    const record = value as Record<string, unknown>
+    if (typeof record.fullBudgeting !== 'boolean' || typeof record.simulateExpired !== 'boolean') return null
+    if (record.accountCreatedAt != null && typeof record.accountCreatedAt !== 'string') return null
+    return {
+      fullBudgeting: record.fullBudgeting,
+      accountCreatedAt: typeof record.accountCreatedAt === 'string' ? record.accountCreatedAt : null,
+      simulateExpired: record.simulateExpired,
+    }
+  } catch {
+    return null
+  }
+}
+
 function requiredValue(row: ServerRow, key: string): string {
   const value = row.values[key]
   if (value == null) throw new DomainError('REMOTE_ROW', `Missing ${key}.`)
@@ -195,6 +214,30 @@ export class KlaroRepository implements LocalStore {
 
   setSessionUserId(userId: string | null): void {
     this.setMeta(SESSION_USER_KEY, userId)
+  }
+
+  setBudgetAccess(access: BudgetAccess | null): void {
+    this.setMeta(BUDGET_ACCESS_KEY, access == null ? null : JSON.stringify(access))
+  }
+
+  budgetEditingAllowed(): boolean {
+    const access = this.readBudgetAccess()
+    if (!access) return true
+    return budgetAccessAllowsEditing(access, this.clock())
+  }
+
+  private readBudgetAccess(): BudgetAccess | null {
+    const raw = this.meta(BUDGET_ACCESS_KEY)
+    if (!raw) return null
+    return parseBudgetAccess(raw)
+  }
+
+  /** Signed-in writes use the stored clock. No clock yet, and local-only rows, stay editable. */
+  private assertBudgetWritable(userId: string | null): void {
+    if (userId == null) return
+    const access = this.readBudgetAccess()
+    if (!access) return
+    assertBudgetEditingAllowed(access, this.clock())
   }
 
   getCursor(userId: string, table: SyncedTable): string | null {
@@ -599,6 +642,7 @@ export class KlaroRepository implements LocalStore {
   }
 
   createBudgetPlan(input: { userId: string | null; category: string; amount: number; note?: string | null }): SyncRow {
+    this.assertBudgetWritable(input.userId)
     const category = requireText(input.category, 'category')
     if (this.findLivePlan(input.userId, category)) {
       throw new DomainError('UNIQUE_CONFLICT', 'A live budget plan already exists for this category.')
@@ -620,6 +664,7 @@ export class KlaroRepository implements LocalStore {
   }
 
   replaceBudgetPlans(userId: string | null, items: ReadonlyArray<{ category: string; amount: number; note?: string | null }>): void {
+    this.assertBudgetWritable(userId)
     if (items.length === 0) {
       throw new DomainError('INVALID', 'Send at least one category with an amount greater than 0.')
     }
@@ -652,6 +697,7 @@ export class KlaroRepository implements LocalStore {
     month: string
     note?: string | null
   }): SyncRow {
+    this.assertBudgetWritable(input.userId)
     const category = requireText(input.category, 'category')
     const month = `${requireIsoDate(input.month, 'month').slice(0, 7)}-01`
     const amount = moneyToText(assertNonNegativeMoney(input.amount))
