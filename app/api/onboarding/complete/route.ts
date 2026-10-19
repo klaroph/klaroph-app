@@ -19,8 +19,12 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}))
+    const bodyHas = (key: string) =>
+      !!body && typeof body === 'object' && Object.prototype.hasOwnProperty.call(body, key)
+    // Only a non-empty string is written. A 4-step finish omits this, and a blank
+    // string must not clear a range the person already saved on Profile.
     const monthly_income_range =
-      typeof body?.monthly_income_range === 'string' ? body.monthly_income_range.trim() || null : null
+      typeof body?.monthly_income_range === 'string' ? body.monthly_income_range.trim() : ''
     const monthly_income =
       typeof body?.monthly_income === 'number' && body.monthly_income >= 0 ? body.monthly_income : null
     const income_frequency =
@@ -83,16 +87,16 @@ export async function POST(request: Request) {
     }
 
     const profileUpdate = {
-      monthly_income_range,
+      ...(monthly_income_range ? { monthly_income_range } : {}),
       monthly_income,
       income_frequency,
       primary_goal_category,
-      savings_confidence,
+      ...(bodyHas('savings_confidence') ? { savings_confidence } : {}),
       savings_percent,
-      financial_stage,
-      risk_comfort,
-      motivation_type,
-      dream_statement,
+      ...(bodyHas('financial_stage') ? { financial_stage } : {}),
+      ...(bodyHas('risk_comfort') ? { risk_comfort } : {}),
+      ...(bodyHas('motivation_type') ? { motivation_type } : {}),
+      ...(bodyHas('dream_statement') ? { dream_statement } : {}),
       onboarding_completed: true,
       profile_completion_percentage: 100,
       nickname: parsedNickname.nickname,

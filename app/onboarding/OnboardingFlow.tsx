@@ -13,11 +13,6 @@ import {
   onboardingNamePrefill,
 } from '@/lib/displayName'
 import KlaroPHHandLogo from '@/components/ui/KlaroPHHandLogo'
-import {
-  FINANCIAL_STAGES,
-  RISK_COMFORT_OPTIONS,
-  MOTIVATION_TYPES,
-} from '@/types/profile'
 import BudgetStep from '@/components/onboarding/BudgetStep'
 
 type IncomeFrequency = 'monthly' | 'semi-monthly' | 'weekly'
@@ -41,17 +36,15 @@ function presetToGoalCategory(presetId: string): string | null {
   return map[presetId] ?? 'other'
 }
 
-const STEPS = 8
+// Welcome is step 1 of 4. The label is "Step n of 4" on every screen, including
+// welcome, so the number always matches the screen the person is on.
+const STEPS = 4
 
-/** Labels for steps 2–8 (step 1 is the welcome screen). */
 const STEP_LABELS: Record<number, string> = {
+  1: 'Welcome',
   2: 'Income',
   3: 'Spending plan',
-  4: 'Goal',
-  5: 'Savings',
-  6: 'Your journey',
-  7: 'What matters',
-  8: 'Your plan',
+  4: 'Your plan',
 }
 
 const SETUP_PREVIEW = ['Your income', 'A simple spending plan', 'Your first goal', 'A savings preference']
@@ -92,7 +85,7 @@ function PreferredNameField({
 type OnboardingFlowProps = {
   nickname?: string | null
   fullName?: string | null
-  /** Test hook so the summary step can render without clicking through. */
+  /** Test hook so a later step can render without clicking through. */
   initialStep?: number
 }
 
@@ -111,11 +104,6 @@ export default function OnboardingFlow({
   const [goalPresetId, setGoalPresetId] = useState<string>('custom')
   const [targetAmount, setTargetAmount] = useState('')
   const [savingsPercent, setSavingsPercent] = useState(20)
-  const [savingsConfidence, setSavingsConfidence] = useState(3)
-  const [financialStage, setFinancialStage] = useState('')
-  const [riskComfort, setRiskComfort] = useState('')
-  const [motivationType, setMotivationType] = useState('')
-  const [dreamStatement, setDreamStatement] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [preferredName, setPreferredName] = useState(seededName)
@@ -158,15 +146,6 @@ export default function OnboardingFlow({
     setStep(2)
   }
 
-  const openFinish = () => {
-    const parsed = nicknameForWrite(preferredName)
-    if (!parsed.ok) {
-      setFinishNameOpen(true)
-      setNameError(parsed.error)
-    }
-    setStep(STEPS)
-  }
-
   const handleFinish = async () => {
     setError(null)
     const parsed = rejectIncompleteName(true)
@@ -186,11 +165,6 @@ export default function OnboardingFlow({
           income_frequency: frequency,
           primary_goal_category,
           savings_percent: savingsPercent,
-          savings_confidence: savingsConfidence,
-          financial_stage: financialStage || null,
-          risk_comfort: riskComfort || null,
-          motivation_type: motivationType || null,
-          dream_statement: dreamStatement.trim() || null,
           goal_name: name,
           goal_target_amount: target,
           nickname: parsed.nickname,
@@ -215,35 +189,37 @@ export default function OnboardingFlow({
     }
   }
 
+  const finishPlan = () => {
+    setError(null)
+    const name =
+      goalPresetId === 'custom'
+        ? goalName.trim()
+        : (GOAL_PRESETS.find((p) => p.id === goalPresetId)?.defaultName ?? goalName)
+    const t = parseFloat(targetAmount.replace(/[^0-9.]/g, ''))
+    if (!name && goalPresetId === 'custom') {
+      setError('Please enter or select a goal.')
+      return
+    }
+    if (!targetAmount.trim() || t <= 0) {
+      setError('Please enter a valid target amount.')
+      return
+    }
+    void handleFinish()
+  }
+
   const goNext = () => {
     setError(null)
     if (step === 2 && (!income.trim() || incomeNum <= 0)) {
       setError('Please enter a valid income amount.')
       return
     }
-    if (step === 4) {
-      const name = goalPresetId === 'custom' ? goalName.trim() : (GOAL_PRESETS.find((p) => p.id === goalPresetId)?.defaultName ?? goalName)
-      const t = parseFloat(targetAmount.replace(/[^0-9.]/g, ''))
-      if (!name && goalPresetId === 'custom') {
-        setError('Please enter or select a goal.')
-        return
-      }
-      if (!targetAmount.trim() || t <= 0) {
-        setError('Please enter a valid target amount.')
-        return
-      }
-    }
     if (step < STEPS) setStep((s) => s + 1)
-    else handleFinish()
   }
 
   const goBack = () => {
     setError(null)
     if (step > 1) setStep((s) => s - 1)
   }
-
-  const progressStep = step - 1
-  const progressTotal = STEPS - 1
 
   const errorLine = error ? (
     <p className="onb-error" role="alert">
@@ -267,23 +243,21 @@ export default function OnboardingFlow({
 
       <main className="onb-main">
         <div className="onb-card">
-          {step > 1 && (
-            <div className="onb-progress">
-              <p className="onb-progress-label">
-                Step {progressStep} of {progressTotal} · <span>{STEP_LABELS[step]}</span>
-              </p>
-              <div
-                className="onb-progress-track"
-                role="progressbar"
-                aria-label="Setup progress"
-                aria-valuemin={1}
-                aria-valuemax={progressTotal}
-                aria-valuenow={progressStep}
-              >
-                <div className="onb-progress-fill" style={{ width: `${(progressStep / progressTotal) * 100}%` }} />
-              </div>
+          <div className="onb-progress">
+            <p className="onb-progress-label">
+              Step {step} of {STEPS} · <span>{STEP_LABELS[step]}</span>
+            </p>
+            <div
+              className="onb-progress-track"
+              role="progressbar"
+              aria-label="Setup progress"
+              aria-valuemin={1}
+              aria-valuemax={STEPS}
+              aria-valuenow={step}
+            >
+              <div className="onb-progress-fill" style={{ width: `${(step / STEPS) * 100}%` }} />
             </div>
-          )}
+          </div>
 
           {/* Step 1: Welcome */}
           {step === 1 && (
@@ -315,7 +289,7 @@ export default function OnboardingFlow({
             </div>
           )}
 
-          {/* Step 2: Income */}
+          {/* Step 2: Income and savings percent */}
           {step === 2 && (
             <>
               <h2 className="onb-title">Let&apos;s start with your income.</h2>
@@ -343,6 +317,29 @@ export default function OnboardingFlow({
                   <option value="weekly">Weekly</option>
                 </select>
               </label>
+              <div className="onb-follow">
+                <h2 className="onb-title">Pay your future self first.</h2>
+                <p className="onb-lead">How much will you save from every income?</p>
+                <div className="onb-range">
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    step="5"
+                    value={savingsPercent}
+                    onChange={(e) => setSavingsPercent(Number(e.target.value))}
+                    aria-label="Savings percentage"
+                  />
+                  <p className="onb-range-value">{savingsPercent}%</p>
+                </div>
+                <p className="onb-callout">
+                  Suggested savings: <strong>{formatWholePeso(savingsPerMonth)}</strong> per month.
+                </p>
+                <p className="onb-hint">
+                  Savings is not what&apos;s left — it comes first. This {savingsPercent}% stays a preference
+                  on your profile. Nothing moves to your goal until you allocate it.
+                </p>
+              </div>
               {errorLine}
               <div className="onb-actions">
                 {backButton}
@@ -353,10 +350,10 @@ export default function OnboardingFlow({
             </>
           )}
 
-          {/* Step 3: Budget (Spending Plan) */}
+          {/* Step 3: Budget (Spending Plan). Skip advances without writing budget_plans. */}
           {step === 3 && <BudgetStep onBack={goBack} onNext={goNext} />}
 
-          {/* Step 4: Goal */}
+          {/* Step 4: Goal and plan summary */}
           {step === 4 && (
             <>
               <h2 className="onb-title">What are you saving for?</h2>
@@ -399,169 +396,44 @@ export default function OnboardingFlow({
                   className="login-input"
                 />
               </label>
-              {errorLine}
-              <div className="onb-actions">
-                {backButton}
-                <button type="button" onClick={goNext} className="btn-primary onb-btn">
-                  Continue
-                </button>
+              <div className="onb-follow">
+                <h2 className="onb-title">Your plan is ready! 🎯</h2>
+                <p className="onb-lead">
+                  {monthsToGoal > 0
+                    ? `If you later allocate ${savingsPercent}% of your income, you could reach your goal in about ${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}.`
+                    : 'Adjust your savings % or target to see a timeline.'}
+                </p>
+                <dl className="onb-summary">
+                  <div>
+                    <dt>This pay period</dt>
+                    <dd>{formatWholePeso(incomeNum)}</dd>
+                  </div>
+                  <div>
+                    <dt>Income</dt>
+                    <dd>{formatWholePeso(monthlyIncome)} a month</dd>
+                  </div>
+                  <div>
+                    <dt>Savings preference</dt>
+                    <dd>{savingsPercent}% · {formatWholePeso(savingsPerMonth)} a month</dd>
+                  </div>
+                  <div>
+                    <dt>Goal</dt>
+                    <dd>{goalName.trim() || 'My Goal'}</dd>
+                  </div>
+                  <div>
+                    <dt>Target</dt>
+                    <dd>{formatWholePeso(targetNum)}</dd>
+                  </div>
+                  <div className="onb-summary-wide">
+                    <dt>If you allocate later</dt>
+                    <dd>{monthsToGoal > 0 ? `~${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}` : '—'}</dd>
+                  </div>
+                </dl>
+                <p className="onb-hint">
+                  We&apos;ll save this pay period&apos;s income today. Nothing moves to your goal until you
+                  allocate it later — your savings % stays a preference only.
+                </p>
               </div>
-            </>
-          )}
-
-          {/* Step 5: Savings % */}
-          {step === 5 && (
-            <>
-              <h2 className="onb-title">Pay your future self first.</h2>
-              <p className="onb-lead">How much will you save from every income?</p>
-              <div className="onb-range">
-                <input
-                  type="range"
-                  min="5"
-                  max="50"
-                  step="5"
-                  value={savingsPercent}
-                  onChange={(e) => setSavingsPercent(Number(e.target.value))}
-                  aria-label="Savings percentage"
-                />
-                <p className="onb-range-value">{savingsPercent}%</p>
-              </div>
-              <p className="onb-callout">
-                Suggested savings: <strong>{formatWholePeso(savingsPerMonth)}</strong> per month.
-              </p>
-              <p className="onb-hint">
-                Savings is not what&apos;s left — it comes first. This {savingsPercent}% stays a preference
-                on your profile. Nothing moves to your goal until you allocate it.
-              </p>
-              <div className="onb-actions">
-                {backButton}
-                <button type="button" onClick={() => setStep(6)} className="btn-primary onb-btn">
-                  Continue
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Step 6: Profile — financial stage & savings confidence */}
-          {step === 6 && (
-            <>
-              <h2 className="onb-title">A bit about your financial journey.</h2>
-              <p className="onb-lead">Optional — you can edit these later in your profile.</p>
-              <label className="onb-field">
-                <span className="onb-label">Where are you now?</span>
-                <select value={financialStage} onChange={(e) => setFinancialStage(e.target.value)} className="login-input">
-                  <option value="">Select</option>
-                  {FINANCIAL_STAGES.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="onb-field">
-                <span className="onb-label" id="onb-confidence-label">How confident are you about saving? (1–5)</span>
-                <div className="onb-chips onb-chips--start" role="group" aria-labelledby="onb-confidence-label">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      aria-pressed={savingsConfidence === n}
-                      className="onb-chip onb-chip--square"
-                      onClick={() => setSavingsConfidence(n)}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="onb-actions">
-                {backButton}
-                <button type="button" onClick={() => setStep(7)} className="btn-primary onb-btn">
-                  Continue
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Step 7: Profile — risk comfort, motivation, dream */}
-          {step === 7 && (
-            <>
-              <h2 className="onb-title">What matters most to you?</h2>
-              <p className="onb-lead">Optional — you can edit these later in your profile.</p>
-              <label className="onb-field">
-                <span className="onb-label">Risk comfort</span>
-                <select value={riskComfort} onChange={(e) => setRiskComfort(e.target.value)} className="login-input">
-                  <option value="">Select</option>
-                  {RISK_COMFORT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="onb-field">
-                <span className="onb-label">What motivates you?</span>
-                <select value={motivationType} onChange={(e) => setMotivationType(e.target.value)} className="login-input">
-                  <option value="">Select</option>
-                  {MOTIVATION_TYPES.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="onb-field">
-                <span className="onb-label">Dream or goal in one sentence (optional)</span>
-                <input
-                  type="text"
-                  placeholder="e.g. Own a home by 35"
-                  value={dreamStatement}
-                  onChange={(e) => setDreamStatement(e.target.value)}
-                  className="login-input"
-                />
-              </label>
-              <div className="onb-actions">
-                {backButton}
-                <button type="button" onClick={openFinish} className="btn-primary onb-btn">
-                  See My Plan
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Step 8: Summary — first value moment from the user's own entries */}
-          {step === 8 && (
-            <>
-              <h2 className="onb-title">Your plan is ready! 🎯</h2>
-              <p className="onb-lead">
-                {monthsToGoal > 0
-                  ? `If you later allocate ${savingsPercent}% of your income, you could reach your goal in about ${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}.`
-                  : 'Adjust your savings % or target to see a timeline.'}
-              </p>
-              <dl className="onb-summary">
-                <div>
-                  <dt>This pay period</dt>
-                  <dd>{formatWholePeso(incomeNum)}</dd>
-                </div>
-                <div>
-                  <dt>Income</dt>
-                  <dd>{formatWholePeso(monthlyIncome)} a month</dd>
-                </div>
-                <div>
-                  <dt>Savings preference</dt>
-                  <dd>{savingsPercent}% · {formatWholePeso(savingsPerMonth)} a month</dd>
-                </div>
-                <div>
-                  <dt>Goal</dt>
-                  <dd>{goalName.trim() || 'My Goal'}</dd>
-                </div>
-                <div>
-                  <dt>Target</dt>
-                  <dd>{formatWholePeso(targetNum)}</dd>
-                </div>
-                <div className="onb-summary-wide">
-                  <dt>If you allocate later</dt>
-                  <dd>{monthsToGoal > 0 ? `~${monthsToGoal} month${monthsToGoal !== 1 ? 's' : ''}` : '—'}</dd>
-                </div>
-              </dl>
-              <p className="onb-hint">
-                We&apos;ll save this pay period&apos;s income today. Nothing moves to your goal until you
-                allocate it later — your savings % stays a preference only.
-              </p>
               {(finishNameOpen || nameError) && (
                 <PreferredNameField
                   value={preferredName}
@@ -572,7 +444,7 @@ export default function OnboardingFlow({
               {errorLine}
               <div className="onb-actions">
                 {backButton}
-                <button type="button" onClick={handleFinish} disabled={loading} className="btn-primary onb-btn">
+                <button type="button" onClick={finishPlan} disabled={loading} className="btn-primary onb-btn">
                   {loading ? 'Setting up…' : 'Go to Dashboard'}
                 </button>
               </div>

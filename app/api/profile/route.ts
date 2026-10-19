@@ -6,7 +6,7 @@ import { nicknameForWrite } from '@/lib/displayName'
 import type { ProfileWithComputed } from '@/types/profile'
 
 /** Unselected selects post "". Those columns only allow NULL or a known value. */
-const BLANK_TO_NULL = new Set<string>(['financial_stage', 'risk_comfort'])
+const BLANK_TO_NULL = new Set<string>(['financial_stage', 'risk_comfort', 'monthly_income_range'])
 
 const PROFILE_SELECT =
   'id, full_name, onboarding_completed, nickname, avatar_url, monthly_income_range, primary_goal_category, financial_stage, savings_confidence, risk_comfort, motivation_type, dream_statement, streak_days, clarity_level, badges_json, updated_at'

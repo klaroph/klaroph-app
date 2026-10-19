@@ -125,7 +125,7 @@ describe('PATCH /api/profile financial stage and risk comfort', () => {
       {
         nickname: 'Ana',
         avatar_url: '',
-        monthly_income_range: '',
+        monthly_income_range: null,
         primary_goal_category: '',
         financial_stage: null,
         risk_comfort: null,
@@ -133,6 +133,12 @@ describe('PATCH /api/profile financial stage and risk comfort', () => {
         dream_statement: '',
       },
     ])
+  })
+
+  it('stores a blank monthly income range as null', async () => {
+    const res = await patch({ monthly_income_range: '' })
+    expect(res.status).toBe(200)
+    expect(state.updates).toEqual([{ monthly_income_range: null }])
   })
 
   it('keeps a chosen financial stage and risk comfort, including an explicit null', async () => {

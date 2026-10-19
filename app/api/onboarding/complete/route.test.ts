@@ -218,6 +218,83 @@ describe('POST /api/onboarding/complete', () => {
     expect(state.rpcCalls).toBe(0)
   })
 
+  it('does not touch income range or removed profile fields on a 4-step finish', async () => {
+    const omitted = [
+      'monthly_income_range',
+      'savings_confidence',
+      'financial_stage',
+      'risk_comfort',
+      'motivation_type',
+      'dream_statement',
+    ] as const
+    for (const extra of [{}, { monthly_income_range: '' }, { monthly_income_range: '   ' }]) {
+      state.calls = []
+      const res = await post(validBody(extra))
+      expect(res.status).toBe(200)
+      const payload = callsTo('profiles', 'update')[0]?.payload as Record<string, unknown>
+      for (const key of omitted) expect(payload).not.toHaveProperty(key)
+      expect(payload).toMatchObject({
+        monthly_income: 25000,
+        income_frequency: 'semi-monthly',
+        savings_percent: 20,
+        onboarding_completed: true,
+        nickname: 'Juan',
+      })
+    }
+  })
+
+  it('still accepts an old 8-step finish and writes the optional profile fields', async () => {
+    const res = await post(
+      validBody({
+        monthly_income_range: '20k_50k',
+        primary_goal_category: 'emergency_fund',
+        savings_confidence: 3,
+        financial_stage: 'building',
+        risk_comfort: 'medium',
+        motivation_type: 'security',
+        dream_statement: '  Own a home by 35  ',
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true, income_id: 'income-1' })
+    expect(callsTo('profiles', 'update')[0]?.payload).toMatchObject({
+      monthly_income_range: '20k_50k',
+      savings_confidence: 3,
+      financial_stage: 'building',
+      risk_comfort: 'medium',
+      motivation_type: 'security',
+      dream_statement: 'Own a home by 35',
+      monthly_income: 25000,
+      income_frequency: 'semi-monthly',
+      savings_percent: 20,
+      primary_goal_category: 'emergency_fund',
+      onboarding_completed: true,
+      nickname: 'Juan',
+    })
+  })
+
+  it('writes null when an old client sends the optional fields as empty', async () => {
+    const res = await post(
+      validBody({
+        savings_confidence: null,
+        financial_stage: null,
+        risk_comfort: '',
+        motivation_type: null,
+        dream_statement: '   ',
+      }),
+    )
+    expect(res.status).toBe(200)
+    const payload = callsTo('profiles', 'update')[0]?.payload as Record<string, unknown>
+    expect(payload).toMatchObject({
+      savings_confidence: null,
+      financial_stage: null,
+      risk_comfort: null,
+      motivation_type: null,
+      dream_statement: null,
+    })
+    expect(payload).not.toHaveProperty('monthly_income_range')
+  })
+
   it('writes a trimmed nickname of 15 characters or fewer', async () => {
     const res = await post(validBody({ nickname: '  Christopher  ' }))
     expect(res.status).toBe(200)
