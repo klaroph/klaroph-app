@@ -4,9 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { plainDbErrorText } from '@/lib/apiError'
 import { NICKNAME_MAX_LENGTH, NICKNAME_REQUIRED_ERROR, NICKNAME_TOO_LONG_ERROR, onboardingNamePrefill } from '@/lib/displayName'
 
-const GOAL_LIMIT_MESSAGE =
-  "You've reached the Free limit. Explore KlaroPH Pro to unlock up to 20 goals."
-
 type Call = {
   table: string
   op: string
@@ -21,6 +18,7 @@ const state = vi.hoisted(() => ({
   incomeError: null as { message: string } | null,
   calls: [] as Call[],
   rpcCalls: 0,
+  goalCount: 0,
 }))
 
 vi.mock('@/lib/format', () => ({
@@ -79,11 +77,14 @@ vi.mock('@/lib/supabaseAdmin', () => ({
           if (table === 'profiles' && ctx.op === 'update') {
             result = { data: null, error: state.profileError }
           } else if (table === 'goals' && ctx.op === 'insert') {
-            result = {
-              data: state.goalError ? null : { id: 'goal-1' },
-              error: state.goalError,
+            if (state.goalError) {
+              result = { data: null, error: state.goalError }
+            } else {
+              state.goalCount += 1
+              result = { data: { id: 'goal-1' }, error: null }
             }
           } else if (table === 'goals' && ctx.op === 'delete') {
+            state.goalCount -= 1
             result = { data: null, error: null }
           } else if (table === 'income_records' && ctx.op === 'insert') {
             result = {
@@ -145,6 +146,7 @@ beforeEach(() => {
   state.incomeError = null
   state.calls = []
   state.rpcCalls = 0
+  state.goalCount = 0
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -338,24 +340,30 @@ describe('POST /api/onboarding/complete', () => {
     expect(state.calls).toEqual([])
   })
 
-  it('returns the free goal-limit message and does not update the profile', async () => {
+  it('finishes when the user is already at the goal limit and leaves that count unchanged', async () => {
     const raw = 'GOAL_LIMIT_REACHED: goal count is already at the plan max_goals'
+    state.goalCount = 2
     state.goalError = { message: raw }
     const res = await post(validBody())
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(200)
     const body = await res.json()
     const serialized = JSON.stringify(body)
-    expect(body).toEqual({
-      error: GOAL_LIMIT_MESSAGE,
-      upgrade_required: true,
-    })
+    expect(body).toEqual({ ok: true, income_id: 'income-1' })
     expect(serialized).not.toContain('GOAL_LIMIT_REACHED')
     expect(serialized).not.toContain('max_goals')
     expect(serialized).not.toContain(raw)
-    expect(callsTo('profiles')).toEqual([])
-    expect(callsTo('income_records')).toEqual([])
+    expect(state.goalCount).toBe(2)
+    expect(state.calls.map((call) => `${call.table}:${call.op}`)).toEqual([
+      'goals:insert',
+      'profiles:update',
+      'income_records:insert',
+    ])
     expect(callsTo('goals', 'delete')).toEqual([])
-    expect(callsTo('goals', 'insert')).toHaveLength(1)
+    expect(callsTo('profiles', 'update')[0]?.payload).toMatchObject({
+      nickname: 'Juan',
+      onboarding_completed: true,
+    })
+    expect(callsTo('income_records', 'insert')).toHaveLength(1)
     expect(console.error).toHaveBeenCalledWith(
       'POST /api/onboarding/complete goal insert error:',
       state.goalError,
@@ -411,6 +419,22 @@ describe('POST /api/onboarding/complete', () => {
     )
   })
 
+  it('deletes no goal when the profile update fails after a skipped goal', async () => {
+    state.goalCount = 2
+    state.goalError = { message: 'GOAL_LIMIT_REACHED: goal count is already at the plan max_goals' }
+    state.profileError = { message: 'new row for relation "profiles" violates check constraint "profiles_nickname_check"' }
+    const res = await post(validBody())
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: plainDbErrorText.save })
+    expect(state.goalCount).toBe(2)
+    expect(callsTo('goals', 'delete')).toEqual([])
+    expect(state.calls.map((call) => `${call.table}:${call.op}`)).toEqual([
+      'goals:insert',
+      'profiles:update',
+    ])
+    expect(callsTo('income_records')).toEqual([])
+  })
+
   it('rolls back the new goal and onboarding flag when the income insert fails', async () => {
     const raw = 'duplicate key value violates unique constraint "income_records_pkey"'
     state.incomeError = { message: raw }
@@ -445,6 +469,32 @@ describe('POST /api/onboarding/complete', () => {
       'POST /api/onboarding/complete income insert error:',
       state.incomeError,
     )
+  })
+
+  it('resets onboarding and deletes no goal when income fails after a skipped goal', async () => {
+    const raw = 'duplicate key value violates unique constraint "income_records_pkey"'
+    state.goalCount = 2
+    state.goalError = { message: 'GOAL_LIMIT_REACHED: goal count is already at the plan max_goals' }
+    state.incomeError = { message: raw }
+    const res = await post(validBody())
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body).toEqual({ error: plainDbErrorText.save })
+    expect(JSON.stringify(body)).not.toContain(raw)
+    expect(JSON.stringify(body)).not.toContain('GOAL_LIMIT_REACHED')
+    expect(state.goalCount).toBe(2)
+    expect(callsTo('goals', 'delete')).toEqual([])
+    expect(state.calls.map((call) => `${call.table}:${call.op}`)).toEqual([
+      'goals:insert',
+      'profiles:update',
+      'income_records:insert',
+      'profiles:update',
+    ])
+    const profileWrites = callsTo('profiles', 'update')
+    expect(profileWrites).toHaveLength(2)
+    expect(profileWrites[0]?.payload).toMatchObject({ nickname: 'Juan', onboarding_completed: true })
+    expect(profileWrites[1]?.payload).toEqual({ onboarding_completed: false })
+    expect(profileWrites[1]?.filters).toEqual({ id: 'user-1' })
   })
 
   it('keeps savings percent on the profile and does not allocate from it', () => {

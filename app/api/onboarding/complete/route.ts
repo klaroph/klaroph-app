@@ -5,10 +5,6 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { toLocalDateString } from '@/lib/format'
 import { nicknameForWrite } from '@/lib/displayName'
 
-/** Same copy POST /api/goals returns for the free-plan goal limit. */
-const GOAL_LIMIT_MESSAGE =
-  "You've reached the Free limit. Explore KlaroPH Pro to unlock up to 20 goals."
-
 const VALID_FINANCIAL_STAGES = ['starter', 'stabilizing', 'building', 'scaling'] as const
 const VALID_RISK_COMFORT = ['low', 'medium', 'high'] as const
 const VALID_MOTIVATION = ['security', 'freedom', 'family', 'growth'] as const
@@ -118,18 +114,12 @@ export async function POST(request: Request) {
       .select('id')
       .single()
 
-    if (goalError || !insertedGoal?.id) {
-      const dbMessage = goalError?.message ?? ''
-      if (dbMessage.includes('GOAL_LIMIT_REACHED')) {
-        console.error('POST /api/onboarding/complete goal insert error:', goalError)
-        return NextResponse.json(
-          {
-            error: GOAL_LIMIT_MESSAGE,
-            upgrade_required: true,
-          },
-          { status: 403 }
-        )
-      }
+    // Null when the free-plan trigger rejects the insert. That person already
+    // has goals, so onboarding continues without adding one.
+    let insertedGoalId: string | null = null
+    if ((goalError?.message ?? '').includes('GOAL_LIMIT_REACHED')) {
+      console.error('POST /api/onboarding/complete goal insert error:', goalError)
+    } else if (goalError || !insertedGoal?.id) {
       return NextResponse.json(
         {
           error: goalError
@@ -138,6 +128,8 @@ export async function POST(request: Request) {
         },
         { status: 500 }
       )
+    } else {
+      insertedGoalId = insertedGoal.id
     }
 
     const { error: profileError } = await supabaseAdmin
@@ -146,15 +138,17 @@ export async function POST(request: Request) {
       .eq('id', user.id)
 
     if (profileError) {
-      // The goal row exists, but the profile write did not apply. Drop the goal
-      // so a retry does not leave one behind. Nickname stays unchanged.
-      const { error: rollbackGoalError } = await supabaseAdmin
-        .from('goals')
-        .delete()
-        .eq('id', insertedGoal.id)
-        .eq('user_id', user.id)
-      if (rollbackGoalError) {
-        console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+      // Drop a goal this request inserted. A limit skip inserted nothing, so
+      // existing goals stay. The failed profile write leaves nickname unchanged.
+      if (insertedGoalId) {
+        const { error: rollbackGoalError } = await supabaseAdmin
+          .from('goals')
+          .delete()
+          .eq('id', insertedGoalId)
+          .eq('user_id', user.id)
+        if (rollbackGoalError) {
+          console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+        }
       }
       return NextResponse.json(
         { error: plainDbError(profileError, 'save', 'POST /api/onboarding/complete profile update error:') },
@@ -176,15 +170,17 @@ export async function POST(request: Request) {
       .single()
 
     if (incomeError || !insertedIncome?.id) {
-      // Profile was already marked complete and the goal row exists. Undo both
-      // so a retry does not leave a finished onboarding without this income.
-      const { error: rollbackGoalError } = await supabaseAdmin
-        .from('goals')
-        .delete()
-        .eq('id', insertedGoal.id)
-        .eq('user_id', user.id)
-      if (rollbackGoalError) {
-        console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+      // Profile was already marked complete. Drop a goal this request inserted,
+      // and clear onboarding so a retry does not finish without this income.
+      if (insertedGoalId) {
+        const { error: rollbackGoalError } = await supabaseAdmin
+          .from('goals')
+          .delete()
+          .eq('id', insertedGoalId)
+          .eq('user_id', user.id)
+        if (rollbackGoalError) {
+          console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+        }
       }
       const { error: rollbackProfileError } = await supabaseAdmin
         .from('profiles')
