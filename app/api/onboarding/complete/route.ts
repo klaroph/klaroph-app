@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
+import { plainDbError } from '@/lib/apiError'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { toLocalDateString } from '@/lib/format'
 import { nicknameForWrite } from '@/lib/displayName'
+
+/** Same copy POST /api/goals returns for the free-plan goal limit. */
+const GOAL_LIMIT_MESSAGE =
+  "You've reached the Free limit. Explore KlaroPH Pro to unlock up to 20 goals."
 
 const VALID_FINANCIAL_STAGES = ['starter', 'stabilizing', 'building', 'scaling'] as const
 const VALID_RISK_COMFORT = ['low', 'medium', 'high'] as const
@@ -102,18 +107,6 @@ export async function POST(request: Request) {
       nickname: parsedNickname.nickname,
     }
 
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .update(profileUpdate)
-      .eq('id', user.id)
-
-    if (profileError) {
-      return NextResponse.json(
-        { error: profileError.message },
-        { status: 500 }
-      )
-    }
-
     const { data: insertedGoal, error: goalError } = await supabaseAdmin
       .from('goals')
       .insert({
@@ -126,8 +119,45 @@ export async function POST(request: Request) {
       .single()
 
     if (goalError || !insertedGoal?.id) {
+      const dbMessage = goalError?.message ?? ''
+      if (dbMessage.includes('GOAL_LIMIT_REACHED')) {
+        console.error('POST /api/onboarding/complete goal insert error:', goalError)
+        return NextResponse.json(
+          {
+            error: GOAL_LIMIT_MESSAGE,
+            upgrade_required: true,
+          },
+          { status: 403 }
+        )
+      }
       return NextResponse.json(
-        { error: goalError?.message ?? 'Could not create your goal.' },
+        {
+          error: goalError
+            ? plainDbError(goalError, 'save', 'POST /api/onboarding/complete goal insert error:')
+            : 'Could not create your goal.',
+        },
+        { status: 500 }
+      )
+    }
+
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .update(profileUpdate)
+      .eq('id', user.id)
+
+    if (profileError) {
+      // The goal row exists, but the profile write did not apply. Drop the goal
+      // so a retry does not leave one behind. Nickname stays unchanged.
+      const { error: rollbackGoalError } = await supabaseAdmin
+        .from('goals')
+        .delete()
+        .eq('id', insertedGoal.id)
+        .eq('user_id', user.id)
+      if (rollbackGoalError) {
+        console.error('POST /api/onboarding/complete goal rollback', rollbackGoalError.message)
+      }
+      return NextResponse.json(
+        { error: plainDbError(profileError, 'save', 'POST /api/onboarding/complete profile update error:') },
         { status: 500 }
       )
     }
@@ -164,7 +194,11 @@ export async function POST(request: Request) {
         console.error('POST /api/onboarding/complete profile rollback', rollbackProfileError.message)
       }
       return NextResponse.json(
-        { error: incomeError?.message ?? 'Could not save your first income.' },
+        {
+          error: incomeError
+            ? plainDbError(incomeError, 'save', 'POST /api/onboarding/complete income insert error:')
+            : 'Could not save your first income.',
+        },
         { status: 500 }
       )
     }

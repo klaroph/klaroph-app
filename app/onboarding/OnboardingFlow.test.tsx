@@ -106,6 +106,16 @@ describe('Onboarding four-step flow', () => {
     expect(plan).toContain('>Back<')
   })
 
+  it('shows the server error, including a goal-limit message, on the final step', () => {
+    const step4 = flowSource.slice(flowSource.indexOf('{step === 4 && ('))
+    expect(step4).toContain('{errorLine}')
+    expect(flowSource).toContain(
+      "const serverError = (data?.error as string) || 'Something went wrong.'",
+    )
+    expect(flowSource).toContain('setError(serverError)')
+    expect(flowSource).not.toContain('GOAL_LIMIT_REACHED')
+  })
+
   it('goes back by changing the step only, so entered answers stay', () => {
     expect(flowSource).toMatch(
       /const goBack = \(\) => \{\n\s*setError\(null\)\n\s*if \(step > 1\) setStep\(\(s\) => s - 1\)\n\s*\}/,
