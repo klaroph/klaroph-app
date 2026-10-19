@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ProfileWithComputed } from '@/types/profile'
 import { getBrowserUser } from '@/lib/supabaseClient'
-import { displayName as resolveDisplayName } from '@/lib/displayName'
+import { NICKNAME_MAX_LENGTH, displayName as resolveDisplayName } from '@/lib/displayName'
 import {
   INCOME_RANGES,
   RISK_COMFORT_OPTIONS,
@@ -326,10 +326,18 @@ export default function ProfilePage() {
             type="text"
             className="klaro-field-input"
             value={form.nickname}
+            maxLength={NICKNAME_MAX_LENGTH}
             onChange={(e) =>
-              setForm((f) => ({ ...f, nickname: e.target.value }))
+              setForm((f) => ({
+                ...f,
+                nickname: e.target.value.slice(0, NICKNAME_MAX_LENGTH),
+              }))
             }
-            onBlur={() => handleBlur('nickname', form.nickname)}
+            onBlur={(e) => {
+              const nickname = e.target.value.trim().slice(0, NICKNAME_MAX_LENGTH)
+              setForm((f) => ({ ...f, nickname }))
+              handleBlur('nickname', nickname)
+            }}
             placeholder="e.g. Jerald"
           />
         </div>

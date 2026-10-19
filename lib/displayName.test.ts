@@ -64,9 +64,13 @@ describe('displayName', () => {
     ).toBe(nickname)
   })
 
-  it('pre-fills onboarding only from a nickname or a real full name', () => {
-    expect(onboardingNamePrefill({ nickname: '  Jun  ', fullName: 'ada@example.com' })).toBe('Jun')
-    expect(onboardingNamePrefill({ nickname: null, fullName: '  Juan Dela Cruz  ' })).toBe('Juan Dela Cruz')
+  it('pre-fills onboarding from a nickname, or only the first name of a real full name', () => {
+    expect(onboardingNamePrefill({ nickname: '  Jun  ', fullName: 'Juan Dela Cruz' })).toBe('Jun')
+    expect(onboardingNamePrefill({ nickname: 'Mary Ann', fullName: 'Juan Dela Cruz' })).toBe('Mary Ann')
+    expect(onboardingNamePrefill({ nickname: null, fullName: '  Juan Dela Cruz  ' })).toBe('Juan')
+    expect(onboardingNamePrefill({ nickname: '   ', fullName: 'Maria Clara Santos' })).toBe('Maria')
+    expect(onboardingNamePrefill({ fullName: 'Juan' })).toBe('Juan')
+    expect(onboardingNamePrefill({ fullName: `${'A'.repeat(50)} Cruz` })).toBe('A'.repeat(40))
     expect(onboardingNamePrefill({ nickname: '   ', fullName: 'Juan @ Work' })).toBe('')
     expect(onboardingNamePrefill({ nickname: null, fullName: 'ada@example.com' })).toBe('')
     expect(onboardingNamePrefill({ fullName: '' })).toBe('')

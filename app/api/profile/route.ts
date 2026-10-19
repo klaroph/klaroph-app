@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { NICKNAME_MAX_LENGTH } from '@/lib/displayName'
 import type { ProfileWithComputed } from '@/types/profile'
 
 const PROFILE_SELECT =
@@ -157,6 +158,9 @@ export async function PATCH(request: Request) {
         if (key === 'savings_confidence') {
           const n = Number(v)
           if (!Number.isNaN(n) && n >= 1 && n <= 5) updates[key] = n
+        } else if (key === 'nickname') {
+          if (typeof v === 'string') updates[key] = v.trim().slice(0, NICKNAME_MAX_LENGTH)
+          else if (v === null) updates[key] = null
         } else if (typeof v === 'string' || v === null) {
           updates[key] = v
         }

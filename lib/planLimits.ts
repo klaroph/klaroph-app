@@ -8,8 +8,7 @@ export const PLAN_LIMITS = {
   free: {
     maxGoals: 2,
     maxRowsPerTool: 300,
-    /** Display-only. CSV export is available to every signed-in user; export routes do not read this flag. */
-    exportEnabled: true,
+    exportEnabled: false,
     advancedAnalytics: false,
     /** Free users get full budgeting for first 30 days after signup; then view-only. */
     budgetFreeTrialDays: 30,
