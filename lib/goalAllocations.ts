@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatPeso } from '@/lib/format'
-import { liveOnly } from '@/lib/liveRows'
+import { liveOnly, softDelete } from '@/lib/liveRows'
 
 /**
  * Edit / remove a single goal allocation (income_allocations row).
@@ -124,9 +124,9 @@ export async function removeGoalAllocation(
   const owned = await loadOwnedAllocation(supabase, userId, allocationId)
   if (!owned) return NOT_FOUND
 
-  const { data: removed, error } = await liveOnly(
-    supabase.from('income_allocations').delete().eq('id', owned.id)
-  ).select('id')
+  const { data: removed, error } = await softDelete(supabase.from('income_allocations'))
+    .eq('id', owned.id)
+    .select('id')
   if (error) return { ok: false, status: 500, error: 'Could not remove allocation.' }
   if (!removed || removed.length === 0) return NOT_FOUND
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
-import { liveOnly } from '@/lib/liveRows'
+import { liveOnly, softDelete } from '@/lib/liveRows'
 import { plainDbError } from '@/lib/apiError'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
@@ -143,7 +143,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       )
     }
 
-    const { error } = await liveOnly(supabase.from('budget_overrides').delete())
+    const { error } = await softDelete(supabase.from('budget_overrides'))
       .eq('id', id)
       .eq('user_id', user.id)
 

@@ -83,7 +83,8 @@ CREATE TABLE public.income_allocations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   income_record_id uuid NOT NULL,
   goal_id uuid NOT NULL,
-  amount numeric NOT NULL
+  amount numeric NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.budget_overrides (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -98,9 +99,13 @@ CREATE TABLE public.budget_plans (
   user_id uuid NOT NULL,
   category text NOT NULL,
   amount numeric NOT NULL,
+  note text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz
 );
+CREATE UNIQUE INDEX budget_plans_user_category_idx ON public.budget_plans (user_id, category);
+CREATE UNIQUE INDEX budget_overrides_user_category_month_idx
+  ON public.budget_overrides (user_id, category, month);
 CREATE TABLE public.financial_accounts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -116,6 +121,7 @@ async function applyMigrations(db: PGlite): Promise<void> {
   await db.exec(readMigration('20261019100000_sync_updated_at_deleted_at.sql'))
   await db.exec(readMigration('20261019110000_income_allocations_user_id.sql'))
   await db.exec(readMigration('20261019120000_exclude_soft_deleted_reads.sql'))
+  await db.exec(readMigration('20261019130000_soft_delete_recreate.sql'))
 }
 
 describe('sync schema migrations', () => {
@@ -129,10 +135,10 @@ describe('sync schema migrations', () => {
         VALUES ('${GOAL_A}', '${USER_A}', 'Emergency', 1000, 0);
       INSERT INTO public.income_records (id, user_id, total_amount, disposable_amount, date)
         VALUES ('${INCOME_A}', '${USER_A}', 500, 500, '2026-10-01');
-      INSERT INTO public.income_allocations (id, income_record_id, goal_id, amount)
-        VALUES ('${ALLOC_A}', '${INCOME_A}', '${GOAL_A}', 100);
-      INSERT INTO public.income_allocations (id, income_record_id, goal_id, amount)
-        VALUES ('${ALLOC_ORPHAN}', '${USER_B}', '${GOAL_A}', 25);
+      INSERT INTO public.income_allocations (id, income_record_id, goal_id, amount, created_at)
+        VALUES ('${ALLOC_A}', '${INCOME_A}', '${GOAL_A}', 100, '2020-05-01T00:00:00Z');
+      INSERT INTO public.income_allocations (id, income_record_id, goal_id, amount, created_at)
+        VALUES ('${ALLOC_ORPHAN}', '${USER_B}', '${GOAL_A}', 25, '2020-05-01T00:00:00Z');
     `)
 
     await applyMigrations(db)
@@ -147,6 +153,11 @@ describe('sync schema migrations', () => {
     )
     expect(orphan.rows[0]?.user_id).toBe(USER_A)
 
+    const backfilled = await db.query<{ updated_at: string }>(
+      `SELECT updated_at::text FROM public.income_allocations WHERE id = '${ALLOC_A}'`
+    )
+    expect(new Date(backfilled.rows[0]!.updated_at).getUTCFullYear()).toBe(2020)
+
     await db.exec(`
       INSERT INTO public.expenses (id, user_id, amount, date, updated_at)
       VALUES ('${GOAL_B}', '${USER_A}', 10, '2026-10-01', '1999-01-01');
@@ -156,12 +167,13 @@ describe('sync schema migrations', () => {
     )
     expect(new Date(stamped.rows[0]!.updated_at).getUTCFullYear()).toBeGreaterThan(1999)
 
-    await db.exec(`UPDATE public.expenses SET deleted_at = now() WHERE id = '${GOAL_B}'`)
+    await db.exec(`UPDATE public.expenses SET deleted_at = '2000-01-01' WHERE id = '${GOAL_B}'`)
     await db.exec(`UPDATE public.expenses SET deleted_at = NULL, amount = 99 WHERE id = '${GOAL_B}'`)
     const tombstone = await db.query<{ deleted_at: string | null; amount: string }>(
       `SELECT deleted_at::text, amount::text FROM public.expenses WHERE id = '${GOAL_B}'`
     )
     expect(tombstone.rows[0]?.deleted_at).not.toBeNull()
+    expect(new Date(tombstone.rows[0]!.deleted_at!).getUTCFullYear()).toBeGreaterThan(2000)
     expect(Number(tombstone.rows[0]?.amount)).toBe(99)
 
     await db.exec(`
@@ -186,6 +198,10 @@ describe('sync schema migrations', () => {
       'income_allocations_select_own',
       'income_allocations_update_own',
     ])
+    const goalCheck = await db.query<{ with_check: string }>(
+      `SELECT with_check FROM pg_policies WHERE policyname = 'income_allocations_insert_own'`
+    )
+    expect(goalCheck.rows[0]?.with_check).toContain('income_allocations.user_id')
 
     const indexes = await db.query<{ indexname: string }>(
       `SELECT indexname FROM pg_indexes WHERE indexname LIKE 'idx_%_user_updated_at' ORDER BY indexname`
@@ -199,6 +215,19 @@ describe('sync schema migrations', () => {
       'idx_income_allocations_user_updated_at',
       'idx_income_records_user_updated_at',
     ])
+
+    const goneGoal = '33333333-3333-4333-8333-333333333333'
+    await db.exec(`
+      INSERT INTO public.goals (id, user_id, name, target_amount)
+        VALUES ('${goneGoal}', '${USER_A}', 'Gone', 1);
+      UPDATE public.goals SET deleted_at = now() WHERE id = '${goneGoal}';
+    `)
+    await expect(
+      db.exec(`
+        INSERT INTO public.income_allocations (goal_id, amount, user_id)
+          VALUES ('${goneGoal}', 5, '${USER_A}');
+      `)
+    ).rejects.toThrow(/Invalid goal/)
 
     await db.exec(`
       DROP TRIGGER IF EXISTS goals_enforce_plan_limit ON public.goals;
@@ -223,14 +252,21 @@ describe('sync schema migrations', () => {
     expect(clarity.rows[0]?.get_clarity_level).toBeGreaterThanOrEqual(2)
 
     await db.exec(`
+      INSERT INTO public.income_allocations (id, goal_id, amount, user_id)
+      VALUES ('22222222-2222-4222-8222-222222222222', '${GOAL_A}', 1, '${USER_A}');
+      ALTER TABLE public.income_allocations DISABLE TRIGGER income_allocations_sync_row;
+      ALTER TABLE public.goals DISABLE TRIGGER goals_sync_row;
       UPDATE public.income_allocations
       SET deleted_at = now() - interval '91 days'
       WHERE id = '${ALLOC_A}';
+      UPDATE public.income_allocations
+      SET deleted_at = now() - interval '1 day'
+      WHERE id = '22222222-2222-4222-8222-222222222222';
       UPDATE public.goals
       SET deleted_at = now() - interval '91 days'
       WHERE id = '${GOAL_A}';
-      INSERT INTO public.income_allocations (id, goal_id, amount, user_id, deleted_at)
-      VALUES ('22222222-2222-4222-8222-222222222222', '${GOAL_A}', 1, '${USER_A}', now() - interval '1 day');
+      ALTER TABLE public.income_allocations ENABLE TRIGGER income_allocations_sync_row;
+      ALTER TABLE public.goals ENABLE TRIGGER goals_sync_row;
     `)
     const purged = await db.query<{ purge_soft_deleted_synced_rows: { income_allocations: number; goals: number } }>(
       `SELECT public.purge_soft_deleted_synced_rows() AS purge_soft_deleted_synced_rows`
@@ -270,5 +306,87 @@ describe('sync schema migrations', () => {
     await expect(db.exec(readMigration('20261019110000_income_allocations_user_id.sql'))).rejects.toThrow(
       /does not match the goal owner/
     )
+  })
+
+  it('recreates a budget category after its tombstone and keeps the old id deleted', async () => {
+    const db = new PGlite()
+    await db.exec(SETUP)
+    await db.exec(`INSERT INTO auth.users (id) VALUES ('${USER_A}');`)
+    await applyMigrations(db)
+
+    await db.exec(`
+      INSERT INTO public.budget_plans (user_id, category, amount) VALUES ('${USER_A}', 'Food', 10);
+      UPDATE public.budget_plans SET deleted_at = '2000-01-01'
+        WHERE user_id = '${USER_A}' AND category = 'Food';
+    `)
+    const firstPlan = await db.query<{ id: string; deleted_at: string }>(
+      `SELECT id::text, deleted_at::text FROM public.budget_plans WHERE category = 'Food'`
+    )
+    expect(new Date(firstPlan.rows[0]!.deleted_at).getUTCFullYear()).toBeGreaterThan(2000)
+    await db.exec(`
+      INSERT INTO public.budget_plans (user_id, category, amount) VALUES ('${USER_A}', 'Food', 20);
+    `)
+    const plans = await db.query<{ id: string; amount: string; live: boolean }>(
+      `SELECT id::text, amount::text, deleted_at IS NULL AS live
+       FROM public.budget_plans WHERE category = 'Food' ORDER BY amount`
+    )
+    expect(plans.rows).toHaveLength(2)
+    expect(plans.rows[0]?.id).toBe(firstPlan.rows[0]?.id)
+    expect(plans.rows[0]?.live).toBe(false)
+    expect(plans.rows[1]?.live).toBe(true)
+    expect(plans.rows[0]?.id).not.toBe(plans.rows[1]?.id)
+    await expect(
+      db.exec(`INSERT INTO public.budget_plans (user_id, category, amount) VALUES ('${USER_A}', 'Food', 21)`)
+    ).rejects.toThrow(/duplicate key|unique/i)
+
+    await db.exec(`
+      INSERT INTO public.budget_overrides (user_id, category, amount, month)
+        VALUES ('${USER_A}', 'Food', 3, '2026-10-01');
+      UPDATE public.budget_overrides SET deleted_at = '2000-01-01'
+        WHERE user_id = '${USER_A}' AND category = 'Food';
+      INSERT INTO public.budget_overrides (user_id, category, amount, month)
+        VALUES ('${USER_A}', 'Food', 4, '2026-10-01');
+    `)
+    const overrides = await db.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM public.budget_overrides
+       WHERE user_id = '${USER_A}' AND category = 'Food' AND month = '2026-10-01'`
+    )
+    const liveOverrides = await db.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM public.budget_overrides
+       WHERE user_id = '${USER_A}' AND category = 'Food' AND deleted_at IS NULL`
+    )
+    expect(overrides.rows[0]?.n).toBe('2')
+    expect(liveOverrides.rows[0]?.n).toBe('1')
+
+    await db.exec(`
+      CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+      LANGUAGE sql STABLE AS $$ SELECT '${USER_A}'::uuid $$;
+    `)
+    await db.exec(`
+      SELECT * FROM public.replace_budget_plan('[{"category":"Food","amount":40}]'::jsonb);
+    `)
+    const replaced = await db.query<{ amount: string; live: boolean }>(
+      `SELECT amount::text, deleted_at IS NULL AS live
+       FROM public.budget_plans WHERE user_id = '${USER_A}' AND category = 'Food' ORDER BY amount`
+    )
+    expect(replaced.rows.filter((row) => row.live).map((row) => Number(row.amount))).toEqual([40])
+    expect(replaced.rows.filter((row) => !row.live).length).toBeGreaterThanOrEqual(2)
+
+    const blocking = await db.query<{ index_name: string }>(
+      `SELECT ic.relname AS index_name
+       FROM pg_index i
+       JOIN pg_class ic ON ic.oid = i.indexrelid
+       JOIN pg_class t ON t.oid = i.indrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       WHERE n.nspname = 'public'
+         AND t.relname IN (
+           'expenses', 'income_records', 'goals', 'income_allocations',
+           'budget_overrides', 'budget_plans', 'financial_accounts'
+         )
+         AND i.indisunique
+         AND NOT i.indisprimary
+         AND i.indpred IS NULL`
+    )
+    expect(blocking.rows).toEqual([])
   })
 })

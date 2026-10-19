@@ -19,6 +19,10 @@ BEGIN
   -- Delete beats edit: a tombstone cannot be cleared or rewritten by a later update.
   IF TG_OP = 'UPDATE' AND OLD.deleted_at IS NOT NULL THEN
     NEW.deleted_at := OLD.deleted_at;
+  ELSIF NEW.deleted_at IS NOT NULL THEN
+    -- First transition to deleted, including an insert that arrives already deleted.
+    -- Ignore any client timestamp so a backdated deleted_at cannot be purged early.
+    NEW.deleted_at := now();
   END IF;
   NEW.updated_at := now();
   RETURN NEW;
@@ -26,7 +30,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.sync_row_timestamps() IS
-  'BEFORE INSERT OR UPDATE on synced tables. The server sets updated_at. Once deleted_at is set, an update cannot clear it.';
+  'BEFORE INSERT OR UPDATE on synced tables. The server sets updated_at. A transition to deleted stamps deleted_at = now(). Once deleted_at is set, an update cannot clear it.';
 
 -- expenses
 ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS updated_at timestamptz;
@@ -55,10 +59,28 @@ ALTER TABLE public.goals ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 COMMENT ON COLUMN public.goals.updated_at IS 'Set by sync_row_timestamps on insert and update. Clients cannot choose this value.';
 COMMENT ON COLUMN public.goals.deleted_at IS 'Soft-delete tombstone. Null means live. Retained 90 days, then purge_soft_deleted_synced_rows().';
 
--- income_allocations (no created_at in current writers)
+-- income_allocations. App writers omit created_at; prod still has the column.
+-- Prefer that history. Fall back to now() only when the column is absent.
 ALTER TABLE public.income_allocations ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 ALTER TABLE public.income_allocations ALTER COLUMN updated_at SET DEFAULT now();
-UPDATE public.income_allocations SET updated_at = now() WHERE updated_at IS NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'income_allocations'
+      AND column_name = 'created_at'
+  ) THEN
+    UPDATE public.income_allocations
+    SET updated_at = COALESCE(created_at, now())
+    WHERE updated_at IS NULL;
+  ELSE
+    UPDATE public.income_allocations
+    SET updated_at = now()
+    WHERE updated_at IS NULL;
+  END IF;
+END $$;
 ALTER TABLE public.income_allocations ALTER COLUMN updated_at SET NOT NULL;
 ALTER TABLE public.income_allocations ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 COMMENT ON COLUMN public.income_allocations.updated_at IS 'Set by sync_row_timestamps on insert and update. Clients cannot choose this value.';

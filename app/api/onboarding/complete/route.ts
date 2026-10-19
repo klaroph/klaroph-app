@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { toLocalDateString } from '@/lib/format'
 import { nicknameForWrite } from '@/lib/displayName'
+import { softDelete } from '@/lib/liveRows'
 
 const VALID_FINANCIAL_STAGES = ['starter', 'stabilizing', 'building', 'scaling'] as const
 const VALID_RISK_COMFORT = ['low', 'medium', 'high'] as const
@@ -141,9 +142,7 @@ export async function POST(request: Request) {
       // Drop a goal this request inserted. A limit skip inserted nothing, so
       // existing goals stay. The failed profile write leaves nickname unchanged.
       if (insertedGoalId) {
-        const { error: rollbackGoalError } = await supabaseAdmin
-          .from('goals')
-          .delete()
+        const { error: rollbackGoalError } = await softDelete(supabaseAdmin.from('goals'))
           .eq('id', insertedGoalId)
           .eq('user_id', user.id)
         if (rollbackGoalError) {
@@ -173,9 +172,7 @@ export async function POST(request: Request) {
       // Profile was already marked complete. Drop a goal this request inserted,
       // and clear onboarding so a retry does not finish without this income.
       if (insertedGoalId) {
-        const { error: rollbackGoalError } = await supabaseAdmin
-          .from('goals')
-          .delete()
+        const { error: rollbackGoalError } = await softDelete(supabaseAdmin.from('goals'))
           .eq('id', insertedGoalId)
           .eq('user_id', user.id)
         if (rollbackGoalError) {

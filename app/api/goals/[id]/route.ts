@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
-import { liveOnly } from '@/lib/liveRows'
+import { liveOnly, softDelete } from '@/lib/liveRows'
 import { plainDbError } from '@/lib/apiError'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -78,7 +78,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { error } = await liveOnly(supabase.from('goals').delete())
+    const { error } = await softDelete(supabase.from('goals'))
       .eq('id', id)
       .eq('user_id', user.id)
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatPeso } from '@/lib/format'
 import { supabase } from '../../lib/supabaseClient'
-import { liveOnly } from '@/lib/liveRows'
+import { liveOnly, softDelete } from '@/lib/liveRows'
 import Modal from '../ui/Modal'
 import AddAssetLiabilityModal from './AddAssetLiabilityModal'
 import { getAccountDisplayLabel, type FinancialAccount } from '@/lib/financialAccounts'
@@ -82,7 +82,7 @@ export default function ManageAssetsLiabilitiesModal({
 
   const deleteRow = async (id: string) => {
     if (!confirm('Remove this item?')) return
-    await supabase.from('financial_accounts').delete().eq('id', id)
+    await softDelete(supabase.from('financial_accounts')).eq('id', id)
     load()
     onSaved()
   }

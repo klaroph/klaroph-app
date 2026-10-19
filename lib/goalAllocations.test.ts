@@ -51,8 +51,8 @@ let tables: Tables
 let db: SupabaseClient
 
 function goalTotal() {
-  return (tables.income_allocations as { goal_id: string; amount: number }[])
-    .filter((r) => r.goal_id === GOAL.id)
+  return (tables.income_allocations as { goal_id: string; amount: number; deleted_at?: string | null }[])
+    .filter((r) => r.goal_id === GOAL.id && r.deleted_at == null)
     .reduce((sum, r) => sum + r.amount, 0)
 }
 
@@ -137,6 +137,7 @@ describe('removeGoalAllocation', () => {
     await updateGoalAllocation(db, ME, ALLOC, 7_500)
     const result = await removeGoalAllocation(db, ME, ALLOC)
     expect(result).toEqual({ ok: true, amount: 7_500 })
+    expect(tables.income_allocations.find((r) => r.id === ALLOC)?.deleted_at).toEqual(expect.any(String))
     expect(goalTotal()).toBe(0)
     expect(goalProgress()).toBe(0)
     expect(income(INCOME)).toMatchObject({ total_amount: 30_000, disposable_amount: 30_000 })

@@ -56,6 +56,9 @@ vi.mock('@/lib/supabaseAdmin', () => ({
           ctx.op = 'delete'
           return api
         },
+        is() {
+          return api
+        },
         select() {
           return api
         },
@@ -83,6 +86,15 @@ vi.mock('@/lib/supabaseAdmin', () => ({
               state.goalCount += 1
               result = { data: { id: 'goal-1' }, error: null }
             }
+          } else if (
+            table === 'goals' &&
+            ctx.op === 'update' &&
+            ctx.payload != null &&
+            typeof ctx.payload === 'object' &&
+            'deleted_at' in ctx.payload
+          ) {
+            state.goalCount -= 1
+            result = { data: null, error: null }
           } else if (table === 'goals' && ctx.op === 'delete') {
             state.goalCount -= 1
             result = { data: null, error: null }
@@ -137,6 +149,17 @@ function validBody(overrides: Record<string, unknown> = {}) {
 
 function callsTo(table: string, op?: string) {
   return state.calls.filter((call) => call.table === table && (op == null || call.op === op))
+}
+
+function goalTombstones() {
+  return state.calls.filter(
+    (call) =>
+      call.table === 'goals' &&
+      call.op === 'update' &&
+      call.payload != null &&
+      typeof call.payload === 'object' &&
+      'deleted_at' in call.payload
+  )
 }
 
 beforeEach(() => {
@@ -358,7 +381,7 @@ describe('POST /api/onboarding/complete', () => {
       'profiles:update',
       'income_records:insert',
     ])
-    expect(callsTo('goals', 'delete')).toEqual([])
+    expect(goalTombstones()).toEqual([])
     expect(callsTo('profiles', 'update')[0]?.payload).toMatchObject({
       nickname: 'Juan',
       onboarding_completed: true,
@@ -399,13 +422,13 @@ describe('POST /api/onboarding/complete', () => {
     expect(state.calls.map((call) => `${call.table}:${call.op}`)).toEqual([
       'goals:insert',
       'profiles:update',
-      'goals:delete',
+      'goals:update',
     ])
-    expect(callsTo('goals', 'delete')).toEqual([
+    expect(goalTombstones()).toEqual([
       {
         table: 'goals',
-        op: 'delete',
-        payload: undefined,
+        op: 'update',
+        payload: { deleted_at: expect.any(String) },
         filters: { id: 'goal-1', user_id: 'user-1' },
       },
     ])
@@ -427,7 +450,7 @@ describe('POST /api/onboarding/complete', () => {
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({ error: plainDbErrorText.save })
     expect(state.goalCount).toBe(2)
-    expect(callsTo('goals', 'delete')).toEqual([])
+    expect(goalTombstones()).toEqual([])
     expect(state.calls.map((call) => `${call.table}:${call.op}`)).toEqual([
       'goals:insert',
       'profiles:update',
@@ -449,14 +472,14 @@ describe('POST /api/onboarding/complete', () => {
       'goals:insert',
       'profiles:update',
       'income_records:insert',
-      'goals:delete',
+      'goals:update',
       'profiles:update',
     ])
-    expect(callsTo('goals', 'delete')).toEqual([
+    expect(goalTombstones()).toEqual([
       {
         table: 'goals',
-        op: 'delete',
-        payload: undefined,
+        op: 'update',
+        payload: { deleted_at: expect.any(String) },
         filters: { id: 'goal-1', user_id: 'user-1' },
       },
     ])
@@ -483,7 +506,7 @@ describe('POST /api/onboarding/complete', () => {
     expect(JSON.stringify(body)).not.toContain(raw)
     expect(JSON.stringify(body)).not.toContain('GOAL_LIMIT_REACHED')
     expect(state.goalCount).toBe(2)
-    expect(callsTo('goals', 'delete')).toEqual([])
+    expect(goalTombstones()).toEqual([])
     expect(state.calls.map((call) => `${call.table}:${call.op}`)).toEqual([
       'goals:insert',
       'profiles:update',

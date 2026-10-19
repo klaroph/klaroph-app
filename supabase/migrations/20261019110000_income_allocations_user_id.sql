@@ -6,6 +6,10 @@
 
 ALTER TABLE public.income_allocations ADD COLUMN IF NOT EXISTS user_id uuid;
 
+-- The sync trigger is already installed. Leave updated_at at the created_at
+-- backfill; this ownership fill is not a user edit.
+ALTER TABLE public.income_allocations DISABLE TRIGGER income_allocations_sync_row;
+
 UPDATE public.income_allocations AS a
 SET user_id = ir.user_id
 FROM public.income_records AS ir
@@ -48,6 +52,8 @@ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE public.income_allocations ENABLE TRIGGER income_allocations_sync_row;
+
 ALTER TABLE public.income_allocations ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE public.income_allocations ALTER COLUMN income_record_id DROP NOT NULL;
 
@@ -82,12 +88,20 @@ SET search_path = public
 AS $$
 DECLARE
   v_goal_user uuid;
+  v_goal_deleted timestamptz;
   v_income_user uuid;
 BEGIN
-  SELECT g.user_id INTO v_goal_user
+  SELECT g.user_id, g.deleted_at INTO v_goal_user, v_goal_deleted
   FROM public.goals AS g
   WHERE g.id = NEW.goal_id;
   IF NOT FOUND THEN
+    RAISE EXCEPTION 'Invalid goal in allocations.';
+  END IF;
+
+  -- A new deposit cannot land on a soft-deleted goal. An update that tombstones
+  -- an existing allocation is still allowed, so the delete can be synced.
+  IF v_goal_deleted IS NOT NULL
+     AND NOT (TG_OP = 'UPDATE' AND NEW.deleted_at IS NOT NULL) THEN
     RAISE EXCEPTION 'Invalid goal in allocations.';
   END IF;
 
@@ -113,7 +127,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.income_allocations_enforce_owner() IS
-  'BEFORE INSERT OR UPDATE. user_id must match the goal owner, and the income record when one is set.';
+  'BEFORE INSERT OR UPDATE. user_id must match the goal owner. Inserts onto a soft-deleted goal are rejected. The income record, when set, must belong to the same user.';
 
 DROP TRIGGER IF EXISTS income_allocations_enforce_owner ON public.income_allocations;
 CREATE TRIGGER income_allocations_enforce_owner
@@ -145,8 +159,8 @@ CREATE POLICY income_allocations_insert_own
     AND EXISTS (
       SELECT 1
       FROM public.goals AS g
-      WHERE g.id = goal_id
-        AND g.user_id = user_id
+      WHERE g.id = income_allocations.goal_id
+        AND g.user_id = income_allocations.user_id
     )
   );
 
@@ -159,8 +173,8 @@ CREATE POLICY income_allocations_update_own
     AND EXISTS (
       SELECT 1
       FROM public.goals AS g
-      WHERE g.id = goal_id
-        AND g.user_id = user_id
+      WHERE g.id = income_allocations.goal_id
+        AND g.user_id = income_allocations.user_id
     )
   );
 
@@ -411,8 +425,10 @@ BEGIN
     AND income_records.user_id = p_user_id
     AND income_records.deleted_at IS NULL;
 
-  -- Live rows only. Tombstones stay until the 90-day purge.
-  DELETE FROM income_allocations AS a
+  -- Tombstones stay until the 90-day purge. A removed allocation is soft-deleted
+  -- so a pull sees the delete. A later insert of the same goal gets a new id.
+  UPDATE income_allocations AS a
+  SET deleted_at = now()
   WHERE a.income_record_id = p_income_id
     AND a.deleted_at IS NULL
     AND NOT EXISTS (
@@ -449,7 +465,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.update_income_with_allocations(uuid, uuid, numeric, date, text, jsonb) IS
-  'Atomically update a live income record and its live goal allocations. Used by PUT /api/income/[id].';
+  'Atomically update a live income record and soft-delete allocations removed from the payload. Used by PUT /api/income/[id].';
 
 REVOKE ALL ON FUNCTION public.update_income_with_allocations(uuid, uuid, numeric, date, text, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.update_income_with_allocations(uuid, uuid, numeric, date, text, jsonb) TO authenticated;
