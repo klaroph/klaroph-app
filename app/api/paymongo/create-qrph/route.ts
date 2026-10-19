@@ -53,7 +53,9 @@ export async function POST(request: Request) {
       if (metadata.user_id !== user.id) {
         return NextResponse.json({ error: 'Invalid payment intent.' }, { status: 403 })
       }
-      if (existing.data.attributes.amount !== pricing.amountCentavos) {
+      // Annual intents were also 99900. Regenerate only a lifetime grant at today's server price
+      // (99900, or 500 when profiles.user_type is tester).
+      if (metadata.grant !== 'lifetime' || existing.data.attributes.amount !== pricing.amountCentavos) {
         return NextResponse.json(
           { error: 'This payment is no longer available.' },
           { status: 410 }

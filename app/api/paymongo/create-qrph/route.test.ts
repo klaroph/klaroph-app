@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   subscription: null as Record<string, unknown> | null,
   intents: [] as { amount?: number; metadata?: Record<string, string> }[],
   intentAmount: 99_900,
+  intentGrant: 'lifetime' as string | null,
   intentStatus: 'awaiting_payment_method',
   attached: 0,
 }))
@@ -61,7 +62,10 @@ vi.mock('@/lib/paymongo', () => ({
   retrievePaymentIntent: async () => ({
     data: {
       attributes: {
-        metadata: { user_id: 'user-1' },
+        metadata: {
+          user_id: 'user-1',
+          ...(state.intentGrant ? { grant: state.intentGrant } : {}),
+        },
         status: state.intentStatus,
         amount: state.intentAmount,
       },
@@ -91,6 +95,7 @@ beforeEach(() => {
   state.subscription = null
   state.intents = []
   state.intentAmount = 99_900
+  state.intentGrant = 'lifetime'
   state.intentStatus = 'awaiting_payment_method'
   state.attached = 0
 })
@@ -142,8 +147,29 @@ describe('POST /api/paymongo/create-qrph', () => {
     expect(state.intents).toHaveLength(0)
   })
 
-  it('regenerates a QR when the stored amount is the current price', async () => {
-    const res = await post({ payment_intent_id: 'pi_old' })
+  it('returns 410 when regenerating an annual grant at ₱999', async () => {
+    state.intentGrant = 'annual'
+    state.intentAmount = 99_900
+    const res = await post({ payment_intent_id: 'pi_annual' })
+    expect(res.status).toBe(410)
+    expect(state.attached).toBe(0)
+    expect(state.intents).toHaveLength(0)
+  })
+
+  it('regenerates a lifetime grant at ₱999', async () => {
+    state.intentGrant = 'lifetime'
+    state.intentAmount = 99_900
+    const res = await post({ payment_intent_id: 'pi_life' })
+    expect(res.status).toBe(200)
+    expect(state.attached).toBe(1)
+    expect(state.intents).toHaveLength(0)
+  })
+
+  it('regenerates a tester lifetime grant at ₱5', async () => {
+    state.profile = { user_type: 'tester' }
+    state.intentGrant = 'lifetime'
+    state.intentAmount = 500
+    const res = await post({ payment_intent_id: 'pi_tester' })
     expect(res.status).toBe(200)
     expect(state.attached).toBe(1)
     expect(state.intents).toHaveLength(0)
@@ -157,15 +183,12 @@ describe('POST /api/paymongo/create-qrph', () => {
     expect(state.intents).toHaveLength(0)
   })
 
-  it('regenerates a tester QR at ₱5 and rejects a retail amount', async () => {
+  it('rejects a tester lifetime grant stored at the retail amount', async () => {
     state.profile = { user_type: 'tester' }
-    state.intentAmount = 500
-    expect((await post({ payment_intent_id: 'pi_tester' })).status).toBe(200)
-    expect(state.attached).toBe(1)
-
+    state.intentGrant = 'lifetime'
     state.intentAmount = 99_900
-    state.attached = 0
-    expect((await post({ payment_intent_id: 'pi_tester' })).status).toBe(410)
+    const res = await post({ payment_intent_id: 'pi_tester' })
+    expect(res.status).toBe(410)
     expect(state.attached).toBe(0)
   })
 

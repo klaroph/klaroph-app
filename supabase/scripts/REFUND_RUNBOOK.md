@@ -9,7 +9,9 @@ Refunds stay manual. There is no refund webhook. Edit `supabase/scripts/revoke_p
 supabase db query -f supabase/scripts/revoke_pro_after_refund.sql
 ```
 
-The script sets that user's subscription to `is_lifetime = false`, the free plan, and `status = 'canceled'`. In the same transaction it inserts `payment_events` with `event_type` `manual.refund` and `event_id` `manual.refund:<payment id>`. The payload stores the payment id at `data.attributes.data.id` and `data.attributes.data.attributes.payment_id`.
+The script aborts, and changes nothing, when `payment_events` has no `payment.paid` or `checkout_session.payment.paid` row for that payment id and that user. The user id is `payload #>> '{data,attributes,data,attributes,metadata,user_id}'`. The payment id is `payload #>> '{data,attributes,data,id}'` or, for a checkout session, `payload #>> '{data,attributes,data,attributes,payments,0,id}'`.
+
+When that row exists, the script sets that user's subscription to `is_lifetime = false`, the free plan, and `status = 'canceled'`. In the same transaction it inserts `payment_events` with `event_type` `manual.refund` and `event_id` `manual.refund:<payment id>`. The payload stores the payment id at `data.attributes.data.id` and `data.attributes.data.attributes.payment_id`.
 
 Migration B reads those two paths from any event whose type contains `refund`. After this script, that payment is not a verified payment, so migration B will not grant it.
 

@@ -8,6 +8,11 @@
 -- This insert sets both paths, and event_type 'manual.refund' matches that
 -- filter, so a later run of migration B does not grant that payment.
 --
+-- The script aborts before any write when payment_events has no
+-- payment.paid or checkout_session.payment.paid row whose payment id is
+-- v_payment_id and whose metadata user_id is v_user_id
+-- (payload #>> '{data,attributes,data,attributes,metadata,user_id}').
+--
 -- Run with psql or: supabase db query -f supabase/scripts/revoke_pro_after_refund.sql
 -- See supabase/scripts/REFUND_RUNBOOK.md.
 
@@ -33,6 +38,19 @@ BEGIN
   SELECT id INTO v_free FROM public.plans WHERE name = 'free' LIMIT 1;
   IF v_free IS NULL THEN
     RAISE EXCEPTION 'free plan is missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.payment_events e
+    WHERE e.event_type IN ('payment.paid', 'checkout_session.payment.paid')
+      AND lower(btrim(e.payload #>> '{data,attributes,data,attributes,metadata,user_id}')) = lower(v_user_id::text)
+      AND v_payment_id IN (
+        NULLIF(btrim(e.payload #>> '{data,attributes,data,id}'), ''),
+        NULLIF(btrim(e.payload #>> '{data,attributes,data,attributes,payments,0,id}'), '')
+      )
+  ) THEN
+    RAISE EXCEPTION 'payment id % was not found in payment_events for user %', v_payment_id, v_user_id;
   END IF;
 
   UPDATE public.subscriptions

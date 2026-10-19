@@ -16,6 +16,22 @@ function sqlLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
+function filledRefundScript(input: {
+  userId: string
+  paymentId: string
+  reason: string
+  operator: string
+}): string {
+  return refund
+    .replace(
+      "v_user_id uuid := '00000000-0000-0000-0000-000000000000';",
+      `v_user_id uuid := '${input.userId}';`
+    )
+    .replace("v_payment_id text := 'pay_replace_me';", `v_payment_id text := '${input.paymentId}';`)
+    .replace("v_reason text := 'replace with the refund reason';", `v_reason text := '${input.reason}';`)
+    .replace("v_operator text := 'replace with the operator name';", `v_operator text := '${input.operator}';`)
+}
+
 /** INSERT from the refund script, with the four operator values filled in. */
 function refundInsertSql(paymentId: string, reason: string, operator: string): string {
   const start = refund.indexOf('INSERT INTO public.payment_events')
@@ -113,6 +129,62 @@ describe('manual refund exclusion', () => {
 
       const after = await payerIds(db)
       expect(after).toEqual([keptUser])
+    } finally {
+      await db.close()
+    }
+  })
+
+  it('aborts when that payment id is not on a paid event for the metadata user_id', async () => {
+    const target = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+    const owner = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+    const freePlan = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3'
+    const db = new PGlite()
+
+    try {
+      await db.exec(`
+        CREATE TABLE public.plans (id uuid PRIMARY KEY, name text NOT NULL);
+        CREATE TABLE public.subscriptions (
+          user_id uuid PRIMARY KEY,
+          plan_id uuid,
+          status text,
+          is_lifetime boolean
+        );
+        CREATE TABLE public.payment_events (
+          event_id text PRIMARY KEY,
+          event_type text NOT NULL,
+          payload jsonb NOT NULL,
+          processed_at timestamptz NOT NULL DEFAULT now()
+        );
+      `)
+      await db.query(`INSERT INTO public.plans (id, name) VALUES ($1::uuid, 'free')`, [freePlan])
+      await db.query(
+        `INSERT INTO public.subscriptions (user_id, plan_id, status, is_lifetime)
+         VALUES ($1::uuid, $2::uuid, 'active', true)`,
+        [target, freePlan]
+      )
+      await insertPaid(db, owner, 'pay_shared')
+
+      await expect(
+        db.exec(
+          filledRefundScript({
+            userId: target,
+            paymentId: 'pay_shared',
+            reason: 'duplicate',
+            operator: 'jerald',
+          })
+        )
+      ).rejects.toThrow(/not found in payment_events/)
+      await db.exec('ROLLBACK')
+
+      const sub = await db.query<{ is_lifetime: boolean; status: string }>(
+        'SELECT is_lifetime, status FROM public.subscriptions WHERE user_id = $1::uuid',
+        [target]
+      )
+      expect(sub.rows).toEqual([{ is_lifetime: true, status: 'active' }])
+      const refunds = await db.query(
+        `SELECT event_id FROM public.payment_events WHERE event_type = 'manual.refund'`
+      )
+      expect(refunds.rows).toHaveLength(0)
     } finally {
       await db.close()
     }
