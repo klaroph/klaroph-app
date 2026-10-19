@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
-  plan: null as Record<string, unknown> | null,
+  plans: {} as Record<string, Record<string, unknown>>,
 }))
 
 vi.mock('@/lib/supabaseAdmin', () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: state.plan, error: null }),
+        eq: (_column: string, id: string) => ({
+          maybeSingle: async () => ({ data: state.plans[id] ?? null, error: null }),
         }),
       }),
     }),
@@ -29,9 +29,17 @@ const proPlan = {
   has_analytics: true,
   has_budgeting: true,
 }
+const freePlan = {
+  id: 'plan-free',
+  name: 'free',
+  max_goals: 2,
+  has_export: false,
+  has_analytics: false,
+  has_budgeting: false,
+}
 
 beforeEach(() => {
-  state.plan = proPlan
+  state.plans = { 'plan-pro': proPlan, 'plan-free': freePlan }
 })
 
 describe('resolveUserPlanFromSubscription', () => {
@@ -50,6 +58,24 @@ describe('resolveUserPlanFromSubscription', () => {
     expect(plan.is_grace).toBe(false)
     expect(getBudgetEditingAllowed(plan, '2020-01-01T00:00:00.000Z')).toBe(true)
     expect(getBudgetTrialDaysLeft(plan, '2020-01-01T00:00:00.000Z')).toBeNull()
+  })
+
+  it('treats a canceled lifetime row on the free plan as Pro', async () => {
+    const sub = normalizeSubscriptionFromRow(
+      {
+        status: 'canceled',
+        plan_id: 'plan-free',
+        current_period_end: '2020-01-01T00:00:00.000Z',
+        is_lifetime: true,
+      },
+      now
+    )
+    const plan = await resolveUserPlanFromSubscription(sub)
+    expect(plan.plan_name).toBe('pro')
+    expect(plan.max_goals).toBe(20)
+    expect(plan.export_enabled).toBe(true)
+    expect(plan.full_budgeting_entitled).toBe(true)
+    expect(plan.is_grace).toBe(false)
   })
 
   it('keeps an active monthly or annual row on Pro until the period ends', async () => {

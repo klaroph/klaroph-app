@@ -1,0 +1,22 @@
+-- Documented check for 20261019000003. Read-only. It does not update anything.
+--
+-- A subscriptions row with is_lifetime = true is Pro in every function below
+-- even when the plan is free, status is expired or canceled, or
+-- current_period_end is in the past. A row without is_lifetime still uses
+-- the previous rule (pro plan name, active or grace period).
+--
+-- Expected for a lifetime row (free plan, status expired or canceled, end date past):
+--   is_free_analytics_user(user_id) = false
+--   enforce_goal_plan_limit uses the pro plan max_goals, not 2
+--   consume_import_quota does not raise IMPORT_QUOTA_EXCEEDED
+--   get_user_features(user_id) ->> 'plan_name' is clarity_premium (the pro plan, renamed as before)
+--   get_founder_metrics() -> 'pro_users' includes the user when they are a real user
+--
+-- The predicates in the migration are:
+--   is_free_analytics_user: NOT (is_lifetime OR (plan is not free AND the old status/grace rule))
+--   enforce_goal_plan_limit: is_lifetime OR (status active AND period end in the future AND pro plan)
+--   consume_import_quota:    is_lifetime OR (status active AND period end in the future AND pro plan)
+--   get_user_features:        is_lifetime, else the old active-period and grace branches
+--   get_founder_metrics:      is_lifetime OR (status active AND period end in the future AND pro plan)
+
+SELECT 'lifetime_pro_entitlement_check' AS check_name;

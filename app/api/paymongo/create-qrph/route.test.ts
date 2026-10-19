@@ -5,6 +5,9 @@ const state = vi.hoisted(() => ({
   profile: { user_type: 'user' } as { user_type: string } | null,
   subscription: null as Record<string, unknown> | null,
   intents: [] as { amount?: number; metadata?: Record<string, string> }[],
+  intentAmount: 99_900,
+  intentStatus: 'awaiting_payment_method',
+  attached: 0,
 }))
 
 vi.mock('@/lib/supabaseServer', () => ({
@@ -49,11 +52,20 @@ vi.mock('@/lib/paymongo', () => ({
     return { data: { id: 'pi_1' } }
   },
   createPaymentMethodQrph: async () => ({ data: { id: 'pm_1' } }),
-  attachPaymentMethodToIntent: async () => ({
-    data: { attributes: { next_action: { code: { image_url: 'https://qr.example/img' } } } },
-  }),
+  attachPaymentMethodToIntent: async () => {
+    state.attached += 1
+    return {
+      data: { attributes: { next_action: { code: { image_url: 'https://qr.example/img' } } } },
+    }
+  },
   retrievePaymentIntent: async () => ({
-    data: { attributes: { metadata: { user_id: 'user-1' }, status: 'awaiting_payment_method' } },
+    data: {
+      attributes: {
+        metadata: { user_id: 'user-1' },
+        status: state.intentStatus,
+        amount: state.intentAmount,
+      },
+    },
   }),
   PayMongoError: class PayMongoError extends Error {
     status = 400
@@ -78,6 +90,9 @@ beforeEach(() => {
   state.profile = { user_type: 'user' }
   state.subscription = null
   state.intents = []
+  state.intentAmount = 99_900
+  state.intentStatus = 'awaiting_payment_method'
+  state.attached = 0
 })
 
 describe('POST /api/paymongo/create-qrph', () => {
@@ -125,6 +140,33 @@ describe('POST /api/paymongo/create-qrph', () => {
     const res = await post()
     expect(res.status).toBe(400)
     expect(state.intents).toHaveLength(0)
+  })
+
+  it('regenerates a QR when the stored amount is the current price', async () => {
+    const res = await post({ payment_intent_id: 'pi_old' })
+    expect(res.status).toBe(200)
+    expect(state.attached).toBe(1)
+    expect(state.intents).toHaveLength(0)
+  })
+
+  it('returns 410 when a stored QR is not the current one-time price', async () => {
+    state.intentAmount = 99_00
+    const res = await post({ payment_intent_id: 'pi_old' })
+    expect(res.status).toBe(410)
+    expect(state.attached).toBe(0)
+    expect(state.intents).toHaveLength(0)
+  })
+
+  it('regenerates a tester QR at ₱5 and rejects a retail amount', async () => {
+    state.profile = { user_type: 'tester' }
+    state.intentAmount = 500
+    expect((await post({ payment_intent_id: 'pi_tester' })).status).toBe(200)
+    expect(state.attached).toBe(1)
+
+    state.intentAmount = 99_900
+    state.attached = 0
+    expect((await post({ payment_intent_id: 'pi_tester' })).status).toBe(410)
+    expect(state.attached).toBe(0)
   })
 
   it('requires a signed-in user', async () => {

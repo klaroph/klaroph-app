@@ -45,12 +45,19 @@ export async function POST(request: Request) {
       name: user.user_metadata?.full_name ?? user.email ?? 'Customer',
       email: user.email ?? '',
     }
+    const pricing = await getSubscriptionPricing(user.id)
 
     if (existingPaymentIntentId) {
       const existing = await retrievePaymentIntent(existingPaymentIntentId)
       const metadata = (existing.data.attributes.metadata ?? {}) as Record<string, string>
       if (metadata.user_id !== user.id) {
         return NextResponse.json({ error: 'Invalid payment intent.' }, { status: 403 })
+      }
+      if (existing.data.attributes.amount !== pricing.amountCentavos) {
+        return NextResponse.json(
+          { error: 'This payment is no longer available.' },
+          { status: 410 }
+        )
       }
       if (existing.data.attributes.status === 'succeeded') {
         return NextResponse.json({ error: 'Payment already completed.' }, { status: 400 })
@@ -77,7 +84,6 @@ export async function POST(request: Request) {
       })
     }
 
-    const pricing = await getSubscriptionPricing(user.id)
     const { amountCentavos } = resolveCheckoutGrant(pricing.amountCentavos)
     if (amountCentavos <= 0) {
       return NextResponse.json(

@@ -7,6 +7,20 @@ import {
 const now = new Date('2026-09-23T12:00:00.000Z')
 
 describe('normalizeSubscriptionFromRow', () => {
+  it('treats a canceled lifetime row on the free plan as active', () => {
+    const sub = normalizeSubscriptionFromRow(
+      {
+        status: 'canceled',
+        plan_id: 'plan_free',
+        current_period_end: '2020-01-01T00:00:00.000Z',
+        is_lifetime: true,
+      },
+      now
+    )
+    expect(sub.state).toBe('ACTIVE')
+    expect(sub.isLifetime).toBe(true)
+  })
+
   it('treats is_lifetime as active without reading the end date or status', () => {
     const sub = normalizeSubscriptionFromRow(
       {

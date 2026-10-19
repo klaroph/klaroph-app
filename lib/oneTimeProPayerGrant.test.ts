@@ -2,14 +2,14 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 
-const migration = readFileSync(
-  join(process.cwd(), 'supabase/migrations/20261019000002_grant_lifetime_to_verified_payers.sql'),
-  'utf8'
+function readText(file: string): string {
+  return readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
+}
+
+const migration = readText(
+  join(process.cwd(), 'supabase/migrations/20261019000002_grant_lifetime_to_verified_payers.sql')
 )
-const report = readFileSync(
-  join(process.cwd(), 'supabase/scripts/one_time_pro_payer_report.sql'),
-  'utf8'
-)
+const report = readText(join(process.cwd(), 'supabase/scripts/one_time_pro_payer_report.sql'))
 
 describe('verified payer grant', () => {
   it('sets lifetime, the pro plan, and active on a free, expired, or canceled row', () => {
