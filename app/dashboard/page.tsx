@@ -252,7 +252,7 @@ export default function DashboardPage() {
         <div className="min-w-0 flex-1 max-lg:w-full">
           <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
             <h2
-              className="dashboard-greeting-title min-w-0 max-w-full max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0"
+              className="dashboard-greeting-title min-w-0 max-w-full max-lg:flex-1 max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0"
               title={`${greeting}, ${greetingName}!`}
             >
               {greeting}, {greetingName}!
@@ -303,7 +303,6 @@ export default function DashboardPage() {
         <DashboardMonthStatStrip
           income={monthIncome}
           expenses={monthExpenses}
-          moneyLeft={monthSummary.moneyLeft}
           loading={monthMoneyLoading}
           goalsCount={goals.length}
           goalsWithSavings={goalsWithSavings}
