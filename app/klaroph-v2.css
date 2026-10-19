@@ -148,6 +148,15 @@
   letter-spacing: -0.02em;
 }
 
+.dashboard-greeting-title {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dashboard-greeting-sub {
   color: var(--text-muted);
 }

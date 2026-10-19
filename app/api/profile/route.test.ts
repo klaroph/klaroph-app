@@ -39,6 +39,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
   supabaseAdmin: { from: () => ({}) },
 }))
 
+import { NICKNAME_MAX_LENGTH, NICKNAME_REQUIRED_ERROR, NICKNAME_TOO_LONG_ERROR } from '@/lib/displayName'
 import { PATCH } from './route'
 
 const patch = (body: unknown) =>
@@ -55,22 +56,45 @@ beforeEach(() => {
 })
 
 describe('PATCH /api/profile nickname', () => {
-  it('trims and caps a nickname at 40 characters', async () => {
-    const res = await patch({ nickname: `  ${'Maria'.repeat(12)}  ` })
+  it('trims a nickname within 15 characters', async () => {
+    const res = await patch({ nickname: '  Christopher  ' })
     expect(res.status).toBe(200)
-    expect(state.updates).toEqual([{ nickname: 'Maria'.repeat(8) }])
-    expect('Maria'.repeat(8)).toHaveLength(40)
+    expect(state.updates).toEqual([{ nickname: 'Christopher' }])
   })
 
-  it('clears a nickname that is only spaces', async () => {
-    const res = await patch({ nickname: '   ' })
+  it('accepts a nickname of exactly 15 characters', async () => {
+    const nickname = 'A'.repeat(NICKNAME_MAX_LENGTH)
+    const res = await patch({ nickname })
     expect(res.status).toBe(200)
-    expect(state.updates).toEqual([{ nickname: '' }])
+    expect(state.updates).toEqual([{ nickname }])
   })
 
-  it('stores null when nickname is cleared to null', async () => {
-    const res = await patch({ nickname: null })
+  it('rejects an empty, blank, or null nickname without writing', async () => {
+    for (const nickname of ['', '   ', null]) {
+      state.updates = []
+      const res = await patch({ nickname })
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({ error: NICKNAME_REQUIRED_ERROR })
+      expect(state.updates).toEqual([])
+    }
+  })
+
+  it('returns 400 for more than 15 characters and does not truncate', async () => {
+    const nickname = `  ${'A'.repeat(16)}  `
+    const res = await patch({ nickname, dream_statement: 'A house by the sea' })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body).toEqual({ error: NICKNAME_TOO_LONG_ERROR })
+    expect(JSON.stringify(body)).not.toContain('A'.repeat(15))
+    expect(state.updates).toEqual([])
+  })
+
+  it('saves other fields when nickname is omitted, even if the stored name is long or missing', async () => {
+    const res = await patch({ dream_statement: 'A house by the sea', financial_stage: 'starter' })
     expect(res.status).toBe(200)
-    expect(state.updates).toEqual([{ nickname: null }])
+    expect(state.updates).toEqual([
+      { dream_statement: 'A house by the sea', financial_stage: 'starter' },
+    ])
+    expect(state.updates[0]).not.toHaveProperty('nickname')
   })
 })

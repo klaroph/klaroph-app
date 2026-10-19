@@ -244,7 +244,7 @@ export default function Sidebar({ drawerOpen = false, onDrawerClose, portalLayou
           <footer className="sidebar-footer" aria-label="Account and plan">
             <div className="sidebar-footer-inner">
               <div className="sidebar-user-block">
-                <div className="sidebar-user-name" title={userName}>Hi {userName}</div>
+                <div className="sidebar-user-name" title={`Hi ${userName}`}>Hi {userName}</div>
                 <div className="sidebar-clarity-badge">Clarity Level – {clarityLevel}</div>
                 {isPro && (
                   <div className="sidebar-plan-card">

@@ -251,7 +251,10 @@ export default function DashboardPage() {
       <div className="page-header page-header-with-actions dashboard-page-header dash-one-glance-header max-lg:order-0 max-lg:items-start max-lg:gap-0 max-lg:mb-0 lg:gap-2">
         <div className="min-w-0 flex-1 max-lg:w-full">
           <div className="max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-2 max-lg:overflow-visible">
-            <h2 className="dashboard-greeting-title max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0">
+            <h2
+              className="dashboard-greeting-title min-w-0 max-w-full max-lg:text-lg max-lg:font-semibold max-lg:leading-tight max-lg:mb-0"
+              title={`${greeting}, ${greetingName}!`}
+            >
               {greeting}, {greetingName}!
             </h2>
             <DashboardMobileHeaderLogo />
