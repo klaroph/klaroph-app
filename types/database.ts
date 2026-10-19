@@ -4,8 +4,11 @@ export interface GoalRow {
   user_id: string
   name: string
   target_amount: number
+  /** Legacy baseline. Creates write 0. Progress display does not add this to allocations. */
   saved_amount: number
   created_at: string
+  updated_at?: string
+  deleted_at?: string | null
   pinned_at?: string | null
 }
 

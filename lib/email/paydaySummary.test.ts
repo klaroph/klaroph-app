@@ -300,6 +300,7 @@ describe('loadPaydayEntries', () => {
             calls.push({ table, method: 'lte', args })
             return builder
           },
+          is: () => builder,
           order: () => builder,
           range: async () => ({ data: rows[table as 'expenses' | 'income_records'] ?? [], error: null }),
         }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { formatPeso, toLocalDateString } from '@/lib/format'
 import { supabase, getBrowserUser } from '../../lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import Modal from '../ui/Modal'
 import SuggestionChips from './SuggestionChips'
 import { INCOME_SOURCES, type IncomeSource } from '../../lib/incomeSources'
@@ -84,7 +85,7 @@ export default function IncomeAllocationModal({
   useEffect(() => {
     if (!isOpen) return
     const load = async () => {
-      const { data } = await supabase.from('goals').select('id, name, target_amount')
+      const { data } = await liveOnly(supabase.from('goals').select('id, name, target_amount'))
       setGoals((data as Goal[]) || [])
     }
     load()
@@ -100,10 +101,9 @@ export default function IncomeAllocationModal({
     }
     let cancelled = false
     const loadAllocations = async () => {
-      const { data } = await supabase
-        .from('income_allocations')
-        .select('goal_id, amount')
-        .eq('income_record_id', initialRecord.id)
+      const { data } = await liveOnly(
+        supabase.from('income_allocations').select('goal_id, amount')
+      ).eq('income_record_id', initialRecord.id)
       if (cancelled) return
       const rows = (data ?? []) as { goal_id: string; amount: number }[]
       const goalMap = new Map(goals.map((g) => [g.id, g.name]))

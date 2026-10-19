@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { liveOnly } from '@/lib/liveRows'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { plainDbError } from '@/lib/apiError'
 
@@ -66,9 +67,9 @@ export async function PUT(request: Request, { params }: RouteParams) {
       )
     }
 
-    const { data: currentRow } = await supabase
-      .from('income_records')
-      .select('date, income_source')
+    const { data: currentRow } = await liveOnly(
+      supabase.from('income_records').select('date, income_source')
+    )
       .eq('id', id)
       .eq('user_id', user.id)
       .single()
@@ -143,10 +144,9 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { error: allocError } = await supabase
-      .from('income_allocations')
-      .delete()
-      .eq('income_record_id', id)
+    const { error: allocError } = await liveOnly(
+      supabase.from('income_allocations').delete()
+    ).eq('income_record_id', id)
 
     if (allocError) {
       console.error('DELETE /api/income/[id] allocations error:', allocError)
@@ -156,9 +156,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       )
     }
 
-    const { error } = await supabase
-      .from('income_records')
-      .delete()
+    const { error } = await liveOnly(supabase.from('income_records').delete())
       .eq('id', id)
       .eq('user_id', user.id)
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { getAccountDisplayLabel, type FinancialAccount } from '@/lib/financialAccounts'
 import { getFinancialHealthInsight, getWeightedLiquidAssets } from '@/lib/financialHealthInsights'
 import { formatPeso, formatDate } from '@/lib/format'
@@ -29,9 +30,11 @@ export default function FinancialHealthPage() {
       setLoading(false)
       return
     }
-    const { data } = await supabase
-      .from('financial_accounts')
-      .select('id, user_id, type, subtype, institution_name, custom_name, amount, notes, created_at, updated_at')
+    const { data } = await liveOnly(
+      supabase
+        .from('financial_accounts')
+        .select('id, user_id, type, subtype, institution_name, custom_name, amount, notes, created_at, updated_at')
+    )
     setAccounts((data as FinancialAccount[]) || [])
     setLoading(false)
   }

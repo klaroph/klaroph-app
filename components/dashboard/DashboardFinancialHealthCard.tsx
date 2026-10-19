@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { formatCurrency } from '@/lib/format'
 import type { FinancialAccount } from '@/lib/financialAccounts'
 import { getNetWorthInsight } from '@/lib/dashboardCardInsights'
@@ -35,9 +36,7 @@ export default function DashboardFinancialHealthCard({
         setLoading(false)
         return
       }
-      const { data } = await supabase
-        .from('financial_accounts')
-        .select('type, amount')
+      const { data } = await liveOnly(supabase.from('financial_accounts').select('type, amount'))
       if (!mounted) return
       const rows = (data as Pick<FinancialAccount, 'type' | 'amount'>[]) ?? []
       let a = 0

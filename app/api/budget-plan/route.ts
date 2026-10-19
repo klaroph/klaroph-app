@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { liveOnly } from '@/lib/liveRows'
 import { plainDbError } from '@/lib/apiError'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
@@ -26,9 +27,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
-      .from('budget_plans')
-      .select('id, user_id, category, amount, note, created_at')
+    const { data, error } = await liveOnly(
+      supabase.from('budget_plans').select('id, user_id, category, amount, note, created_at')
+    )
       .eq('user_id', user.id)
       .order('category')
 

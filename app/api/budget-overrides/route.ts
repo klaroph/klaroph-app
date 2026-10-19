@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { liveOnly } from '@/lib/liveRows'
 import { plainDbError } from '@/lib/apiError'
 import { resolvePlanAndBudgetEntitlement } from '@/lib/entitlements'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '@/lib/budgetLockMessage'
@@ -37,9 +38,9 @@ export async function GET(request: Request) {
     const monthParam = searchParams.get('month')
     const month = toFirstDayOfMonth(monthParam || undefined)
 
-    const { data, error } = await supabase
-      .from('budget_overrides')
-      .select('id, user_id, category, amount, month, note, created_at')
+    const { data, error } = await liveOnly(
+      supabase.from('budget_overrides').select('id, user_id, category, amount, month, note, created_at')
+    )
       .eq('user_id', user.id)
       .eq('month', month)
       .order('category')

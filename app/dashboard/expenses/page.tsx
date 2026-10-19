@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { supabase, getBrowserUser } from '../../../lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { EXPENSE_CATEGORIES } from '../../../lib/expenseCategories'
 import AddExpenseModal from '../../../components/dashboard/AddExpenseModal'
 import EditExpenseModal, { type ExpenseRecord } from '../../../components/dashboard/EditExpenseModal'
@@ -279,9 +280,9 @@ export default function ExpensesPage() {
         setLoading(false)
         return
       }
-      let query = supabase
-        .from('expenses')
-        .select('id, category, type, amount, date, description')
+      let query = liveOnly(
+        supabase.from('expenses').select('id, category, type, amount, date, description')
+      )
         .eq('user_id', user.id)
         .gte('date', range.start)
         .lte('date', range.end)

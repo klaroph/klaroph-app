@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatPeso } from '@/lib/format'
+import { liveOnly } from '@/lib/liveRows'
 
 /**
  * Edit / remove a single goal allocation (income_allocations row).
@@ -43,26 +44,26 @@ async function loadOwnedAllocation(
 ): Promise<OwnedAllocation | null> {
   if (!UUID_RE.test(allocationId)) return null
 
-  const { data: allocation } = await supabase
-    .from('income_allocations')
-    .select('id, amount, income_record_id')
+  const { data: allocation } = await liveOnly(
+    supabase.from('income_allocations').select('id, amount, income_record_id')
+  )
     .eq('id', allocationId)
     .maybeSingle()
   if (!allocation) return null
 
-  const incomeId = (allocation as { income_record_id: string }).income_record_id
-  const { data: income } = await supabase
-    .from('income_records')
-    .select('id, total_amount')
+  const incomeId = (allocation as { income_record_id: string | null }).income_record_id
+  if (!incomeId) return null
+  const { data: income } = await liveOnly(
+    supabase.from('income_records').select('id, total_amount')
+  )
     .eq('id', incomeId)
     .eq('user_id', userId)
     .maybeSingle()
   if (!income) return null
 
-  const { data: siblings } = await supabase
-    .from('income_allocations')
-    .select('id, amount')
-    .eq('income_record_id', incomeId)
+  const { data: siblings } = await liveOnly(
+    supabase.from('income_allocations').select('id, amount')
+  ).eq('income_record_id', incomeId)
   const otherAllocated = ((siblings ?? []) as { id: string; amount: number }[])
     .filter((row) => row.id !== allocationId)
     .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
@@ -105,11 +106,9 @@ export async function updateGoalAllocation(
     }
   }
 
-  const { data: updated, error } = await supabase
-    .from('income_allocations')
-    .update({ amount: parsed.amount })
-    .eq('id', owned.id)
-    .select('id')
+  const { data: updated, error } = await liveOnly(
+    supabase.from('income_allocations').update({ amount: parsed.amount }).eq('id', owned.id)
+  ).select('id')
   if (error) return { ok: false, status: 500, error: 'Could not update allocation.' }
   if (!updated || updated.length === 0) return NOT_FOUND
 
@@ -125,11 +124,9 @@ export async function removeGoalAllocation(
   const owned = await loadOwnedAllocation(supabase, userId, allocationId)
   if (!owned) return NOT_FOUND
 
-  const { data: removed, error } = await supabase
-    .from('income_allocations')
-    .delete()
-    .eq('id', owned.id)
-    .select('id')
+  const { data: removed, error } = await liveOnly(
+    supabase.from('income_allocations').delete().eq('id', owned.id)
+  ).select('id')
   if (error) return { ok: false, status: 500, error: 'Could not remove allocation.' }
   if (!removed || removed.length === 0) return NOT_FOUND
 

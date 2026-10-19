@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import {
   computeGoalRunway,
   formatGoalRunwayCopy,
@@ -64,10 +65,9 @@ export function useGoalsData(refreshTrigger: number) {
           return
         }
 
-        const { data: goalsData, error: goalsError } = await supabase
-          .from('goals')
-          .select('*')
-          .order('created_at', { ascending: false })
+        const { data: goalsData, error: goalsError } = await liveOnly(
+          supabase.from('goals').select('*')
+        ).order('created_at', { ascending: false })
         if (!isMounted) return
         if (goalsError) {
           setGoals([])
@@ -90,10 +90,9 @@ export function useGoalsData(refreshTrigger: number) {
         }
 
         const goalIds = goalsList.map((g) => g.id)
-        const { data: allocData, error: allocError } = await supabase
-          .from('income_allocations')
-          .select('goal_id, amount, income_records(date)')
-          .in('goal_id', goalIds)
+        const { data: allocData, error: allocError } = await liveOnly(
+          supabase.from('income_allocations').select('goal_id, amount, income_records(date)')
+        ).in('goal_id', goalIds)
 
         if (!isMounted) return
         if (allocError) {
@@ -120,6 +119,8 @@ export function useGoalsData(refreshTrigger: number) {
         for (const g of goalsList) {
           const runway = computeGoalRunway({
             target: Number(g.target_amount) || 0,
+            // Allocation sum only. saved_amount is not added; creates store 0 and
+            // no writer copies allocations into that column.
             saved: byGoal[g.id] ?? 0,
             events: eventsByGoal[g.id] ?? [],
           })

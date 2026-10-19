@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { toLocalDateString, parseLocalDateString } from '@/lib/format'
+import { liveOnly } from '@/lib/liveRows'
 
 export type AllTimeTableName = 'income_records' | 'expenses'
 
@@ -37,17 +38,13 @@ export async function getAllTimeRangeAndGrouping(
 ): Promise<AllTimeRangeResult> {
   const today = toLocalDateString(new Date())
 
-  const { data: minRow } = await supabase
-    .from(tableName)
-    .select('date')
+  const { data: minRow } = await liveOnly(supabase.from(tableName).select('date'))
     .eq('user_id', userId)
     .order('date', { ascending: true })
     .limit(1)
     .maybeSingle()
 
-  const { data: maxRow } = await supabase
-    .from(tableName)
-    .select('date')
+  const { data: maxRow } = await liveOnly(supabase.from(tableName).select('date'))
     .eq('user_id', userId)
     .order('date', { ascending: false })
     .limit(1)

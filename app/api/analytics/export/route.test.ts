@@ -29,6 +29,10 @@ function adminQuery(table: string) {
       if (column === 'user_id' && typeof value === 'string') userId = value
       return builder
     },
+    is: (column: string, value: unknown) => {
+      state.filters.push({ table, column, value })
+      return builder
+    },
     order: () => builder,
     range: async (from: number, to: number) => {
       state.ranges.push({ table, from, to })
@@ -130,9 +134,17 @@ describe('GET /api/analytics/export', () => {
     expect(res.status).toBe(200)
     expect(state.filters.length).toBeGreaterThan(0)
     for (const filter of state.filters) {
-      expect(filter).toEqual({ table: filter.table, column: 'user_id', value: 'free-user' })
+      if (filter.column === 'deleted_at') {
+        expect(filter.value).toBeNull()
+      } else {
+        expect(filter).toEqual({ table: filter.table, column: 'user_id', value: 'free-user' })
+      }
     }
-    expect(state.filters.map((filter) => filter.table).sort()).toEqual(['expenses', 'income_records'])
+    expect(state.filters.filter((filter) => filter.column === 'user_id').map((filter) => filter.table).sort()).toEqual([
+      'expenses',
+      'income_records',
+    ])
+    expect(state.filters.filter((filter) => filter.column === 'deleted_at')).toHaveLength(2)
     expect(state.userClientReads).toBe(0)
   })
 
@@ -162,8 +174,12 @@ describe('GET /api/analytics/export', () => {
     expect(csv).not.toContain('user-b')
     expect(state.filters.length).toBeGreaterThan(0)
     for (const filter of state.filters) {
-      expect(filter.column).toBe('user_id')
-      expect(filter.value).toBe('user-a')
+      if (filter.column === 'deleted_at') {
+        expect(filter.value).toBeNull()
+      } else {
+        expect(filter.column).toBe('user_id')
+        expect(filter.value).toBe('user-a')
+      }
     }
   })
 

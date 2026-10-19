@@ -5,6 +5,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { liveOnly } from '@/lib/liveRows'
 import {
   aggregateSpendingCategories,
   monthBounds,
@@ -52,16 +53,12 @@ export async function getSpendingCategories(params: {
   const metric = params.metric === 'room' ? 'room' : 'spent'
 
   const [expenseRes, planRes, overrideRes] = await Promise.all([
-    params.supabase
-      .from('expenses')
-      .select('amount, category')
+    liveOnly(params.supabase.from('expenses').select('amount, category'))
       .eq('user_id', params.userId)
       .gte('date', start)
       .lt('date', endExclusive),
-    params.supabase.from('budget_plans').select('category, amount').eq('user_id', params.userId),
-    params.supabase
-      .from('budget_overrides')
-      .select('category, amount')
+    liveOnly(params.supabase.from('budget_plans').select('category, amount')).eq('user_id', params.userId),
+    liveOnly(params.supabase.from('budget_overrides').select('category, amount'))
       .eq('user_id', params.userId)
       .eq('month', start),
   ])
@@ -94,7 +91,7 @@ export async function getSpendingCategories(params: {
 
 /** The authenticated user's goal names — used to resolve and clarify goal references. */
 export async function getGoalNames(supabase: SupabaseClient, userId: string): Promise<string[]> {
-  const { data, error } = await supabase.from('goals').select('name').eq('user_id', userId)
+  const { data, error } = await liveOnly(supabase.from('goals').select('name')).eq('user_id', userId)
   if (error) {
     console.error('[klaro-chat] goal_names_error', { message: error.message })
     return []

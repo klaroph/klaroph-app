@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseLocalDateString } from '@/lib/format'
+import { liveOnly } from '@/lib/liveRows'
 import { monthBounds } from '@/lib/ai/klaroFinancialContext'
 
 export type CashFlowTimingAggregates = {
@@ -53,15 +54,11 @@ export async function buildCashFlowTimingAggregates(
   const { start, endExclusive, label } = monthBounds(periodFirst)
 
   const [incomeRes, expenseRes] = await Promise.all([
-    supabase
-      .from('income_records')
-      .select('total_amount, date')
+    liveOnly(supabase.from('income_records').select('total_amount, date'))
       .eq('user_id', userId)
       .gte('date', start)
       .lt('date', endExclusive),
-    supabase
-      .from('expenses')
-      .select('amount, date')
+    liveOnly(supabase.from('expenses').select('amount, date'))
       .eq('user_id', userId)
       .gte('date', start)
       .lt('date', endExclusive),

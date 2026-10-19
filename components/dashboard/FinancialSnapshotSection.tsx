@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { formatPeso } from '@/lib/format'
 import { supabase, getBrowserUser } from '../../lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { getAccountDisplayLabel, type FinancialAccount } from '@/lib/financialAccounts'
 import { getWeightedLiquidAssets } from '@/lib/financialHealthInsights'
 import ManageAssetsLiabilitiesModal from './ManageAssetsLiabilitiesModal'
@@ -163,9 +164,11 @@ export default function FinancialSnapshotSection({
     const load = async () => {
       const { data: { user } } = await getBrowserUser()
       if (!user) return
-      const { data } = await supabase
-        .from('financial_accounts')
-        .select('id, user_id, type, subtype, institution_name, custom_name, amount, notes, created_at, updated_at')
+      const { data } = await liveOnly(
+        supabase
+          .from('financial_accounts')
+          .select('id, user_id, type, subtype, institution_name, custom_name, amount, notes, created_at, updated_at')
+      )
       setAccounts((data as FinancialAccount[]) || [])
     }
     load()

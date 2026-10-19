@@ -9,6 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { displayName } from '@/lib/displayName'
+import { liveOnly } from '@/lib/liveRows'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { CampaignLinkConfig, CampaignSendSummary } from '@/lib/email/campaignSender'
 import { sendClaimedRecipients } from '@/lib/email/campaignSender'
@@ -171,9 +172,7 @@ export async function loadPaydayEntries(
   const allowed = new Set(ids)
   const [expenses, income] = await Promise.all([
     eachPage<ExpenseRow>((from, to) =>
-      admin
-        .from('expenses')
-        .select('id, user_id, date, category, amount')
+      liveOnly(admin.from('expenses').select('id, user_id, date, category, amount'))
         .in('user_id', ids)
         .gte('date', window.covered.start)
         .lte('date', window.covered.end)
@@ -181,9 +180,7 @@ export async function loadPaydayEntries(
         .range(from, to),
     ),
     eachPage<IncomeRow>((from, to) =>
-      admin
-        .from('income_records')
-        .select('id, user_id, date')
+      liveOnly(admin.from('income_records').select('id, user_id, date'))
         .in('user_id', ids)
         .gte('date', window.covered.start)
         .lte('date', window.covered.end)

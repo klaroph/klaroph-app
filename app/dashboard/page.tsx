@@ -10,6 +10,7 @@ import {
   DASHBOARD_TRANSACTIONS_REFRESH_EVENT,
   dispatchDashboardRefresh,
 } from '@/lib/dashboardRefresh'
+import { liveOnly } from '@/lib/liveRows'
 import type { GoalRow, GoalWithSaved } from '@/types/database'
 import BudgetOverview from '@/components/dashboard/BudgetOverview'
 import MonthPicker from '@/components/dashboard/MonthPicker'
@@ -145,10 +146,9 @@ export default function DashboardPage() {
       return
     }
 
-    const { data: goalsData, error: goalsError } = await supabase
-      .from('goals')
-      .select('*')
-      .eq('user_id', user.id)
+    const { data: goalsData, error: goalsError } = await liveOnly(
+      supabase.from('goals').select('*')
+    ).eq('user_id', user.id)
     if (goalsError || !goalsData?.length) {
       setGoals([])
       setLoading(false)
@@ -156,10 +156,9 @@ export default function DashboardPage() {
     }
 
     const goalIds = (goalsData as GoalRow[]).map((g) => g.id)
-    const { data: allocData } = await supabase
-      .from('income_allocations')
-      .select('goal_id, amount')
-      .in('goal_id', goalIds)
+    const { data: allocData } = await liveOnly(
+      supabase.from('income_allocations').select('goal_id, amount')
+    ).in('goal_id', goalIds)
 
     const byGoal: Record<string, number> = {}
     for (const row of allocData ?? []) {
@@ -170,6 +169,8 @@ export default function DashboardPage() {
 
     const withSaved: GoalWithSaved[] = (goalsData as GoalRow[]).map((g) => ({
       ...g,
+      // Live allocation sum when this goal has any. saved_amount is only the fallback
+      // for a goal with no allocation rows. The two are not added (see migration comment).
       saved: byGoal[g.id] ?? Number(g.saved_amount) ?? 0,
     }))
     setGoals(withSaved)

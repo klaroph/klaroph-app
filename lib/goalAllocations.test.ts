@@ -10,12 +10,14 @@ type Tables = Record<string, Row[]>
 function fakeSupabase(tables: Tables) {
   class Query {
     private filters: [string, unknown][] = []
+    private nullChecks: [string, unknown][] = []
     private op: 'select' | 'update' | 'delete' = 'select'
     private patch: Row = {}
     private single = false
     constructor(private table: string) {}
     select() { return this }
     eq(column: string, value: unknown) { this.filters.push([column, value]); return this }
+    is(column: string, value: unknown) { this.nullChecks.push([column, value]); return this }
     update(patch: Row) { this.op = 'update'; this.patch = patch; return this }
     delete() { this.op = 'delete'; return this }
     maybeSingle() { this.single = true; return this }
@@ -24,7 +26,10 @@ function fakeSupabase(tables: Tables) {
     }
     private run() {
       const rows = tables[this.table] ?? []
-      const matched = rows.filter((r) => this.filters.every(([c, v]) => r[c] === v))
+      const matched = rows.filter((r) => {
+        if (!this.filters.every(([c, v]) => r[c] === v)) return false
+        return this.nullChecks.every(([c, v]) => (v === null ? r[c] == null : r[c] === v))
+      })
       if (this.op === 'update') matched.forEach((r) => Object.assign(r, this.patch))
       if (this.op === 'delete') tables[this.table] = rows.filter((r) => !matched.includes(r))
       const data = this.single ? (matched[0] ? { ...matched[0] } : null) : matched.map((r) => ({ ...r }))

@@ -115,6 +115,7 @@ function fakeSupabase(rowsByTable: Record<string, unknown[]>) {
           filters.push({ table, column, value })
           return builder
         },
+        is: () => builder,
         gte: () => builder,
         lt: () => builder,
         then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>

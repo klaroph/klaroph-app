@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useLayoutEffect, startTransition } from 'react'
 import Image from 'next/image'
 import { supabase, getBrowserUser } from '@/lib/supabaseClient'
+import { liveOnly } from '@/lib/liveRows'
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories'
 import { useSubscriptionOptional } from '@/contexts/SubscriptionContext'
 import { useUpgradeTriggerOptional } from '@/contexts/UpgradeTriggerContext'
@@ -232,9 +233,7 @@ export default function BudgetOverview({
         setSpendingByCategoryFetched({})
         return
       }
-      supabase
-        .from('expenses')
-        .select('category, amount')
+      liveOnly(supabase.from('expenses').select('category, amount'))
         .eq('user_id', user.id)
         .gte('date', start)
         .lte('date', end)

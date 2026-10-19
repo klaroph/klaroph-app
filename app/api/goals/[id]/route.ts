@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { liveOnly } from '@/lib/liveRows'
 import { plainDbError } from '@/lib/apiError'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -33,11 +34,13 @@ export async function PUT(request: Request, { params }: RouteParams) {
       )
     }
 
-    const { data, error } = await supabase
-      .from('goals')
-      .update({ name, target_amount: targetAmount })
-      .eq('id', id)
-      .eq('user_id', user.id)
+    const { data, error } = await liveOnly(
+      supabase
+        .from('goals')
+        .update({ name, target_amount: targetAmount })
+        .eq('id', id)
+        .eq('user_id', user.id)
+    )
       .select('id, name, target_amount, saved_amount, created_at')
       .single()
 
@@ -75,9 +78,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { error } = await supabase
-      .from('goals')
-      .delete()
+    const { error } = await liveOnly(supabase.from('goals').delete())
       .eq('id', id)
       .eq('user_id', user.id)
 
