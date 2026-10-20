@@ -5,7 +5,7 @@ import { orderCategoryChips, repeatChips } from './chips'
 import { groupHistoryByDay, rowHeadline } from './historyGroups'
 import { homeInsight } from './insight'
 import type { HistoryRow } from './ledger'
-import { daysToPaydayAt, daysToPaydayOn } from './payday'
+import { daysToPaydayAt, daysToPaydayOn, paydayCardTitle } from './payday'
 import { emptyDraft } from './quickAdd'
 import { toastForSave, undoSavedEntry } from './saveToast'
 
@@ -147,6 +147,15 @@ describe('days to payday', () => {
     expect(daysToPaydayAt(new Date('2026-10-14T15:59:59.000Z')).days).toBe(1)
     expect(daysToPaydayAt(new Date('2026-10-14T16:00:00.000Z')).days).toBe(16)
   })
+
+  it('says Payday today on the 15th and the last day, then counts to the next payday', () => {
+    expect(paydayCardTitle('2026-10-15')).toBe('Payday today')
+    expect(paydayCardTitle('2026-10-16')).toBe('15 days to payday')
+    expect(paydayCardTitle('2026-10-31')).toBe('Payday today')
+    expect(paydayCardTitle('2026-11-01')).toBe('14 days to payday')
+    expect(paydayCardTitle('2026-02-28')).toBe('Payday today')
+    expect(paydayCardTitle('2026-03-01')).toBe('14 days to payday')
+  })
 })
 
 describe('home insight', () => {
@@ -157,7 +166,7 @@ describe('home insight', () => {
       topCategory: 'Groceries',
       daysLogged: 4,
       hasActivity: true,
-    })).toBe('You spent 18% less on food than last kinsena')
+    })).toBe('18% less on food than last kinsena')
     expect(homeInsight({
       foodSpent: 0,
       previousFoodSpent: 0,

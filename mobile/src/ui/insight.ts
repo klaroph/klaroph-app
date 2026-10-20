@@ -21,9 +21,9 @@ export function homeInsight(input: {
   if (input.previousFoodSpent > 0 && input.foodSpent > 0) {
     const ratio = (input.foodSpent - input.previousFoodSpent) / input.previousFoodSpent
     const pct = Math.round(Math.abs(ratio) * 100)
-    if (pct === 0) return 'Food spending matches last kinsena'
-    if (ratio < 0) return `You spent ${pct}% less on food than last kinsena`
-    return `You spent ${pct}% more on food than last kinsena`
+    if (pct === 0) return 'Food matches last kinsena'
+    if (ratio < 0) return `${pct}% less on food than last kinsena`
+    return `${pct}% more on food than last kinsena`
   }
   if (input.topCategory) return `${input.topCategory} is your biggest spend this kinsena`
   if (input.daysLogged > 0) {

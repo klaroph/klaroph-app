@@ -583,6 +583,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
           moneyLeft={draftMoneyLeft(home, overlay.type === 'edit-entry' ? overlay.row : null)}
           status={pill}
           onClose={() => setOverlay(null)}
+          onDeleteEntry={deleteEntry}
           onSaveEntry={(draft) => {
             const previous = draft.id
               ? historyRows.find((row) => row.id === draft.id && row.kind === draft.kind)
@@ -661,6 +662,7 @@ function OverlaySheet({
   moneyLeft: remainder,
   status,
   onSaveEntry,
+  onDeleteEntry,
   onSaveGoal,
   onSaveBudget,
   onDeposit,
@@ -677,6 +679,7 @@ function OverlaySheet({
   status: ReturnType<typeof syncPill>
   onClose: () => void
   onSaveEntry: (draft: EntryDraft) => void
+  onDeleteEntry: (row: HistoryRow) => void
   onSaveGoal: (name: string, target: string, id?: string) => void
   onSaveBudget: (amount: string) => void
   onDeposit: (goalId: string, amount: string) => void
@@ -724,6 +727,7 @@ function OverlaySheet({
           status={status}
           onClose={onClose}
           onSave={onSaveEntry}
+          onDelete={() => onDeleteEntry(overlay.row)}
         />
       )
     case 'budget':

@@ -32,6 +32,7 @@ export function QuickAddSheet({
   status,
   onClose,
   onSave,
+  onDelete,
 }: {
   initial: EntryDraft
   today: string
@@ -43,6 +44,7 @@ export function QuickAddSheet({
   status: SyncPill
   onClose: () => void
   onSave: (draft: EntryDraft) => void
+  onDelete?: () => void
 }) {
   const { colors } = useTheme()
   const [draft, setDraft] = useState(initial)
@@ -50,6 +52,7 @@ export function QuickAddSheet({
   const [noteOpen, setNoteOpen] = useState(initial.description.trim().length > 0)
   const [focusNote, setFocusNote] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const editing = draft.id != null
   const chips = orderCategoryChips(draft.kind, draft.category, recent)
   const repeats = editing ? [] : repeatChips(recent.filter((row) => row.kind === draft.kind))
@@ -185,6 +188,7 @@ export function QuickAddSheet({
             </Pressable>
           )
         ) : null}
+        <View style={styles.flexGap} />
         {repeats.length > 0 ? (
           <View style={styles.section}>
             <T size={12} weight="bold" color={colors.muted} style={styles.kicker}>REPEAT RECENT</T>
@@ -241,6 +245,22 @@ export function QuickAddSheet({
           </View>
         ))}
       </View>
+      {editing && onDelete ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={confirmDelete ? 'Confirm delete' : 'Delete entry'}
+          onPress={() => {
+            if (!confirmDelete) {
+              setConfirmDelete(true)
+              return
+            }
+            onDelete()
+          }}
+          style={styles.deleteEntry}
+        >
+          <T weight="bold" color={colors.danger} center>{confirmDelete ? 'Confirm delete' : 'Delete'}</T>
+        </Pressable>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={saveLabel}
@@ -311,7 +331,7 @@ function CategoryChoice({
       <View style={[styles.choiceIcon, { backgroundColor: selected ? colors.blue : colors.blueSoft }]}>
         <MaterialCommunityIcons name={icon} size={22} color={selected ? colors.onBlue : colors.blue} />
       </View>
-      <T size={11} weight="semibold" center numberOfLines={1} color={selected ? colors.blue : colors.muted} style={styles.choiceLabel}>{label}</T>
+      <T size={11} weight="semibold" center color={selected ? colors.blue : colors.muted} style={styles.choiceLabel}>{label}</T>
     </Pressable>
   )
 }
@@ -354,8 +374,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   body: {
+    flexGrow: 1,
     gap: space.sm,
-    paddingBottom: space.sm,
+    paddingBottom: 0,
+  },
+  flexGap: {
+    flex: 1,
+    minHeight: 8,
   },
   amountRow: {
     flexDirection: 'row',
@@ -428,7 +453,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   choice: {
-    width: 72,
+    width: 92,
     alignItems: 'center',
     gap: 6,
   },
@@ -440,7 +465,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   choiceLabel: {
-    width: 72,
+    width: 92,
+  },
+  deleteEntry: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   keypad: {
     gap: 8,

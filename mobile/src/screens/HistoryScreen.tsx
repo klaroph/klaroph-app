@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { FlatList, Pressable, StyleSheet, TextInput, View, type GestureResponderEvent } from 'react-native'
+import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View, type GestureResponderEvent } from 'react-native'
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
 import type { PayPeriod } from '../domain/payPeriod'
 import { ScreenHeader } from '../components/Header'
@@ -75,8 +75,11 @@ export function HistoryScreen({
               placeholderTextColor={colors.muted}
               style={[styles.searchInput, { color: colors.text, fontFamily: font.regular }]}
             />
+            <View accessibilityRole="image" accessibilityLabel="Filter" style={[styles.filterIcon, { backgroundColor: colors.blue }]}>
+              <MaterialCommunityIcons name="filter-variant" size={18} color={colors.onBlue} />
+            </View>
           </View>
-          <View style={styles.filters}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
             {FILTERS.map((item) => (
               <Chip
                 key={item.id}
@@ -86,7 +89,7 @@ export function HistoryScreen({
                 onPress={() => setFilter(item.id)}
               />
             ))}
-          </View>
+          </ScrollView>
           {olderLineVisible ? (
             <View testID="older-entries">
               <T size={14} color={colors.blue}>{OLDER_ENTRIES_LINE}</T>
@@ -222,6 +225,9 @@ function SwipeRow({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={deleteLabel}
+        accessibilityElementsHidden={!open}
+        importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}
+        aria-hidden={open ? undefined : true}
         onPress={onDelete}
         pointerEvents={open ? 'auto' : 'none'}
         style={[styles.delete, { opacity: open ? 1 : 0 }]}
@@ -259,9 +265,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     minHeight: 44,
   },
+  filterIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   filters: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 8,
   },
   day: {

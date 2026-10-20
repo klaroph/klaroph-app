@@ -67,6 +67,22 @@ export function daysToPaydayAt(instant: Date): PaydayCountdown {
   return daysToPayday(manilaCivilDate(instant))
 }
 
+/** The 15th and the month's last day are payday in Manila, even after the period has rolled. */
+export function isPaydayDate(isoDate: string): boolean {
+  const year = Number(isoDate.slice(0, 4))
+  const month = Number(isoDate.slice(5, 7))
+  const day = Number(isoDate.slice(8, 10))
+  return day === 15 || day === daysInMonth(year, month)
+}
+
+/** Card title. On payday itself this is "Payday today"; the next day counts to the following payday. */
+export function paydayCardTitle(isoDate: string): string {
+  if (isPaydayDate(isoDate)) return 'Payday today'
+  const { days } = daysToPaydayOn(isoDate)
+  const noun = days === 1 ? 'day' : 'days'
+  return `${days} ${noun} to payday`
+}
+
 export function elapsedPeriodDays(period: PayPeriod, today: string): number {
   if (today < period.start) return 0
   const end = today < period.end ? today : period.end

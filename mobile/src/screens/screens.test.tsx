@@ -8,6 +8,7 @@ import { DELETE_UNSYNCED_LABEL, OLDER_ENTRIES_LINE, PERIOD_BUDGET_LINE, UNINSTAL
 import { BudgetSheet } from './BudgetSheet'
 import { FirstRun } from './FirstRun'
 import { HistoryScreen } from './HistoryScreen'
+import { QuickAddSheet } from './QuickAddSheet'
 import { SettingsSheet } from './SettingsSheet'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -150,7 +151,9 @@ describe('screen components', () => {
     expect(text).toContain(OLDER_ENTRIES_LINE)
     expect(text).toContain('Groceries')
     expect(renderer!.root.findByProps({ accessibilityLabel: 'Edit Groceries' })).toBeTruthy()
-    expect(renderer!.root.findByProps({ accessibilityLabel: 'Delete Groceries' })).toBeTruthy()
+    const remove = renderer!.root.findByProps({ accessibilityLabel: 'Delete Groceries' })
+    expect(remove.props.accessibilityElementsHidden).toBe(true)
+    expect(remove.props.importantForAccessibility).toBe('no-hide-descendants')
   })
 
   it('describes the budget ring with the spent amount', () => {
@@ -210,9 +213,39 @@ describe('screen components', () => {
       )
     })
     expect(performance.now() - started).toBeLessThan(300)
-    expect(collect(renderer.toJSON())).toContain('₱3,250.00 left until payday')
+    const toastText = collect(renderer.toJSON())
+    expect(toastText).toContain('₱3,250.00')
+    expect(toastText).toContain('left until payday')
     press(renderer, 'Undo')
     expect(onUndo).toHaveBeenCalledOnce()
+  })
+
+  it('deletes from the edit sheet only after confirm, on the same path as swipe', () => {
+    const onDelete = vi.fn()
+    let renderer!: ReturnType<typeof create>
+    act(() => {
+      renderer = create(
+        <ThemeProvider>
+          <QuickAddSheet
+            initial={{ id: '1', kind: 'expense', amount: '80.00', category: 'Groceries', date: '2026-10-20', description: '' }}
+            today="2026-10-20"
+            cutoff={null}
+            lastExpense="Groceries"
+            lastIncome={null}
+            recent={[]}
+            moneyLeft={1000}
+            status={{ tone: 'local', label: 'On this phone' }}
+            onClose={() => undefined}
+            onSave={() => undefined}
+            onDelete={onDelete}
+          />
+        </ThemeProvider>,
+      )
+    })
+    press(renderer, 'Delete entry')
+    expect(onDelete).not.toHaveBeenCalled()
+    press(renderer, 'Confirm delete')
+    expect(onDelete).toHaveBeenCalledOnce()
   })
 
   it('tells the reader the pay-period amount stays on the phone', () => {

@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
+import Svg, { Rect } from 'react-native-svg'
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
 import { BudgetRing } from '../components/BudgetRing'
 import { CategoryIcon } from '../components/CategoryIcon'
@@ -10,7 +12,7 @@ import { formatPeso, formatPesoShort, signedPeso } from '../ui/format'
 import { rowHeadline, rowSignedAmount } from '../ui/historyGroups'
 import { homeInsight } from '../ui/insight'
 import type { HistoryRow, LedgerSnapshot } from '../ui/ledger'
-import { dailyAllowance, daysToPaydayOn, elapsedPeriodDays, kinsenaRange } from '../ui/payday'
+import { dailyAllowance, daysToPaydayOn, elapsedPeriodDays, kinsenaRange, paydayCardTitle } from '../ui/payday'
 import { moneyLeft } from '../ui/saveToast'
 import { SUGGESTED_PERIOD_BUDGET, type StarterGoal } from '../ui/starters'
 import type { SyncPill } from '../ui/syncStatus'
@@ -46,6 +48,8 @@ export function HomeScreen({
   const noBudget = snapshot.budget == null
   const heading = noActivity && noBudget ? 'Welcome' : greeting
   const payday = daysToPaydayOn(snapshot.today)
+  const paydayTitle = paydayCardTitle(snapshot.today)
+  const paydayToday = paydayTitle === 'Payday today'
   const left = moneyLeft(snapshot.budget, snapshot.spent)
   const perDay = left == null ? null : dailyAllowance(left, payday.days)
   const elapsed = elapsedPeriodDays(snapshot.period, snapshot.today)
@@ -118,8 +122,10 @@ export function HomeScreen({
             <MaterialCommunityIcons name="calendar-month-outline" size={22} color="#8A6A00" />
           </View>
           <View style={styles.paydayCopy}>
-            <T size={18} weight="bold">{`${payday.days} ${payday.days === 1 ? 'day' : 'days'} to payday`}</T>
-            <T size={13} color={colors.muted}>{noActivity && noBudget ? 'Paydays: 15th and last day' : `Payday ${payday.paydayLabel}`}</T>
+            <T size={16} weight="bold" numberOfLines={1}>{paydayTitle}</T>
+            <T size={13} color={colors.muted} numberOfLines={1}>
+              {noActivity && noBudget ? 'Paydays: 15th and last day' : paydayToday ? '15th and last day' : `Payday ${payday.paydayLabel}`}
+            </T>
           </View>
           {noActivity && noBudget ? null : (
             <View style={styles.ticks}>
@@ -134,9 +140,11 @@ export function HomeScreen({
       {insight ? (
         <View style={[styles.insight, { backgroundColor: colors.okSoft }]}>
           <MaterialCommunityIcons name="trending-down" size={18} color={colors.ok} />
-          <T size={14} weight="semibold" color={colors.ok} style={styles.insightText}>{insight}</T>
+          <T size={14} weight="semibold" color={colors.ok} numberOfLines={1} style={styles.insightText}>{insight}</T>
         </View>
       ) : null}
+
+      {noActivity ? <FirstExpensePrompt onPress={onAdd} /> : null}
 
       <View style={styles.stats}>
         <Card style={[styles.stat, noActivity ? styles.statCompact : null]}>
@@ -177,17 +185,7 @@ export function HomeScreen({
         </Card>
       </View>
 
-      {noActivity ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Log your first expense" onPress={onAdd} style={[styles.first, { borderColor: colors.border }]}>
-          <View style={[styles.plus, { backgroundColor: colors.yellow }]}>
-            <T size={22} weight="bold" color={colors.onYellow}>+</T>
-          </View>
-          <View style={styles.firstCopy}>
-            <T weight="bold">Log your first expense</T>
-            <T size={13} color={colors.muted}>Tap + · takes about 3 seconds</T>
-          </View>
-        </Pressable>
-      ) : (
+      {noActivity ? null : (
         <View style={styles.recentBlock}>
           <View style={styles.recentHead}>
             <T size={18} weight="bold">Recent</T>
@@ -207,6 +205,48 @@ export function HomeScreen({
         <StarterGoals existingNames={snapshot.goals.map((goal) => goal.name)} onAdd={onAddStarter} onCustom={onCustomGoal} />
       ) : null}
     </ScreenScroll>
+  )
+}
+
+function FirstExpensePrompt({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme()
+  const [box, setBox] = useState({ width: 0, height: 0 })
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Log your first expense"
+      onPress={onPress}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout
+        const next = { width: Math.round(width), height: Math.round(height) }
+        setBox((current) => (current.width === next.width && current.height === next.height ? current : next))
+      }}
+      style={styles.first}
+    >
+      {box.width > 0 ? (
+        <Svg width={box.width} height={box.height} style={styles.dash} pointerEvents="none">
+          <Rect
+            x={1}
+            y={1}
+            width={Math.max(box.width - 2, 0)}
+            height={Math.max(box.height - 2, 0)}
+            rx={24}
+            ry={24}
+            fill="none"
+            stroke="#C4BBA8"
+            strokeWidth={1.5}
+            strokeDasharray="7 6"
+          />
+        </Svg>
+      ) : null}
+      <View style={[styles.plus, { backgroundColor: colors.yellow }]}>
+        <T size={22} weight="bold" color={colors.onYellow}>+</T>
+      </View>
+      <View style={styles.firstCopy}>
+        <T weight="bold">Log your first expense</T>
+        <T size={13} color={colors.muted}>Tap + · takes about 3 seconds</T>
+      </View>
+    </Pressable>
   )
 }
 
@@ -401,9 +441,12 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 999,
   },
+  dash: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
   first: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
     borderRadius: 26,
     padding: 14,
     flexDirection: 'row',
