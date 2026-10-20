@@ -213,7 +213,7 @@ describe('POST /api/expenses/import/confirm', () => {
     expect(await res.json()).toEqual({
       imported: 0,
       skippedHistory: 1,
-      message: '1 entries older than 90 days were skipped. Upgrade to Pro to import them.',
+      message: '1 entry older than 90 days was skipped. Upgrade to Pro to import them.',
     })
     expect(state.calls).toEqual([])
   })

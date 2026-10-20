@@ -29,6 +29,12 @@ describe('free history partition', () => {
       skipped: 1,
     })
     expect(partitionFreeHistory(rows, false, eightAmManila)).toEqual({ keep: rows, skipped: 0 })
+  })
+
+  it('pluralizes the skip message and keeps the upgrade sentence', () => {
+    expect(historySkipMessage(1)).toBe(
+      '1 entry older than 90 days was skipped. Upgrade to Pro to import them.',
+    )
     expect(historySkipMessage(2)).toBe(
       '2 entries older than 90 days were skipped. Upgrade to Pro to import them.',
     )

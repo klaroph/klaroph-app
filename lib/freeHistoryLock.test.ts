@@ -16,7 +16,7 @@ const FREE_PLAN = '44444444-4444-4444-8444-444444444444'
 const PREMIUM_PLAN = '55555555-5555-4555-8555-555555555555'
 
 const migration = readFileSync(
-  join(process.cwd(), 'supabase/migrations/20261020140000_free_history_lock.sql'),
+  join(process.cwd(), 'supabase/migrations/20261020035957_free_history_lock.sql'),
   'utf8',
 )
 

@@ -8,7 +8,7 @@ function readText(file: string): string {
 }
 
 const migration = readText('supabase/migrations/20261019000003_lifetime_pro_entitlement.sql')
-const historyLock = readText('supabase/migrations/20261020140000_free_history_lock.sql')
+const historyLock = readText('supabase/migrations/20261020035957_free_history_lock.sql')
 const check = readText('supabase/scripts/lifetime_pro_entitlement_check.sql')
 const refund = readText('supabase/scripts/revoke_pro_after_refund.sql')
 const grant = readText('supabase/migrations/20261019000002_grant_lifetime_to_verified_payers.sql')

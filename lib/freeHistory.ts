@@ -39,7 +39,9 @@ export function isOlderThanFreeHistory(date: string, now = new Date()): boolean 
 }
 
 export function historySkipMessage(skipped: number): string {
-  return `${skipped} entries older than 90 days were skipped. Upgrade to Pro to import them.`
+  const entry = skipped === 1 ? 'entry' : 'entries'
+  const verb = skipped === 1 ? 'was' : 'were'
+  return `${skipped} ${entry} older than 90 days ${verb} skipped. Upgrade to Pro to import them.`
 }
 
 export function partitionFreeHistory<T extends { date: string }>(
