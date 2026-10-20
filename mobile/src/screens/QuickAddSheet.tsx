@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: {
-    flexGrow: 0,
+    flexGrow: 1,
     flexShrink: 1,
   },
   body: {

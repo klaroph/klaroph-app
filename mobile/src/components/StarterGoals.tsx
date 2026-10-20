@@ -62,8 +62,8 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    gap: 6,
-    padding: 12,
+    gap: 4,
+    padding: 10,
   },
   top: {
     flexDirection: 'row',
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   add: {
-    minHeight: 44,
+    minHeight: 32,
     justifyContent: 'center',
     paddingHorizontal: 4,
   },

@@ -10,7 +10,7 @@ import { filterHistoryRows, groupHistoryByDay, type HistoryDay, type HistoryFilt
 import type { HistoryRow } from '../ui/ledger'
 import type { SyncPill } from '../ui/syncStatus'
 import { font, space } from '../ui/theme'
-import { EntryRow } from './HomeScreen'
+import { EntryRow, ignoreEntryPressAfterSwipe, resetEntryPressIgnore } from './HomeScreen'
 
 const FILTERS: readonly { id: HistoryFilter; label: string }[] = [
   { id: 'kinsena', label: 'This kinsena' },
@@ -191,8 +191,34 @@ function SwipeRow({
     if (origin.current == null) origin.current = { x, y }
     return { dx: x - origin.current.x, dy: y - origin.current.y }
   }
+  function reset() {
+    drag.current = 0
+    origin.current = null
+  }
   return (
-    <View style={styles.swipeHost}>
+    <View
+      style={styles.swipeHost}
+      onStartShouldSetResponderCapture={(event) => {
+        origin.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }
+        drag.current = 0
+        resetEntryPressIgnore()
+        return false
+      }}
+      onMoveShouldSetResponderCapture={(event) => {
+        const { dx, dy } = track(event)
+        return dx < -12 && Math.abs(dx) > Math.abs(dy)
+      }}
+      onResponderMove={(event) => {
+        drag.current = track(event).dx
+        if (drag.current < -24) ignoreEntryPressAfterSwipe()
+      }}
+      onResponderRelease={() => {
+        if (drag.current < -48) onOpen()
+        else onClose()
+        reset()
+      }}
+      onResponderTerminate={reset}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={deleteLabel}
@@ -203,26 +229,7 @@ function SwipeRow({
         <MaterialCommunityIcons name="trash-can-outline" size={18} color="#FFFFFF" />
         <T size={12} weight="bold" color="#FFFFFF">Delete</T>
       </Pressable>
-      <View
-        style={{ transform: [{ translateX: open ? -84 : 0 }] }}
-        onMoveShouldSetResponder={(event) => {
-          const { dx, dy } = track(event)
-          return dx < -12 && Math.abs(dx) > Math.abs(dy)
-        }}
-        onResponderMove={(event) => {
-          drag.current = track(event).dx
-        }}
-        onResponderRelease={() => {
-          if (drag.current < -48) onOpen()
-          else onClose()
-          drag.current = 0
-          origin.current = null
-        }}
-        onResponderTerminate={() => {
-          drag.current = 0
-          origin.current = null
-        }}
-      >
+      <View style={{ transform: [{ translateX: open ? -84 : 0 }] }}>
         {children}
       </View>
     </View>

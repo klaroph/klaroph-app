@@ -61,7 +61,7 @@ export function HomeScreen({
     <ScreenScroll testID="home-screen">
       <ScreenHeader title="Klaro." greeting={heading} pill={pill} onAvatar={onOpenSettings} />
       {noBudget ? (
-        <View style={[styles.hero, { backgroundColor: colors.blue }]}>
+        <View style={[styles.hero, styles.heroCompact, { backgroundColor: colors.blue }]}>
           <View style={styles.blob} />
           <T size={12} weight="bold" color="rgba(255,255,255,0.78)" style={styles.kicker}>
             {`THIS KINSENA · ${kinsenaRange(snapshot.period)}`}
@@ -139,13 +139,13 @@ export function HomeScreen({
       ) : null}
 
       <View style={styles.stats}>
-        <Card style={styles.stat}>
+        <Card style={[styles.stat, noActivity ? styles.statCompact : null]}>
           <T size={22} weight="bold" color={colors.blue}>
             {noActivity || snapshot.daysLogged === 0 ? 'Day 1' : `${snapshot.daysLogged}/${Math.max(elapsed, snapshot.daysLogged)}`}
           </T>
           <T size={12} color={colors.muted}>{noActivity || snapshot.daysLogged === 0 ? 'Start a streak today' : 'Days logged'}</T>
         </Card>
-        <Card style={styles.stat}>
+        <Card style={[styles.stat, noActivity ? styles.statCompact : null]}>
           {snapshot.topCategory ? (
             <>
               <CategoryIcon name={snapshot.topCategory.icon} size={28} />
@@ -159,7 +159,7 @@ export function HomeScreen({
             </>
           )}
         </Card>
-        <Card style={styles.stat}>
+        <Card style={[styles.stat, noActivity ? styles.statCompact : null]}>
           {snapshot.goalPercent == null ? (
             <>
               <T size={16} weight="bold" color={colors.blue}>No goal</T>
@@ -210,6 +210,23 @@ export function HomeScreen({
   )
 }
 
+let ignoreNextEntryPress = false
+
+/** A swipe should not also count as a tap on the row. */
+export function ignoreEntryPressAfterSwipe(): void {
+  ignoreNextEntryPress = true
+}
+
+export function resetEntryPressIgnore(): void {
+  ignoreNextEntryPress = false
+}
+
+function entryPressIgnored(): boolean {
+  if (!ignoreNextEntryPress) return false
+  ignoreNextEntryPress = false
+  return true
+}
+
 export function EntryRow({
   row,
   onPress,
@@ -230,7 +247,10 @@ export function EntryRow({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Edit ${row.title}`}
-      onPress={onPress}
+      onPress={() => {
+        if (entryPressIgnored()) return
+        onPress?.()
+      }}
       style={({ pressed }) => [
         grouped ? styles.grouped : styles.entry,
         grouped ? null : { backgroundColor: colors.card, borderColor: colors.border },
@@ -260,6 +280,10 @@ const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.sm,
     overflow: 'hidden',
+  },
+  heroCompact: {
+    padding: space.md,
+    gap: 6,
   },
   blob: {
     position: 'absolute',
@@ -362,6 +386,10 @@ const styles = StyleSheet.create({
     padding: 12,
     minHeight: 108,
     justifyContent: 'space-between',
+  },
+  statCompact: {
+    minHeight: 76,
+    padding: 10,
   },
   track: {
     height: 6,

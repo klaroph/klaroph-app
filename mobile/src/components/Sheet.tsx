@@ -22,10 +22,10 @@ export function Sheet({
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType="slide" onRequestClose={onClose} style={styles.layer}>
       <View style={styles.fill}>
         <Pressable accessibilityRole="button" accessibilityLabel="Dismiss" style={styles.backdrop} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={tall ? styles.tallHost : styles.shortHost}>
           <View
             testID={testID}
             style={[
@@ -49,13 +49,29 @@ export function Sheet({
 }
 
 const styles = StyleSheet.create({
+  layer: {
+    zIndex: 40,
+  },
   fill: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(27, 26, 23, 0.35)',
   },
   backdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(27, 26, 23, 0.35)',
+  },
+  tallHost: {
     flex: 1,
+    marginTop: 28,
+    width: '100%',
+  },
+  shortHost: {
+    width: '100%',
+    maxHeight: '92%',
   },
   sheet: {
     borderTopLeftRadius: 28,
@@ -63,11 +79,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     gap: 8,
-    maxHeight: '92%',
   },
   tall: {
-    height: '94%',
-    maxHeight: '94%',
+    flex: 1,
   },
   titleRow: {
     flexDirection: 'row',

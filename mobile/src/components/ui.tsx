@@ -339,9 +339,9 @@ export function IconButton(props: PressableProps & { children: ReactNode; style?
 
 const styles = StyleSheet.create({
   scroll: {
-    padding: 20,
-    paddingBottom: 48,
-    gap: 12,
+    padding: 16,
+    paddingBottom: 112,
+    gap: 10,
   },
   card: {
     borderRadius: 26,
