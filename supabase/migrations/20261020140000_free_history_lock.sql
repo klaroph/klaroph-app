@@ -23,8 +23,11 @@
 -- income_record_owned_by is the only SECURITY DEFINER lookup used by
 -- income_allocations_enforce_owner. It answers whether one income id belongs
 -- to one user, so a Free user can still edit an allocation when the parent
--- income is hidden by the 90-day SELECT policy. The trigger function itself
--- stays SECURITY INVOKER.
+-- income is hidden by the 90-day SELECT policy. The check runs only when
+-- p_user_id is auth.uid(), or auth.role() is service_role. Any other call
+-- returns false. current_user is the function owner inside SECURITY DEFINER,
+-- so service role is auth.role() (the request JWT role), not current_user.
+-- The trigger function itself stays SECURITY INVOKER.
 --
 -- enforce_free_history_lock runs BEFORE INSERT and BEFORE UPDATE OF date.
 -- A Free user's date older than the cutoff raises HISTORY_LOCKED.
@@ -73,16 +76,21 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.income_records
-    WHERE id = p_income_id
-      AND user_id = p_user_id
-  );
+  SELECT CASE
+    WHEN p_user_id = auth.uid()
+      OR auth.role() = 'service_role'
+    THEN EXISTS (
+      SELECT 1
+      FROM public.income_records
+      WHERE id = p_income_id
+        AND user_id = p_user_id
+    )
+    ELSE false
+  END;
 $$;
 
 COMMENT ON FUNCTION public.income_record_owned_by(uuid, uuid) IS
-  'True when this income id belongs to this user. SECURITY DEFINER so the allocation owner trigger can see a parent the 90-day SELECT policy hides. Returns no other columns.';
+  'True when this income id belongs to this user. SECURITY DEFINER so the allocation owner trigger can see a parent the 90-day SELECT policy hides. Runs that check only for auth.uid() or auth.role() = service_role; every other call returns false. Service role is the JWT role, not current_user. Returns no other columns.';
 
 REVOKE ALL ON FUNCTION public.income_record_owned_by(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.income_record_owned_by(uuid, uuid) FROM anon;

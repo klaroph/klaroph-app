@@ -26,6 +26,13 @@ async function database(): Promise<PGlite> {
     CREATE SCHEMA IF NOT EXISTS auth;
     CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
     LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+    CREATE OR REPLACE FUNCTION auth.role() RETURNS text
+    LANGUAGE sql STABLE AS $$
+      SELECT coalesce(
+        nullif(current_setting('request.jwt.claim.role', true), ''),
+        (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
+      )
+    $$;
     DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon; END IF;
       IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF;
@@ -252,11 +259,25 @@ describe('Manila cutoff and hidden income ownership', () => {
       LANGUAGE sql STABLE AS $$
         SELECT NULLIF(current_setting('klaro.user_id', true), '')::uuid
       $$;
-      GRANT USAGE ON SCHEMA public TO authenticated;
-      GRANT SELECT ON public.goals, public.income_records TO authenticated;
-      GRANT SELECT, UPDATE ON public.income_allocations TO authenticated;
+      CREATE OR REPLACE FUNCTION public.touch_allocation_as_definer(p_id uuid, p_amount numeric)
+      RETURNS void
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public
+      AS $fn$
+      BEGIN
+        UPDATE public.income_allocations SET amount = p_amount WHERE id = p_id;
+      END;
+      $fn$;
+      GRANT USAGE ON SCHEMA public TO authenticated, service_role;
+      GRANT SELECT ON public.goals, public.income_records TO authenticated, service_role;
+      GRANT SELECT, UPDATE ON public.income_allocations TO authenticated, service_role;
+      GRANT EXECUTE ON FUNCTION public.touch_allocation_as_definer(uuid, numeric) TO authenticated;
     `)
-    await db.exec(`SELECT set_config('klaro.user_id', '${USER}', false)`)
+    await db.exec(`
+      SELECT set_config('klaro.user_id', '${USER}', false);
+      SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+    `)
     await db.exec('SET ROLE authenticated')
     const visible = await db.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM public.income_records WHERE id = '${incomeId}'`,
@@ -266,14 +287,85 @@ describe('Manila cutoff and hidden income ownership', () => {
       `SELECT public.income_record_owned_by('${incomeId}'::uuid, '${USER}'::uuid) AS owned`,
     )
     expect(owned.rows[0]?.owned).toBe(true)
+    const probe = await db.query<{ owned: boolean }>(
+      `SELECT public.income_record_owned_by('${otherIncome}'::uuid, '${LIFETIME}'::uuid) AS owned`,
+    )
+    expect(probe.rows[0]?.owned).toBe(false)
     await db.exec(`UPDATE public.income_allocations SET amount = 25 WHERE id = '${allocationId}'`)
     await expect(db.exec(
       `UPDATE public.income_allocations SET amount = 3 WHERE id = '${otherAllocation}'`,
     )).rejects.toThrow(/Income record not found or unauthorized/)
+    await db.exec(`SELECT public.touch_allocation_as_definer('${allocationId}'::uuid, 40)`)
     await db.exec('RESET ROLE')
     const saved = await db.query<{ amount: string }>(
       `SELECT amount::text FROM public.income_allocations WHERE id = '${allocationId}'`,
     )
-    expect(saved.rows[0]?.amount).toBe('25')
+    expect(saved.rows[0]?.amount).toBe('40')
+
+    const session = await db.query<{ current_user: string; role: string | null }>(`
+      SELECT current_user, auth.role() AS role
+    `)
+    expect(session.rows[0]?.current_user).not.toBe('service_role')
+    await db.exec(`
+      SELECT set_config('klaro.user_id', '', false);
+      SELECT set_config('request.jwt.claim.role', 'service_role', false);
+    `)
+    const asService = await db.query<{ owned: boolean; mismatch: boolean }>(`
+      SELECT
+        public.income_record_owned_by('${incomeId}'::uuid, '${USER}'::uuid) AS owned,
+        public.income_record_owned_by('${incomeId}'::uuid, '${LIFETIME}'::uuid) AS mismatch
+    `)
+    expect(asService.rows[0]?.owned).toBe(true)
+    expect(asService.rows[0]?.mismatch).toBe(false)
+    await db.exec(`UPDATE public.income_allocations SET amount = 55 WHERE id = '${allocationId}'`)
+    const afterService = await db.query<{ amount: string }>(
+      `SELECT amount::text FROM public.income_allocations WHERE id = '${allocationId}'`,
+    )
+    expect(afterService.rows[0]?.amount).toBe('55')
+  })
+
+  it('returns false for a cross-user probe, true for the owner, and the real check for service role', async () => {
+    const db = await database()
+    const incomeId = '66666666-6666-4666-8666-666666666666'
+    const otherIncome = '77777777-7777-4777-8777-777777777777'
+    await db.exec(`
+      ALTER TABLE public.income_records DISABLE TRIGGER income_records_history_locked_insert;
+      INSERT INTO public.income_records (id, user_id, date, total_amount)
+        VALUES ('${incomeId}', '${USER}', '2020-01-01', 100),
+               ('${otherIncome}', '${LIFETIME}', '2020-01-01', 50);
+      ALTER TABLE public.income_records ENABLE TRIGGER income_records_history_locked_insert;
+      CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+      LANGUAGE sql STABLE AS $$
+        SELECT NULLIF(current_setting('klaro.user_id', true), '')::uuid
+      $$;
+    `)
+    await db.exec(`
+      SELECT set_config('klaro.user_id', '${USER}', false);
+      SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+    `)
+    await db.exec('SET ROLE authenticated')
+    const asOwner = await db.query<{ own: boolean; probe: boolean }>(`
+      SELECT
+        public.income_record_owned_by('${incomeId}'::uuid, '${USER}'::uuid) AS own,
+        public.income_record_owned_by('${otherIncome}'::uuid, '${LIFETIME}'::uuid) AS probe
+    `)
+    expect(asOwner.rows[0]?.own).toBe(true)
+    expect(asOwner.rows[0]?.probe).toBe(false)
+    await db.exec('RESET ROLE')
+    const caller = await db.query<{ current_user: string }>(`SELECT current_user`)
+    expect(caller.rows[0]?.current_user).not.toBe('service_role')
+    await db.exec(`
+      SELECT set_config('klaro.user_id', '', false);
+      SELECT set_config('request.jwt.claim.role', 'service_role', false);
+    `)
+    const asService = await db.query<{ own: boolean; other: boolean; mismatch: boolean }>(`
+      SELECT
+        public.income_record_owned_by('${incomeId}'::uuid, '${USER}'::uuid) AS own,
+        public.income_record_owned_by('${otherIncome}'::uuid, '${LIFETIME}'::uuid) AS other,
+        public.income_record_owned_by('${incomeId}'::uuid, '${LIFETIME}'::uuid) AS mismatch
+    `)
+    expect(asService.rows[0]?.own).toBe(true)
+    expect(asService.rows[0]?.other).toBe(true)
+    expect(asService.rows[0]?.mismatch).toBe(false)
   })
 })
