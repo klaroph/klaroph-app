@@ -2,11 +2,13 @@ import React, { act, type ReactNode } from 'react'
 import { create, type ReactTestRendererJSON } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { BudgetRing } from '../components/BudgetRing'
+import { SaveToast } from '../components/SaveToast'
 import { ThemeProvider } from '../components/ThemeProvider'
 import { DELETE_UNSYNCED_LABEL, OLDER_ENTRIES_LINE, PERIOD_BUDGET_LINE, UNINSTALL_WARNING, unsyncedSignOutLine } from '../ui/copy'
 import { BudgetSheet } from './BudgetSheet'
 import { FirstRun } from './FirstRun'
 import { HistoryScreen } from './HistoryScreen'
+import { QuickAddSheet } from './QuickAddSheet'
 import { SettingsSheet } from './SettingsSheet'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -149,7 +151,9 @@ describe('screen components', () => {
     expect(text).toContain(OLDER_ENTRIES_LINE)
     expect(text).toContain('Groceries')
     expect(renderer!.root.findByProps({ accessibilityLabel: 'Edit Groceries' })).toBeTruthy()
-    expect(renderer!.root.findByProps({ accessibilityLabel: 'Delete Groceries' })).toBeTruthy()
+    const remove = renderer!.root.findByProps({ accessibilityLabel: 'Delete Groceries' })
+    expect(remove.props.accessibilityElementsHidden).toBe(true)
+    expect(remove.props.importantForAccessibility).toBe('no-hide-descendants')
   })
 
   it('describes the budget ring with the spent amount', () => {
@@ -194,6 +198,53 @@ describe('screen components', () => {
     press(renderer, DELETE_UNSYNCED_LABEL)
     expect(onDelete).not.toHaveBeenCalled()
     press(renderer, 'Confirm delete unsynced entries')
+    expect(onDelete).toHaveBeenCalledOnce()
+  })
+
+  it('shows the payday toast and undo in the same turn', () => {
+    const onUndo = vi.fn()
+    const started = performance.now()
+    let renderer!: ReturnType<typeof create>
+    act(() => {
+      renderer = create(
+        <ThemeProvider>
+          <SaveToast message="Saved · ₱3,250.00 left until payday" onUndo={onUndo} />
+        </ThemeProvider>,
+      )
+    })
+    expect(performance.now() - started).toBeLessThan(300)
+    const toastText = collect(renderer.toJSON())
+    expect(toastText).toContain('₱3,250.00')
+    expect(toastText).toContain('left until payday')
+    press(renderer, 'Undo')
+    expect(onUndo).toHaveBeenCalledOnce()
+  })
+
+  it('deletes from the edit sheet only after confirm, on the same path as swipe', () => {
+    const onDelete = vi.fn()
+    let renderer!: ReturnType<typeof create>
+    act(() => {
+      renderer = create(
+        <ThemeProvider>
+          <QuickAddSheet
+            initial={{ id: '1', kind: 'expense', amount: '80.00', category: 'Groceries', date: '2026-10-20', description: '' }}
+            today="2026-10-20"
+            cutoff={null}
+            lastExpense="Groceries"
+            lastIncome={null}
+            recent={[]}
+            moneyLeft={1000}
+            status={{ tone: 'local', label: 'On this phone' }}
+            onClose={() => undefined}
+            onSave={() => undefined}
+            onDelete={onDelete}
+          />
+        </ThemeProvider>,
+      )
+    })
+    press(renderer, 'Delete entry')
+    expect(onDelete).not.toHaveBeenCalled()
+    press(renderer, 'Confirm delete')
     expect(onDelete).toHaveBeenCalledOnce()
   })
 

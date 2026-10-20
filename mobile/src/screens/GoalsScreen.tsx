@@ -1,15 +1,20 @@
 import { StyleSheet, View } from 'react-native'
 import { ScreenHeader } from '../components/Header'
+import { StarterGoals } from '../components/StarterGoals'
 import { useTheme } from '../components/ThemeProvider'
 import { Banner, Card, GhostButton, PrimaryButton, ScreenScroll, T } from '../components/ui'
 import type { GoalCard } from '../ui/ledger'
+import type { StarterGoal } from '../ui/starters'
+import type { SyncPill } from '../ui/syncStatus'
 
 export function GoalsScreen({
   goals,
   banner,
   canAdd,
+  pill,
   onOpenSettings,
   onAdd,
+  onAddStarter,
   onDeposit,
   onEdit,
   onDelete,
@@ -17,8 +22,10 @@ export function GoalsScreen({
   goals: GoalCard[]
   banner: string | null
   canAdd: boolean
+  pill?: SyncPill
   onOpenSettings: () => void
   onAdd: () => void
+  onAddStarter: (goal: StarterGoal) => void
   onDeposit: (goal: GoalCard) => void
   onEdit: (goal: GoalCard) => void
   onDelete: (goal: GoalCard) => void
@@ -26,13 +33,10 @@ export function GoalsScreen({
   const { colors } = useTheme()
   return (
     <ScreenScroll testID="goals-screen">
-      <ScreenHeader title="Goals" onAvatar={onOpenSettings} />
+      <ScreenHeader title="Goals" pill={pill} onAvatar={onOpenSettings} />
       {banner ? <Banner message={banner} /> : null}
-      {canAdd ? <PrimaryButton label="Add goal" onPress={onAdd} /> : null}
       {goals.length === 0 ? (
-        <Card>
-          <T color={colors.muted}>{"No goals yet. Add one to track what you're saving for."}</T>
-        </Card>
+        <T color={colors.muted}>Pick a starter, or add your own.</T>
       ) : (
         goals.map((goal) => (
           <Card key={goal.id}>
@@ -54,6 +58,9 @@ export function GoalsScreen({
           </Card>
         ))
       )}
+      {canAdd ? (
+        <StarterGoals existingNames={goals.map((goal) => goal.name)} onAdd={onAddStarter} onCustom={onAdd} />
+      ) : null}
     </ScreenScroll>
   )
 }

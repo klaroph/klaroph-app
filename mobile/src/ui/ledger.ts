@@ -6,6 +6,8 @@ import type { SyncRow, SyncedTable } from '../sync/model'
 import { monthlyBudget, ringBudget, ringProgress } from './budgetMath'
 import { iconForCategory, type CategoryIconName, type EntryKind } from './categories'
 import { formatPeriodRange, formatPeso, formatPrettyDate } from './format'
+import { foodTotal, isFoodCategory } from './insight'
+import { previousPayPeriod } from './payday'
 import { historyCutoff, manilaToday, showsFreeHistory } from './historyWindow'
 
 export const HISTORY_PAGE_SIZE = 40
@@ -68,6 +70,10 @@ export type LedgerSnapshot = {
   capMessage: string | null
   expenseTotals: CategoryTotal[]
   dateCounts: DatedCount[]
+  /** Food (groceries and dining) inside this pay period. */
+  foodSpent: number
+  /** Food in the previous pay period, from the same local rows. */
+  previousFoodSpent: number
 }
 
 export type HistoryPage = {
@@ -269,6 +275,10 @@ export function loadLedger(repo: KlaroRepository, now: Date, localPeriodBudget: 
   const expenseTotals = stats.categories.map((row) => ({ name: row.name, amount: roundMoney(row.amount) }))
   const dateCounts = stats.dates.map((row) => ({ date: row.date, count: row.count }))
   const recent = pageHistory(repo, now, null, 5).rows
+  const previous = previousPayPeriod(period)
+  const previousStats = repo.periodStats(previous.start, previous.end, minDate)
+  const foodSpent = foodTotal(expenseTotals)
+  const previousFoodSpent = foodTotal(previousStats.categories)
 
   const signedIn = repo.sessionUserId() != null
   const goalRows = deviceRows(repo, 'goals')
@@ -319,6 +329,8 @@ export function loadLedger(repo: KlaroRepository, now: Date, localPeriodBudget: 
     capMessage,
     expenseTotals,
     dateCounts,
+    foodSpent,
+    previousFoodSpent,
   }
 }
 
@@ -338,22 +350,26 @@ function bumpCategory(totals: CategoryTotal[], name: string, delta: number): Cat
   return next.filter((item) => item.amount > 0)
 }
 
-function fold(view: LedgerSnapshot, row: HistoryRow, sign: 1 | -1): Pick<LedgerSnapshot, 'spent' | 'incomeTotal' | 'expenseTotals' | 'dateCounts'> {
+function fold(view: LedgerSnapshot, row: HistoryRow, sign: 1 | -1): Pick<LedgerSnapshot, 'spent' | 'incomeTotal' | 'expenseTotals' | 'dateCounts' | 'foodSpent'> {
+  const foodDelta = row.kind === 'expense' && isFoodCategory(row.category) ? sign * row.amount : 0
   if (!inPeriod(row.date, view.period)) {
     return {
       spent: view.spent,
       incomeTotal: view.incomeTotal,
       expenseTotals: view.expenseTotals,
       dateCounts: view.dateCounts,
+      foodSpent: view.foodSpent,
     }
   }
   const dateCounts = bumpDate(view.dateCounts, row.date, sign)
+  const foodSpent = roundMoney(view.foodSpent + foodDelta)
   if (row.kind === 'expense') {
     return {
       spent: roundMoney(view.spent + sign * row.amount),
       incomeTotal: view.incomeTotal,
       expenseTotals: bumpCategory(view.expenseTotals, row.category, sign * row.amount),
       dateCounts,
+      foodSpent,
     }
   }
   if (row.kind === 'income') {
@@ -362,6 +378,7 @@ function fold(view: LedgerSnapshot, row: HistoryRow, sign: 1 | -1): Pick<LedgerS
       incomeTotal: roundMoney(view.incomeTotal + sign * row.amount),
       expenseTotals: view.expenseTotals,
       dateCounts,
+      foodSpent,
     }
   }
   const neverKind: never = row.kind

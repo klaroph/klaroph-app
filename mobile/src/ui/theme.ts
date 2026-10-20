@@ -8,6 +8,37 @@ export const radius = {
   card: 26,
   control: 16,
   icon: 14,
+  pill: 999,
+} as const
+
+/** Rounded sans sizes. Screens use these instead of one-off font sizes. */
+export const typeScale = {
+  caption: 12,
+  label: 13,
+  body: 15,
+  button: 16,
+  section: 18,
+  title: 22,
+  hero: 28,
+  screen: 32,
+  amount: 40,
+} as const
+
+export const space = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+} as const
+
+/** Durations in milliseconds. The save toast is on screen before `toast` elapses. */
+export const motion = {
+  press: 120,
+  toast: 220,
+  sheet: 280,
+  dismiss: 4200,
 } as const
 
 export type KlaroColors = {

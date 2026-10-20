@@ -1,15 +1,14 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { CategoryIconName } from '../ui/categories'
 import { useTheme } from './ThemeProvider'
 import { T } from './ui'
 
 export type TabId = 'home' | 'history' | 'goals'
 
-const TABS: readonly { id: TabId; label: string; icon: CategoryIconName | 'home' | 'history' }[] = [
+const TABS: readonly { id: TabId; label: string; icon: 'home' | 'clock-outline' | 'flag-outline' }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
-  { id: 'history', label: 'History', icon: 'history' },
+  { id: 'history', label: 'History', icon: 'clock-outline' },
   { id: 'goals', label: 'Goals', icon: 'flag-outline' },
 ]
 
@@ -17,25 +16,7 @@ export function TabBar({ tab, onTab, onAdd }: { tab: TabId; onTab: (tab: TabId) 
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   return (
-    <View style={[styles.bar, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {TABS.map((item) => {
-        const selected = item.id === tab
-        return (
-          <Pressable
-            key={item.id}
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected }}
-            testID={`tab-${item.id}`}
-            onPress={() => onTab(item.id)}
-            style={styles.tab}
-          >
-            <MaterialCommunityIcons name={item.icon} size={22} color={selected ? colors.blue : colors.muted} />
-            <T size={12} weight="bold" color={selected ? colors.blue : colors.muted}>{item.label}</T>
-            <View style={[styles.mark, { backgroundColor: selected ? colors.yellow : 'transparent' }]} />
-          </Pressable>
-        )
-      })}
+    <View style={styles.wrap} pointerEvents="box-none">
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Add entry"
@@ -43,20 +24,47 @@ export function TabBar({ tab, onTab, onAdd }: { tab: TabId; onTab: (tab: TabId) 
         onPress={onAdd}
         style={({ pressed }) => [
           styles.add,
-          { backgroundColor: colors.yellow, borderColor: colors.background, opacity: pressed ? 0.9 : 1 },
+          {
+            backgroundColor: colors.yellow,
+            borderColor: colors.background,
+            transform: [{ scale: pressed ? 0.96 : 1 }],
+          },
         ]}
       >
-        <MaterialCommunityIcons name="plus" size={32} color={colors.onYellow} />
+        <MaterialCommunityIcons name="plus" size={34} color={colors.onYellow} />
       </Pressable>
+      <View style={[styles.bar, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
+        {TABS.map((item) => {
+          const selected = item.id === tab
+          const icon = item.id === 'home' && selected ? 'home' : item.id === 'home' ? 'home-outline' : item.icon
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              accessibilityState={{ selected }}
+              testID={`tab-${item.id}`}
+              onPress={() => onTab(item.id)}
+              style={styles.tab}
+            >
+              <MaterialCommunityIcons name={icon} size={22} color={selected ? colors.blue : colors.muted} />
+              <T size={12} weight="bold" color={selected ? colors.blue : colors.muted}>{item.label}</T>
+            </Pressable>
+          )
+        })}
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    overflow: 'visible',
+  },
   bar: {
     borderTopWidth: 1,
     flexDirection: 'row',
-    paddingTop: 36,
+    paddingTop: 8,
     paddingHorizontal: 8,
   },
   tab: {
@@ -66,22 +74,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
-  mark: {
-    width: 18,
-    height: 3,
-    borderRadius: 999,
-    marginTop: 2,
-  },
   add: {
     position: 'absolute',
-    top: -28,
+    top: -32,
     left: '50%',
-    marginLeft: -30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    marginLeft: -32,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 4,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2,
+    shadowColor: '#FCD116',
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
 })
