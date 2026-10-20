@@ -30,7 +30,7 @@ export const FIRST_RUN_PAGES = [
   {
     title: 'Before you start',
     points: [
-      'The yellow + adds an entry. Amount, category, save.',
+      'The yellow + adds an entry. A recent one saves in one more tap.',
       'Home follows this payday period.',
       UNINSTALL_WARNING,
     ],

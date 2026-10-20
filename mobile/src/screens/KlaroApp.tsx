@@ -2,14 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { AppRuntime } from '../runtime/runtime'
+import { SaveToast } from '../components/SaveToast'
 import { useTheme } from '../components/ThemeProvider'
 import { TabBar, type TabId } from '../components/TabBar'
+import { roundMoney } from '../domain/money'
 import { payPeriodAt } from '../domain/payPeriod'
 import { commitDeleteEntry, commitDeleteGoal, commitDeposit, commitEntry, commitGoal, commitPeriodBudget } from '../ui/actions'
 import type { SignInResult } from '../ui/accountFlow'
 import { ISOLATED_ACCOUNT_NOTICE, SIGN_OUT_WARNING } from '../ui/copy'
 import { errorText } from '../ui/format'
 import { canAddGoal, engineGoalMessage, scrubGoalCopy, visibleGoalBanner } from '../ui/goalCopy'
+import { haptic } from '../ui/haptics'
+import { manilaToday, shiftIsoDate } from '../ui/historyWindow'
 import {
   applyHistoryChange,
   hasUnsyncedChanges,
@@ -23,7 +27,11 @@ import {
   type HistoryRow,
   type LedgerSnapshot,
 } from '../ui/ledger'
+import { manilaGreeting } from '../ui/payday'
 import { newEntryDraft, type EntryDraft } from '../ui/quickAdd'
+import { moneyLeft, toastForSave, undoSavedEntry } from '../ui/saveToast'
+import { SUGGESTED_PERIOD_BUDGET, type StarterGoal } from '../ui/starters'
+import { motion } from '../ui/theme'
 import { subscribeSyncActivity } from '../sync/activity'
 import { budgetsKeptFromAccountLine, movedToAccountLine } from '../sync/summary'
 import { reportLooksOffline, syncNotices, syncPill, uniqueLines } from '../ui/syncStatus'
@@ -58,6 +66,9 @@ function historyDraft(row: HistoryRow): EntryDraft {
 
 const SYNC_DEBOUNCE_MS = 1500
 let historySeedStarted = false
+let v2ShotStarted = false
+
+type SaveNotice = { row: HistoryRow; message: string }
 
 export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   const { repo, prefs } = runtime
@@ -71,6 +82,9 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   const [notices, setNotices] = useState<string[]>([])
   const [engineMessage, setEngineMessage] = useState<string | null>(null)
   const [home, setHome] = useState<LedgerSnapshot>(() => readHome(repo, prefs))
+  const [toast, setToast] = useState<SaveNotice | null>(null)
+  const [quickRows, setQuickRows] = useState<HistoryRow[]>([])
+  const [revealHistory, setRevealHistory] = useState(false)
   const [historyRows, setHistoryRows] = useState<HistoryRow[]>([])
   const [, setHistoryCursor] = useState<HistoryCursor | null>(null)
   const [historyHasMore, setHistoryHasMore] = useState(false)
@@ -190,6 +204,12 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   }, [])
 
   useEffect(() => {
+    if (!toast) return
+    const id = setTimeout(() => setToast(null), motion.dismiss)
+    return () => clearTimeout(id)
+  }, [toast])
+
+  useEffect(() => {
     if (!prefs.firstRunDone()) return
     if (launched.current) return
     launched.current = true
@@ -307,6 +327,39 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             setNotices([errorText(error)])
           }
         })()
+      } else if (shot === 'v2-empty') {
+        replaceHome()
+      } else if (shot === 'v2-home' || shot === 'v2-add' || shot === 'v2-toast' || shot === 'v2-history') {
+        if (v2ShotStarted) return
+        v2ShotStarted = true
+        seedV2Sample(repo, prefs)
+        if (shot === 'v2-toast') {
+          const now = new Date()
+          const before = readHome(repo, prefs)
+          const row = commitEntry(repo, {
+            ...newEntryDraft(before.today, 'expense', 'Dining Out'),
+            amount: '250',
+            category: 'Dining Out',
+            description: 'Jollibee',
+          }, now)
+          setHome(readHome(repo, prefs))
+          setToast({
+            row,
+            message: toastForSave({ budget: before.budget, spentBefore: before.spent, row, period: before.period }).message,
+          })
+        } else {
+          replaceHome()
+        }
+        if (shot === 'v2-add') {
+          prefs.setLastCategory('expense', 'Groceries')
+          setQuickRows(pageHistory(repo, new Date(), null, 100).rows)
+          setOverlay({ type: 'quick-add' })
+        }
+        if (shot === 'v2-history') {
+          historyReady.current = false
+          setRevealHistory(true)
+          setTab('history')
+        }
       } else if (shot === 'merge') {
         const moved = movedToAccountLine(12, 2)
         const kept = budgetsKeptFromAccountLine(1)
@@ -338,23 +391,56 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
     noteHistoryStale()
   }
 
-  function confirmDeleteEntry(row: HistoryRow) {
-    Alert.alert('Delete entry?', 'This removes it from this phone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          try {
-            commitDeleteEntry(repo, row.kind, row.id, new Date())
-            applyEntry({ type: 'delete', previous: row })
-            finishLocal()
-          } catch (error) {
-            setNotices([errorText(error)])
-          }
-        },
-      },
-    ])
+  function openAdd() {
+    haptic('add')
+    setQuickRows(pageHistory(repo, new Date(), null, 100).rows)
+    setOverlay({ type: 'quick-add' })
+  }
+
+  function openEdit(row: HistoryRow) {
+    setQuickRows(pageHistory(repo, new Date(), null, 100).rows)
+    setOverlay({ type: 'edit-entry', row })
+  }
+
+  function deleteEntry(row: HistoryRow) {
+    try {
+      commitDeleteEntry(repo, row.kind, row.id, new Date())
+      applyEntry({ type: 'delete', previous: row })
+      setToast((current) => (current && current.row.id === row.id && current.row.kind === row.kind ? null : current))
+      haptic('delete')
+      finishLocal()
+    } catch (error) {
+      setNotices([errorText(error)])
+    }
+  }
+
+  function undoToast() {
+    if (!toast) return
+    const current = toast
+    setToast(null)
+    try {
+      undoSavedEntry(repo, current.row, new Date())
+      applyEntry({ type: 'delete', previous: current.row })
+      haptic('delete')
+      scheduleSync()
+    } catch (error) {
+      setNotices([errorText(error)])
+    }
+  }
+
+  function addStarter(goal: StarterGoal) {
+    try {
+      commitGoal(repo, { name: goal.name, target: goal.target })
+      replaceHome()
+      scheduleSync()
+    } catch (error) {
+      setNotices([errorText(error)])
+    }
+  }
+
+  function useSuggestedBudget() {
+    commitPeriodBudget(prefs, home.period.start, String(SUGGESTED_PERIOD_BUDGET))
+    replaceHome()
   }
 
   function confirmDeleteGoal(goal: GoalCard) {
@@ -429,9 +515,15 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
           <HomeScreen
             snapshot={home}
             pill={pill}
+            greeting={manilaGreeting(new Date())}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
-            onOpenEntry={(row) => setOverlay({ type: 'edit-entry', row })}
+            onOpenEntry={openEdit}
             onEditBudget={() => setOverlay({ type: 'budget' })}
+            onUseSuggestedBudget={useSuggestedBudget}
+            onSeeAll={() => setTab('history')}
+            onAdd={openAdd}
+            onAddStarter={addStarter}
+            onCustomGoal={() => setOverlay({ type: 'add-goal' })}
           />
         ) : null}
         {tab === 'history' ? (
@@ -439,9 +531,13 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             rows={historyRows}
             olderLineVisible={home.olderLineVisible}
             emptyLabel={home.freeHistory ? 'No entries in the last 90 days.' : 'No entries yet.'}
+            pill={pill}
+            today={home.today}
+            period={home.period}
+            revealFirst={revealHistory}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
-            onEdit={(row) => setOverlay({ type: 'edit-entry', row })}
-            onDelete={confirmDeleteEntry}
+            onEdit={openEdit}
+            onDelete={deleteEntry}
             onLoadMore={() => {
               if (loadingMore.current || !historyHasMoreRef.current || !historyCursorRef.current) return
               loadingMore.current = true
@@ -455,8 +551,10 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             goals={home.goals}
             banner={banner}
             canAdd={canAddGoal(banner)}
+            pill={pill}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
             onAdd={() => setOverlay({ type: 'add-goal' })}
+            onAddStarter={addStarter}
             onDeposit={(goal) => setOverlay({ type: 'deposit', goal })}
             onEdit={(goal) => setOverlay({ type: 'edit-goal', goal })}
             onDelete={confirmDeleteGoal}
@@ -466,8 +564,13 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       <TabBar
         tab={tab}
         onTab={setTab}
-        onAdd={() => setOverlay({ type: 'quick-add' })}
+        onAdd={openAdd}
       />
+      {toast ? (
+        <View pointerEvents="box-none" style={styles.toastSlot}>
+          <SaveToast message={toast.message} onUndo={undoToast} />
+        </View>
+      ) : null}
       {overlay ? (
         <OverlaySheet
           overlay={overlay}
@@ -476,6 +579,9 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
           lastExpense={prefs.lastCategory('expense')}
           lastIncome={prefs.lastCategory('income')}
           localBudget={formatStoredBudget(prefs.periodBudget(home.period.start))}
+          recent={quickRows}
+          moneyLeft={draftMoneyLeft(home, overlay.type === 'edit-entry' ? overlay.row : null)}
+          status={pill}
           onClose={() => setOverlay(null)}
           onSaveEntry={(draft) => {
             const previous = draft.id
@@ -486,7 +592,19 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             prefs.setLastCategory(draft.kind, draft.category)
             if (draft.id && previous) applyEntry({ type: 'update', row, previous })
             else if (draft.id) replaceHome()
-            else applyEntry({ type: 'insert', row })
+            else {
+              applyEntry({ type: 'insert', row })
+              setToast({
+                row,
+                message: toastForSave({
+                  budget: home.budget,
+                  spentBefore: home.spent,
+                  row,
+                  period: home.period,
+                }).message,
+              })
+            }
+            haptic('save')
             finishLocal()
           }}
           onSaveBudget={(amount) => {
@@ -539,6 +657,9 @@ function OverlaySheet({
   lastExpense,
   lastIncome,
   localBudget,
+  recent,
+  moneyLeft: remainder,
+  status,
   onSaveEntry,
   onSaveGoal,
   onSaveBudget,
@@ -551,6 +672,9 @@ function OverlaySheet({
   lastExpense: string | null
   lastIncome: string | null
   localBudget: string
+  recent: HistoryRow[]
+  moneyLeft: number | null
+  status: ReturnType<typeof syncPill>
   onClose: () => void
   onSaveEntry: (draft: EntryDraft) => void
   onSaveGoal: (name: string, target: string, id?: string) => void
@@ -580,6 +704,9 @@ function OverlaySheet({
           cutoff={cutoff}
           lastExpense={lastExpense}
           lastIncome={lastIncome}
+          recent={recent}
+          moneyLeft={remainder}
+          status={status}
           onClose={onClose}
           onSave={onSaveEntry}
         />
@@ -592,6 +719,9 @@ function OverlaySheet({
           cutoff={cutoff}
           lastExpense={lastExpense}
           lastIncome={lastIncome}
+          recent={recent}
+          moneyLeft={remainder}
+          status={status}
           onClose={onClose}
           onSave={onSaveEntry}
         />
@@ -648,11 +778,55 @@ function formatStoredBudget(amount: number | null): string {
   return amount == null ? '' : amount.toFixed(2)
 }
 
+function draftMoneyLeft(home: LedgerSnapshot, editing: HistoryRow | null): number | null {
+  if (home.budget == null) return null
+  let spent = home.spent
+  if (editing && editing.kind === 'expense' && editing.date >= home.period.start && editing.date <= home.period.end) {
+    spent = roundMoney(spent - editing.amount)
+  }
+  return moneyLeft(home.budget, spent)
+}
+
+function seedV2Sample(repo: AppRuntime['repo'], prefs: AppRuntime['prefs']) {
+  const now = new Date()
+  const today = manilaToday(now)
+  const period = payPeriodAt(now)
+  commitPeriodBudget(prefs, period.start, '12000')
+  const userId = repo.sessionUserId()
+  const on = (delta: number) => shiftIsoDate(today, delta)
+  repo.createExpense({
+    userId,
+    category: 'Groceries',
+    type: 'needs',
+    amount: 2305.49,
+    date: shiftIsoDate(period.start, -1),
+    description: 'Last kinsena market',
+  })
+  repo.createIncome({ userId, totalAmount: 18500, date: period.start, incomeSource: 'Salary' })
+  repo.createExpense({ userId, category: 'Rent / Mortgage', type: 'needs', amount: 3000, date: on(-4), description: 'October rent' })
+  repo.createExpense({ userId, category: 'Family Support', type: 'needs', amount: 2000, date: on(-3), description: 'Padala kay Nanay' })
+  repo.createExpense({ userId, category: 'Shopping', type: 'wants', amount: 572.5, date: on(-3), description: 'Shopee 10.10 haul' })
+  repo.createExpense({ userId, category: 'Transportation', type: 'needs', amount: 24, date: on(-3), description: 'Grab to Makati' })
+  repo.createExpense({ userId, category: 'Utilities', type: 'needs', amount: 1000, date: on(-2), description: 'Meralco October' })
+  repo.createExpense({ userId, category: 'Dining Out', type: 'wants', amount: 650, date: on(-1), description: 'Jollibee with family' })
+  repo.createExpense({ userId, category: 'Groceries', type: 'needs', amount: 1240.5, date: today, description: 'Puregold weekly' })
+  repo.createExpense({ userId, category: 'Transportation', type: 'needs', amount: 13, date: today, description: 'Jeep to Ortigas' })
+  const goal = repo.createGoal({ userId, name: 'Emergency fund', targetAmount: 30000 })
+  repo.createDeposit({ userId, goalId: goal.id, amount: 18600 })
+}
+
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
   },
   body: {
     flex: 1,
+  },
+  toastSlot: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 96,
+    zIndex: 20,
   },
 })

@@ -6,14 +6,15 @@ The Next.js app at the repo root does not import this package. `mobile/` is excl
 
 ## Screens
 
-Light mode is the primary palette: blue `#0038A8`, yellow `#FCD116`, off-white cards with 26px corners. Dark mode follows the system appearance. Nunito is the rounded sans. Category icons are bundled in the app.
+Light mode is the primary palette: blue `#0038A8`, yellow `#FCD116`, off-white cards with 26px corners. Dark mode follows the system appearance. Nunito is the rounded sans. Type, spacing, and motion tokens live in `src/ui/theme.ts`. Category icons are bundled in the app. Save, delete, and the + trigger haptic feedback on a device.
 
-- First run is two screens. Then Home, History, and Goals, with a yellow + in the middle of the tab bar.
-- Home shows this payday period, a budget ring, an on-this-phone / synced pill, days logged, top category, goal progress, and recent entries.
-- Quick add opens from the +. Amount, category, save. The date starts as today in Asia/Manila and cannot move past today. On Free, it also stops 90 days back. The category starts as Groceries (Salary for income) until one has been saved; the next add uses the last category for that kind.
-- History lists expenses and income with edit and delete. Free shows the last 90 days and the line "Entries older than 90 days are saved. Upgrade to Pro to see them." Older rows stay stored and cannot be edited or deleted on Free.
-- Goals show progress as the sum of live allocations, or `saved_amount` when a goal has none. Deposit writes an allocation. Limit and past-due grace copy comes from the sync engine.
-- Settings sits behind the avatar: sync switch, email sign-in, and the uninstall warning. Sign-out clears local financial rows. The intro flag, last categories, and phone-only pay-period amounts are written back. If any rows have not synced, sign-out is blocked and the screen shows the count. The way through is the red "Delete unsynced entries" button, after a confirmation.
+- First run is two screens. Then Home, History, and Goals. The three tabs are equal. A raised round yellow + sits centred above the bar and is not one of the tabs.
+- Home shows this kinsena (the payday period), money left, a days-to-payday card, one insight line from local rows, days logged, top category, and goal progress. With no budget and no entries it asks you to set a budget and offers starter goals instead of an em dash.
+- Quick add opens from the +. A centred peso amount, category chips with icons sorted most-used first, repeat chips, and an Add note row that expands in the same sheet. Expense and income toggle. Tapping a repeat chip saves it, so a repeat is the + and that chip. The date starts as today in Asia/Manila and cannot move past today. On Free, it also stops 90 days back.
+- Saving shows a toast, `Saved · ₱X left until payday`, in the same turn as the write. Undo soft-deletes through the existing delete path.
+- History groups rows under day headers with the day's net total. The row title is the note, or the category when there is no note. Tap a row to edit. Swipe left, then Delete, to remove it. Free shows the last 90 days and the line "Entries older than 90 days are saved. Upgrade to Pro to see them." Older rows stay stored and cannot be edited or deleted on Free.
+- Goals show progress as the sum of live allocations, or `saved_amount` when a goal has none. An empty list offers starter goals. Deposit writes an allocation. Limit and past-due grace copy comes from the sync engine.
+- Settings sits behind the sun button: sync switch, email sign-in, and the uninstall warning. Sign-out clears local financial rows. The intro flag, last categories, and phone-only pay-period amounts are written back. If any rows have not synced, sign-out is blocked and the screen shows the count. The way through is the red "Delete unsynced entries" button, after a confirmation.
 
 The budget ring uses the payday helper. When category budgets are already on the phone, it prorates that monthly total by the period's share of days in the month. Otherwise it uses one amount for the current pay period, stored only on the phone. Tap the ring to set it. That amount is not pushed.
 

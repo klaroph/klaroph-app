@@ -4,7 +4,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from './ThemeProvider'
 import { GhostButton, T } from './ui'
 
-export function Sheet({ title, onClose, children, testID }: { title: string; onClose: () => void; children: ReactNode; testID?: string }) {
+export function Sheet({
+  title,
+  header,
+  onClose,
+  children,
+  testID,
+  tall,
+}: {
+  title?: string
+  header?: ReactNode
+  onClose: () => void
+  children: ReactNode
+  testID?: string
+  tall?: boolean
+}) {
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   return (
@@ -14,12 +28,18 @@ export function Sheet({ title, onClose, children, testID }: { title: string; onC
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View
             testID={testID}
-            style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) }]}
+            style={[
+              styles.sheet,
+              tall ? styles.tall : null,
+              { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 12) },
+            ]}
           >
-            <View style={styles.titleRow}>
-              <T size={22} weight="bold">{title}</T>
-              <GhostButton label="Close" onPress={onClose} />
-            </View>
+            {header ?? (
+              <View style={styles.titleRow}>
+                <T size={22} weight="bold">{title}</T>
+                <GhostButton label="Close" onPress={onClose} />
+              </View>
+            )}
             {children}
           </View>
         </KeyboardAvoidingView>
@@ -40,10 +60,14 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    gap: 12,
-    maxHeight: '90%',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 8,
+    maxHeight: '92%',
+  },
+  tall: {
+    height: '94%',
+    maxHeight: '94%',
   },
   titleRow: {
     flexDirection: 'row',

@@ -112,7 +112,15 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   return <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, style]}>{children}</View>
 }
 
-export function Pill({ label, tone }: { label: string; tone: 'local' | 'off' | 'syncing' | 'offline' | 'pending' | 'synced' }) {
+export function Pill({
+  label,
+  tone,
+  icon,
+}: {
+  label: string
+  tone: 'local' | 'off' | 'syncing' | 'offline' | 'pending' | 'synced'
+  icon?: ReactNode
+}) {
   const { colors } = useTheme()
   const palette = {
     local: { bg: colors.blueSoft, fg: colors.blue },
@@ -124,6 +132,7 @@ export function Pill({ label, tone }: { label: string; tone: 'local' | 'off' | '
   }[tone]
   return (
     <View testID="sync-pill" style={[styles.pill, { backgroundColor: palette.bg }]}>
+      {icon}
       <T size={12} weight="bold" color={palette.fg}>{label}</T>
     </View>
   )
@@ -277,8 +286,22 @@ export function Field({
   )
 }
 
-export function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+export function Chip({
+  label,
+  selected,
+  onPress,
+  tone = 'blue',
+  icon,
+}: {
+  label: string
+  selected: boolean
+  onPress: () => void
+  tone?: 'blue' | 'yellow'
+  icon?: ReactNode
+}) {
   const { colors } = useTheme()
+  const selectedBg = tone === 'yellow' ? colors.yellow : colors.blue
+  const selectedFg = tone === 'yellow' ? colors.onYellow : colors.onBlue
   return (
     <Pressable
       accessibilityRole="button"
@@ -287,10 +310,11 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
       onPress={onPress}
       style={[
         styles.chip,
-        { backgroundColor: selected ? colors.blue : colors.card, borderColor: selected ? colors.blue : colors.border },
+        { backgroundColor: selected ? selectedBg : colors.card, borderColor: selected ? selectedBg : colors.border },
       ]}
     >
-      <T size={14} weight="semibold" color={selected ? colors.onBlue : colors.text}>{label}</T>
+      {icon}
+      <T size={14} weight="semibold" color={selected ? selectedFg : colors.text}>{label}</T>
     </Pressable>
   )
 }
@@ -329,6 +353,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   button: {
     minHeight: 52,
@@ -358,9 +385,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 14,
-    minHeight: 48,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
   },
   fit: {
     alignSelf: 'stretch',

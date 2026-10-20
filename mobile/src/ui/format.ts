@@ -21,6 +21,29 @@ export function formatPeriodRange(start: string, end: string): string {
   return `${formatPrettyDate(start, true)} – ${formatPrettyDate(end, true)}`
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+
+export function formatWeekdayShort(iso: string): string {
+  const utc = new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))))
+  return WEEKDAYS[utc.getUTCDay()] ?? ''
+}
+
+/** Whole pesos when the amount has no centavos, otherwise the full amount. */
+export function formatPesoShort(amount: number): string {
+  const cents = Math.round(Math.abs(amount) * 100) % 100
+  if (cents !== 0) return formatPeso(amount)
+  const negative = amount < 0
+  const grouped = String(Math.round(Math.abs(amount))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${negative ? '-' : ''}₱${grouped}`
+}
+
+/** Leading plus, or a minus, so a day total reads the same way as a row. */
+export function signedPeso(amount: number): string {
+  if (amount > 0) return `+${formatPeso(amount)}`
+  if (amount < 0) return `−${formatPeso(Math.abs(amount))}`
+  return formatPeso(0)
+}
+
 export function errorText(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message
   return 'Something went wrong.'

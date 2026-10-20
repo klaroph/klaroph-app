@@ -3,7 +3,7 @@
     "name": "Klaro Native",
     "slug": "klaro-native",
     "scheme": "klaro",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "ph.klaro.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
