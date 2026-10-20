@@ -5,12 +5,13 @@ import { orderCategoryChips, repeatChips } from './chips'
 import { groupHistoryByDay, rowHeadline } from './historyGroups'
 import { homeInsight } from './insight'
 import type { HistoryRow } from './ledger'
+import { daysLeftInMonth, monthBudgetLine } from './budgetMath'
+import { launchRevealPlan, SAVE_CHECK_DP, SPLASH_REVEAL_MS } from './launchReveal'
 import { daysToPaydayAt, daysToPaydayOn, paydayCardTitle } from './payday'
 import { emptyDraft } from './quickAdd'
 import { toastForSave, undoSavedEntry } from './saveToast'
 
 const NOW = new Date('2026-10-20T04:00:00.000Z')
-const OCTOBER_B = { half: 'b' as const, month: '2026-10', start: '2026-10-15', end: '2026-10-30' }
 
 function row(partial: {
   id: string
@@ -73,7 +74,7 @@ describe('category chips', () => {
 })
 
 describe('save toast', () => {
-  it('shows the payday remainder immediately and undo soft-deletes', () => {
+  it('shows the monthly remainder immediately and undo soft-deletes', () => {
     const { repo } = openTestRepository({ now: () => NOW })
     const saved = commitEntry(repo, {
       ...emptyDraft('2026-10-20'),
@@ -86,9 +87,15 @@ describe('save toast', () => {
       budget: 12000,
       spentBefore: 8500,
       row: saved,
-      period: OCTOBER_B,
+      month: { start: '2026-10-01', end: '2026-10-31' },
     })
-    expect(toast.message).toBe('Saved · ₱3,250.00 left until payday')
+    expect(toast.message).toBe('Saved · ₱3,250 left this month')
+    expect(toastForSave({
+      budget: 1000,
+      spentBefore: 900,
+      row: saved,
+      month: { start: '2026-10-01', end: '2026-10-31' },
+    }).message).toBe('Saved · ₱150 over this month')
     expect(performance.now() - started).toBeLessThan(300)
     expect(repo.getRow('expenses', saved.id)?.deleted_at).toBeNull()
     undoSavedEntry(repo, saved, NOW)
@@ -155,6 +162,34 @@ describe('days to payday', () => {
     expect(paydayCardTitle('2026-11-01')).toBe('14 days to payday')
     expect(paydayCardTitle('2026-02-28')).toBe('Payday today')
     expect(paydayCardTitle('2026-03-01')).toBe('14 days to payday')
+  })
+})
+
+describe('month budget line', () => {
+  it('counts days left in the Manila month, including leap February, and the over state', () => {
+    expect(daysLeftInMonth('2026-10-20')).toBe(12)
+    expect(daysLeftInMonth('2026-10-15')).toBe(17)
+    expect(daysLeftInMonth('2026-10-31')).toBe(1)
+    expect(daysLeftInMonth('2026-11-01')).toBe(30)
+    expect(daysLeftInMonth('2026-02-28')).toBe(1)
+    expect(daysLeftInMonth('2026-03-01')).toBe(31)
+    expect(daysLeftInMonth('2024-02-28')).toBe(2)
+    expect(daysLeftInMonth('2024-02-29')).toBe(1)
+    expect(monthBudgetLine(3500, '2026-10-20')).toBe('₱3,500 left this month · 12 days left')
+    expect(monthBudgetLine(3500, '2026-10-31')).toBe('₱3,500 left this month · 1 day left')
+    expect(monthBudgetLine(0, '2026-02-28')).toBe('₱0 left this month · 1 day left')
+    expect(monthBudgetLine(-200, '2026-10-20')).toBe('₱200 over this month · 12 days left')
+    expect(monthBudgetLine(-250.4, '2026-11-01')).toBe('₱250 over this month · 30 days left')
+    expect(monthBudgetLine(3500, '2026-10-15')).not.toContain('Payday')
+    expect(monthBudgetLine(-1, '2026-10-31')).toBe('₱1 over this month · 1 day left')
+  })
+
+  it('skips the launch reveal when reduce motion is on', () => {
+    expect(launchRevealPlan(false)).toBe('play')
+    expect(launchRevealPlan(true)).toBe('skip')
+    expect(SPLASH_REVEAL_MS).toBe(1400)
+    expect(SAVE_CHECK_DP).toBeGreaterThanOrEqual(56)
+    expect(SAVE_CHECK_DP).toBeLessThanOrEqual(72)
   })
 })
 

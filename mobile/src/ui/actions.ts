@@ -118,11 +118,11 @@ export function commitDeleteGoal(repo: KlaroRepository, id: string): void {
   repo.softDeleteGoal(id)
 }
 
-/** Stores one pay-period total on the phone. An empty amount clears it. Nothing is synced. */
-export function commitPeriodBudget(prefs: ScreenPrefs, periodStart: string, raw: string): void {
+/** Stores one monthly amount on the phone. An empty amount clears it. Nothing is synced. */
+export function commitMonthlyBudget(prefs: ScreenPrefs, raw: string): void {
   if (raw.trim() === '') {
-    prefs.setPeriodBudget(periodStart, null)
+    prefs.setMonthlyBudget(null)
     return
   }
-  prefs.setPeriodBudget(periodStart, requireAmount(raw, 'budget'))
+  prefs.setMonthlyBudget(requireAmount(raw, 'budget'))
 }

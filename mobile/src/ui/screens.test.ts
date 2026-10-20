@@ -11,8 +11,8 @@ import { syncActivity } from '../sync/activity'
 import { emptyCounts } from '../sync/model'
 import { MemoryTokenStore } from '../sync/tokenStore'
 import { signInAndAdopt, signOutKeepingIntro } from './accountFlow'
-import { commitDeleteEntry, commitDeposit, commitEntry, commitGoal, commitPeriodBudget } from './actions'
-import { monthlyBudget, prorateToPeriod, ringProgress } from './budgetMath'
+import { commitDeleteEntry, commitDeposit, commitEntry, commitGoal, commitMonthlyBudget } from './actions'
+import { monthBudgetLine, monthlyBudget, ringProgress } from './budgetMath'
 import { FIRST_RUN_PAGES, FUTURE_DATE_MESSAGE, OLDER_ENTRIES_LINE, PERIOD_BUDGET_LINE, UNINSTALL_WARNING, unsyncedSignOutLine } from './copy'
 import { canShiftEntryDate, historyCutoff, manilaToday } from './historyWindow'
 import { hasUnsyncedChanges, loadLedger, pageHistory } from './ledger'
@@ -109,41 +109,120 @@ describe('free history window', () => {
   })
 })
 
-describe('home payday card', () => {
-  it('prorates the monthly budget across the pay period and ignores spending outside it', () => {
+describe('home month budget', () => {
+  it('uses the whole Manila month and ignores spending outside it', () => {
     const { repo } = openTestRepository({ now: () => NOW })
     repo.createBudgetPlan({ userId: null, category: 'Groceries', amount: 3100 })
-    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 500, date: '2026-10-16' })
+    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 500, date: '2026-10-01' })
     repo.createExpense({ userId: null, category: 'Dining Out', type: 'wants', amount: 200, date: '2026-10-20' })
     repo.createExpense({ userId: null, category: 'Shopping', type: 'wants', amount: 5000, date: '2026-09-01' })
     repo.createIncome({ userId: null, totalAmount: 1000, date: '2026-10-16', incomeSource: 'Salary' })
     const view = loadLedger(repo, NOW)
-    expect(view.period).toMatchObject({ half: 'b', month: '2026-10', start: '2026-10-15', end: '2026-10-30' })
-    expect(view.budget).toBe(1600)
+    expect(view.month).toBe('2026-10')
+    expect(view.monthStart).toBe('2026-10-01')
+    expect(view.monthEnd).toBe('2026-10-31')
+    expect(view.budget).toBe(3100)
     expect(view.spent).toBe(700)
     expect(view.incomeTotal).toBe(1000)
-    expect(view.ring).toBeCloseTo(700 / 1600)
+    expect(view.ring).toBeCloseTo(700 / 3100)
     expect(view.overBudget).toBe(false)
-    expect(view.daysLogged).toBe(2)
+    expect(view.daysLogged).toBe(3)
     expect(view.topCategory).toMatchObject({ name: 'Groceries', amount: 500 })
+    expect(monthBudgetLine((view.budget ?? 0) - view.spent, view.today)).toBe('₱2,400 left this month · 12 days left')
     const month = monthlyBudget('2026-10', [{ category: 'Groceries', amount: 1000 }, { category: 'Dining Out', amount: 1000 }], [
       { category: 'Groceries', amount: 310, month: '2026-10-01' },
     ])
-    expect(prorateToPeriod(month.amount, view.period)).toBe(676.13)
+    expect(month.amount).toBe(1310)
     expect(ringProgress(2000, 1600)).toEqual({ progress: 1, over: true })
   })
 
-  it('uses a phone-only pay period amount until category budgets exist', () => {
+  it('keeps October spending on the last day and starts November the next morning', () => {
+    const { repo } = openTestRepository({ now: () => NOW })
+    repo.createBudgetPlan({ userId: null, category: 'Groceries', amount: 1000 })
+    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 100, date: '2026-10-01' })
+    repo.createExpense({ userId: null, category: 'Dining Out', type: 'wants', amount: 50, date: '2026-10-31' })
+    repo.createExpense({ userId: null, category: 'Shopping', type: 'wants', amount: 999, date: '2026-11-01' })
+    repo.createExpense({ userId: null, category: 'Travel', type: 'wants', amount: 999, date: '2026-09-30' })
+    const oct31 = new Date('2026-10-31T02:00:00.000Z')
+    const october = loadLedger(repo, oct31)
+    expect(october.today).toBe('2026-10-31')
+    expect(october.spent).toBe(150)
+    expect(monthBudgetLine((october.budget ?? 0) - october.spent, october.today)).toBe('₱850 left this month · 1 day left')
+    const nov1 = new Date('2026-11-01T02:00:00.000Z')
+    const november = loadLedger(repo, nov1)
+    expect(november.today).toBe('2026-11-01')
+    expect(november.spent).toBe(999)
+    expect(monthBudgetLine((november.budget ?? 0) - november.spent, november.today)).toBe('₱1 left this month · 30 days left')
+    repo.createExpense({ userId: null, category: 'Shopping', type: 'wants', amount: 2, date: '2026-11-01' })
+    const over = loadLedger(repo, nov1)
+    expect(monthBudgetLine((over.budget ?? 0) - over.spent, over.today)).toBe('₱1 over this month · 30 days left')
+  })
+
+  it('uses February through the 28th in a non-leap year and through the 29th in a leap year', () => {
+    const { repo } = openTestRepository({ now: () => NOW })
+    repo.createBudgetPlan({ userId: null, category: 'Groceries', amount: 500 })
+    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 20, date: '2026-02-01' })
+    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 30, date: '2026-02-28' })
+    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 400, date: '2026-03-01' })
+    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 10, date: '2024-02-29' })
+    const feb28 = loadLedger(repo, new Date('2026-02-28T02:00:00.000Z'))
+    expect(feb28.monthEnd).toBe('2026-02-28')
+    expect(feb28.spent).toBe(50)
+    expect(monthBudgetLine((feb28.budget ?? 0) - feb28.spent, feb28.today)).toBe('₱450 left this month · 1 day left')
+    const leapDay = loadLedger(repo, new Date('2024-02-29T02:00:00.000Z'))
+    expect(leapDay.monthEnd).toBe('2024-02-29')
+    expect(leapDay.spent).toBe(10)
+    expect(monthBudgetLine((leapDay.budget ?? 0) - leapDay.spent, '2024-02-28')).toBe('₱490 left this month · 2 days left')
+    expect(monthBudgetLine((leapDay.budget ?? 0) - leapDay.spent, leapDay.today)).toBe('₱490 left this month · 1 day left')
+    const march = loadLedger(repo, new Date('2026-03-01T02:00:00.000Z'))
+    expect(march.spent).toBe(400)
+    expect(monthBudgetLine((march.budget ?? 0) - march.spent, march.today)).toBe('₱100 left this month · 31 days left')
+  })
+
+  it('uses a phone-only monthly amount until category budgets exist', () => {
     const { sqlite, repo } = openTestRepository({ now: () => NOW })
     const prefs = prefsFor(sqlite)
-    const start = '2026-10-15'
-    expect(loadLedger(repo, NOW, prefs.periodBudget(start)).budget).toBeNull()
-    commitPeriodBudget(prefs, start, '900')
-    expect(prefs.periodBudget(start)).toBe(900)
-    expect(loadLedger(repo, NOW, prefs.periodBudget(start)).budget).toBe(900)
+    expect(loadLedger(repo, NOW, prefs.monthlyBudget()).budget).toBeNull()
+    commitMonthlyBudget(prefs, '900')
+    expect(prefs.monthlyBudget()).toBe(900)
+    expect(prefs.migratePaydayBudget('2026-10-15')).toEqual({ converted: false, amount: 900 })
+    expect(loadLedger(repo, NOW, prefs.monthlyBudget()).budget).toBe(900)
     expect(PERIOD_BUDGET_LINE).toBe("This amount stays on this phone and doesn't sync.")
     repo.createBudgetPlan({ userId: null, category: 'Groceries', amount: 3100 })
-    expect(loadLedger(repo, NOW, prefs.periodBudget(start)).budget).toBe(1600)
+    expect(loadLedger(repo, NOW, prefs.monthlyBudget()).budget).toBe(3100)
+  })
+
+  it('doubles a stored payday budget once, then shows the monthly notice once', () => {
+    const { sqlite, repo } = openTestRepository({ now: () => NOW })
+    const prefs = prefsFor(sqlite)
+    prefs.setPeriodBudget('2026-09-30', 400)
+    prefs.setPeriodBudget('2026-10-15', 900)
+    const plan = repo.createBudgetPlan({ userId: null, category: 'Groceries', amount: 3100 })
+    expect(prefs.migratePaydayBudget('2026-10-15')).toEqual({ converted: true, amount: 1800 })
+    expect(prefs.exportKeptPrefs().monthlyBudget).toBe('month:1800.00')
+    expect(prefs.exportKeptPrefs().periodBudgets.find((row) => row.start === '2026-10-15')?.amount).toBe('month:1800.00')
+    expect(prefs.monthlyBudgetNotice()?.message).toBe('Your budget is now monthly: ₱1,800')
+    expect(prefs.migratePaydayBudget('2026-10-15')).toEqual({ converted: false, amount: 1800 })
+    expect(prefs.monthlyBudget()).toBe(1800)
+    expect(repo.getRow('budget_plans', plan.id)?.values.amount).toBe('3100.00')
+    prefs.acknowledgeMonthlyBudgetNotice()
+    expect(prefs.monthlyBudgetNotice()).toBeNull()
+    expect(prefs.migratePaydayBudget('2026-10-15')).toEqual({ converted: false, amount: 1800 })
+    expect(prefs.monthlyBudgetNotice()).toBeNull()
+
+    sqlite.prepare('delete from local_meta where key = ?').run('ui.monthly_budget')
+    expect(prefs.migratePaydayBudget('2026-10-15')).toEqual({ converted: false, amount: 1800 })
+
+    const kept = prefs.exportKeptPrefs()
+    const fresh = prefsFor(openTestRepository({ now: () => NOW }).sqlite)
+    expect(fresh.migratePaydayBudget('2026-10-15')).toEqual({ converted: false, amount: null })
+    fresh.restoreKeptPrefs(kept)
+    expect(fresh.migratePaydayBudget('2026-10-15')).toEqual({ converted: false, amount: 1800 })
+    expect(fresh.monthlyBudgetNotice()).toBeNull()
+    commitMonthlyBudget(fresh, '500')
+    expect(fresh.migratePaydayBudget('2026-10-15')).toEqual({ converted: false, amount: 500 })
+    fresh.setMonthlyBudget(null)
+    expect(fresh.migratePaydayBudget('2026-10-15')).toEqual({ converted: false, amount: null })
   })
 })
 
@@ -362,7 +441,7 @@ describe('account flow for the settings sheet', () => {
     expect(prefs.firstRunDone()).toBe(true)
     expect(prefs.syncEnabled()).toBe(true)
     prefs.setLastCategory('expense', 'Dining Out')
-    commitPeriodBudget(prefs, '2026-10-15', '900')
+    commitMonthlyBudget(prefs, '900')
     const kept = prefs.exportKeptPrefs()
     await signOutKeepingIntro({
       local: repo,
@@ -372,7 +451,8 @@ describe('account flow for the settings sheet', () => {
     })
     prefs.restoreKeptPrefs(kept)
     expect(prefs.lastCategory('expense')).toBe('Dining Out')
-    expect(prefs.periodBudget('2026-10-15')).toBe(900)
+    expect(prefs.monthlyBudget()).toBe(900)
+    expect(kept.monthlyBudget).toBe('month:900.00')
     expect(prefs.syncEnabled()).toBe(true)
   })
 })

@@ -163,6 +163,7 @@ export function QuickAddSheet({
           </View>
         ) : null}
         {cutoff && showDate ? <T size={13} color={colors.muted} center>{`Dates start at ${formatPrettyDate(cutoff, true)} on Free.`}</T> : null}
+        <View style={styles.flexGap} />
         {draft.kind === 'expense' ? (
           noteOpen ? (
             <TextInput
@@ -188,7 +189,6 @@ export function QuickAddSheet({
             </Pressable>
           )
         ) : null}
-        <View style={styles.flexGap} />
         {repeats.length > 0 ? (
           <View style={styles.section}>
             <T size={12} weight="bold" color={colors.muted} style={styles.kicker}>REPEAT RECENT</T>
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     width: 92,
   },
   deleteEntry: {
-    minHeight: 44,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },

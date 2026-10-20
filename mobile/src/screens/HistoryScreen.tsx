@@ -85,6 +85,7 @@ export function HistoryScreen({
                 key={item.id}
                 label={item.label}
                 tone="yellow"
+                dense
                 selected={filter === item.id}
                 onPress={() => setFilter(item.id)}
               />
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
   filters: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   day: {
     gap: 6,

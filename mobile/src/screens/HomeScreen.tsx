@@ -8,11 +8,12 @@ import { ScreenHeader } from '../components/Header'
 import { StarterGoals } from '../components/StarterGoals'
 import { Card, FitLine, ScreenScroll, T, YellowButton } from '../components/ui'
 import { useTheme } from '../components/ThemeProvider'
-import { formatPeso, formatPesoShort, signedPeso } from '../ui/format'
+import { monthBudgetLine } from '../ui/budgetMath'
+import { formatPesoShort, formatWholePeso, monthKicker, signedPeso } from '../ui/format'
 import { rowHeadline, rowSignedAmount } from '../ui/historyGroups'
 import { homeInsight } from '../ui/insight'
 import type { HistoryRow, LedgerSnapshot } from '../ui/ledger'
-import { dailyAllowance, daysToPaydayOn, elapsedPeriodDays, kinsenaRange, paydayCardTitle } from '../ui/payday'
+import { elapsedPeriodDays } from '../ui/payday'
 import { moneyLeft } from '../ui/saveToast'
 import { SUGGESTED_PERIOD_BUDGET, type StarterGoal } from '../ui/starters'
 import type { SyncPill } from '../ui/syncStatus'
@@ -26,6 +27,8 @@ export function HomeScreen({
   onOpenEntry,
   onEditBudget,
   onUseSuggestedBudget,
+  budgetNotice = null,
+  onEditBudgetNotice,
   onSeeAll,
   onAdd,
   onAddStarter,
@@ -38,6 +41,8 @@ export function HomeScreen({
   onOpenEntry: (row: HistoryRow) => void
   onEditBudget: () => void
   onUseSuggestedBudget: () => void
+  budgetNotice?: string | null
+  onEditBudgetNotice?: () => void
   onSeeAll: () => void
   onAdd: () => void
   onAddStarter: (goal: StarterGoal) => void
@@ -47,11 +52,9 @@ export function HomeScreen({
   const noActivity = snapshot.recent.length === 0 && snapshot.spent === 0 && snapshot.incomeTotal === 0
   const noBudget = snapshot.budget == null
   const heading = noActivity && noBudget ? 'Welcome' : greeting
-  const payday = daysToPaydayOn(snapshot.today)
-  const paydayTitle = paydayCardTitle(snapshot.today)
-  const paydayToday = paydayTitle === 'Payday today'
   const left = moneyLeft(snapshot.budget, snapshot.spent)
-  const perDay = left == null ? null : dailyAllowance(left, payday.days)
+  const wholeLeft = left == null ? null : Math.round(left)
+  const line = wholeLeft == null ? null : monthBudgetLine(wholeLeft, snapshot.today)
   const elapsed = elapsedPeriodDays(snapshot.period, snapshot.today)
   const insight = homeInsight({
     foodSpent: snapshot.foodSpent,
@@ -60,7 +63,6 @@ export function HomeScreen({
     daysLogged: snapshot.daysLogged,
     hasActivity: !noActivity,
   })
-  const ticks = paydayTicks(elapsed, payday.days)
   return (
     <ScreenScroll testID="home-screen">
       <ScreenHeader title="Klaro." greeting={heading} pill={pill} onAvatar={onOpenSettings} />
@@ -68,10 +70,10 @@ export function HomeScreen({
         <View style={[styles.hero, styles.heroCompact, { backgroundColor: colors.blue }]}>
           <View style={styles.blob} />
           <T size={12} weight="bold" color="rgba(255,255,255,0.78)" style={styles.kicker}>
-            {`THIS KINSENA · ${kinsenaRange(snapshot.period)}`}
+            {monthKicker(snapshot.month)}
           </T>
-          <T size={26} weight="bold" color={colors.onBlue}>Set a budget for this pay period</T>
-          <T size={15} color="rgba(255,255,255,0.86)">{`We'll show what's left until ${payday.paydayLabel}.`}</T>
+          <T size={26} weight="bold" color={colors.onBlue}>Set a budget for this month</T>
+          <T size={15} color="rgba(255,255,255,0.86)">{"We'll show what's left this month."}</T>
           <View style={styles.heroActions}>
             <View style={styles.heroButton}>
               <YellowButton label="Set budget" onPress={onEditBudget} />
@@ -90,57 +92,50 @@ export function HomeScreen({
         <View style={[styles.hero, { backgroundColor: colors.blue }]}>
           <View style={styles.heroTop}>
             <T size={12} weight="bold" color="rgba(255,255,255,0.78)" style={styles.kicker}>
-              {`THIS KINSENA · ${kinsenaRange(snapshot.period)}`}
+              {monthKicker(snapshot.month)}
             </T>
-            <Pressable accessibilityRole="button" accessibilityLabel="Edit pay period budget" testID="edit-budget" onPress={onEditBudget} style={styles.budgetPill}>
-              <T size={12} weight="bold" color={colors.onBlue}>{`Budget ${formatPesoShort(snapshot.budget ?? 0)}`}</T>
+            <Pressable accessibilityRole="button" accessibilityLabel="Edit monthly budget" testID="edit-budget" onPress={onEditBudget} style={styles.budgetPill}>
+              <T size={12} weight="bold" color={colors.onBlue}>{`Budget ${formatWholePeso(snapshot.budget ?? 0)}`}</T>
             </Pressable>
           </View>
           <View style={styles.ringRow}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Edit pay period budget" onPress={onEditBudget}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Edit monthly budget" onPress={onEditBudget}>
               <BudgetRing spent={snapshot.spent} budget={snapshot.budget} tone="hero" />
             </Pressable>
             <View style={styles.leftCopy}>
-              <T size={14} weight="semibold" color="rgba(255,255,255,0.82)">Money left</T>
-              <FitLine size={28} color={colors.yellow}>{left == null ? formatPeso(0) : formatPeso(left)}</FitLine>
+              <T size={14} weight="semibold" color="rgba(255,255,255,0.82)">{wholeLeft != null && wholeLeft < 0 ? 'Over budget' : 'Money left'}</T>
+              <FitLine size={28} color={colors.yellow}>{formatWholePeso(wholeLeft == null ? 0 : Math.abs(wholeLeft))}</FitLine>
               <T size={13} color="rgba(255,255,255,0.88)">
-                {`Spent ${formatPesoShort(snapshot.spent)} of ${formatPesoShort(snapshot.budget ?? 0)}`}
+                {`Spent ${formatWholePeso(snapshot.spent)} of ${formatWholePeso(snapshot.budget ?? 0)}`}
               </T>
-              {perDay != null ? (
-                <T size={13} color="rgba(255,255,255,0.82)">
-                  {`≈ ${formatPesoShort(perDay)}/day for ${payday.days} ${payday.days === 1 ? 'day' : 'days'}`}
-                </T>
-              ) : null}
             </View>
           </View>
+          {line ? (
+            <T size={14} weight="bold" color={colors.onBlue} numberOfLines={2}>{line}</T>
+          ) : null}
         </View>
       )}
 
-      <Card>
-        <View style={styles.payday}>
-          <View style={[styles.paydayIcon, { backgroundColor: '#FFF4C2' }]}>
-            <MaterialCommunityIcons name="calendar-month-outline" size={22} color="#8A6A00" />
+      {budgetNotice ? (
+        <Card>
+          <View style={styles.notice}>
+            <T size={15} weight="semibold" style={styles.noticeText}>{budgetNotice}</T>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit"
+              onPress={onEditBudgetNotice}
+              style={styles.noticeEdit}
+            >
+              <T weight="bold" color={colors.blue}>Edit</T>
+            </Pressable>
           </View>
-          <View style={styles.paydayCopy}>
-            <T size={16} weight="bold" numberOfLines={1}>{paydayTitle}</T>
-            <T size={13} color={colors.muted} numberOfLines={1}>
-              {noActivity && noBudget ? 'Paydays: 15th and last day' : paydayToday ? '15th and last day' : `Payday ${payday.paydayLabel}`}
-            </T>
-          </View>
-          {noActivity && noBudget ? null : (
-            <View style={styles.ticks}>
-              {ticks.map((filled, index) => (
-                <View key={index} style={[styles.tick, { backgroundColor: filled ? colors.blue : colors.border }]} />
-              ))}
-            </View>
-          )}
-        </View>
-      </Card>
+        </Card>
+      ) : null}
 
       {insight ? (
         <View style={[styles.insight, { backgroundColor: colors.okSoft }]}>
           <MaterialCommunityIcons name="trending-down" size={18} color={colors.ok} />
-          <T size={14} weight="semibold" color={colors.ok} numberOfLines={1} style={styles.insightText}>{insight}</T>
+          <T size={14} weight="semibold" color={colors.ok} numberOfLines={2} style={styles.insightText}>{insight}</T>
         </View>
       ) : null}
 
@@ -308,12 +303,6 @@ export function EntryRow({
   )
 }
 
-function paydayTicks(elapsed: number, daysLeft: number): boolean[] {
-  const total = Math.max(elapsed + daysLeft, 1)
-  const filled = Math.round((elapsed / total) * 12)
-  return Array.from({ length: 12 }, (_, index) => index < filled)
-}
-
 const styles = StyleSheet.create({
   hero: {
     borderRadius: 28,
@@ -378,32 +367,20 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  payday: {
+  notice: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.md,
+    gap: space.sm,
   },
-  paydayIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  noticeText: {
+    flex: 1,
+  },
+  noticeEdit: {
+    minHeight: 48,
+    minWidth: 48,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  paydayCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  ticks: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 3,
-    height: 22,
-  },
-  tick: {
-    width: 4,
-    height: 18,
-    borderRadius: 2,
+    paddingHorizontal: 8,
   },
   insight: {
     borderRadius: 16,

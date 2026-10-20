@@ -23,9 +23,22 @@ export function formatPeriodRange(start: string, end: string): string {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
+export function monthKicker(month: string): string {
+  const name = (MONTHS[Number(month.slice(5, 7)) - 1] ?? month).toUpperCase()
+  return `THIS MONTH · ${name} ${month.slice(0, 4)}`
+}
+
 export function formatWeekdayShort(iso: string): string {
   const utc = new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))))
   return WEEKDAYS[utc.getUTCDay()] ?? ''
+}
+
+/** Rounded to the nearest peso. The sign stays on the amount. */
+export function formatWholePeso(amount: number): string {
+  const negative = amount < 0
+  const whole = Math.round(Math.abs(amount))
+  const grouped = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${negative ? '-' : ''}₱${grouped}`
 }
 
 /** Whole pesos when the amount has no centavos, otherwise the full amount. */
