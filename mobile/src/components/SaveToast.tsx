@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
 import LottieView from 'lottie-react-native'
@@ -54,23 +53,14 @@ export function SaveToast({
 }
 
 function ToastLine({ message }: { message: string }) {
-  const [width, setWidth] = useState(0)
-  const size = width > 0 ? Math.max(13, Math.floor(width / (message.length * 0.5))) : 15
-  const fitted = Math.min(15, size)
   const match = message.match(/^(.*?)(₱[\d,]+(?:\.\d+)?)(.*)$/)
   return (
-    <View
-      style={styles.message}
-      onLayout={(event) => {
-        const next = Math.floor(event.nativeEvent.layout.width)
-        setWidth((current) => (current === next ? current : next))
-      }}
-    >
-      <T size={fitted} weight="bold" color="#F7F4EC" numberOfLines={1}>
+    <View style={styles.message}>
+      <T size={15} weight="bold" color="#F7F4EC" numberOfLines={2}>
         {match ? (
           <>
             {match[1]}
-            <T size={fitted} weight="bold" color="#FCD116">{match[2]}</T>
+            <T size={15} weight="bold" color="#FCD116">{match[2]}</T>
             {match[3]}
           </>
         ) : message}
@@ -108,6 +98,8 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   undo: {
     minWidth: 56,

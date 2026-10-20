@@ -555,7 +555,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             emptyLabel={home.freeHistory ? 'No entries in the last 90 days.' : 'No entries yet.'}
             pill={pill}
             today={home.today}
-            period={home.period}
+            month={{ start: home.monthStart, end: home.monthEnd }}
             revealFirst={revealHistory}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
             onEdit={openEdit}
@@ -826,7 +826,7 @@ function seedV2Sample(repo: AppRuntime['repo'], prefs: AppRuntime['prefs']) {
     type: 'needs',
     amount: 2305.49,
     date: shiftIsoDate(period.start, -1),
-    description: 'Last kinsena market',
+    description: 'Weekend market',
   })
   repo.createIncome({ userId, totalAmount: 18500, date: period.start, incomeSource: 'Salary' })
   repo.createExpense({ userId, category: 'Rent / Mortgage', type: 'needs', amount: 3000, date: on(-4), description: 'October rent' })

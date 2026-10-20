@@ -7,8 +7,7 @@ import { calendarMonth, monthlyBudget, ringBudget, ringProgress } from './budget
 import { iconForCategory, type CategoryIconName, type EntryKind } from './categories'
 import { formatPeriodRange, formatPeso, formatPrettyDate } from './format'
 import { foodTotal, isFoodCategory } from './insight'
-import { previousPayPeriod } from './payday'
-import { historyCutoff, manilaToday, showsFreeHistory } from './historyWindow'
+import { historyCutoff, manilaToday, shiftIsoDate, showsFreeHistory } from './historyWindow'
 
 export const HISTORY_PAGE_SIZE = 40
 
@@ -74,9 +73,9 @@ export type LedgerSnapshot = {
   capMessage: string | null
   expenseTotals: CategoryTotal[]
   dateCounts: DatedCount[]
-  /** Food (groceries and dining) inside this pay period. */
+  /** Food (groceries and dining) inside this Manila calendar month. */
   foodSpent: number
-  /** Food in the previous pay period, from the same local rows. */
+  /** Food in the previous calendar month, from the same local rows. */
   previousFoodSpent: number
 }
 
@@ -105,10 +104,6 @@ function money(row: SyncRow, key: string): number {
   const value = row.values[key]
   if (value == null || value === '') return 0
   return parseMoney(value)
-}
-
-function inPeriod(date: string, period: PayPeriod): boolean {
-  return date >= period.start && date <= period.end
 }
 
 function halfLabel(half: PayHalf): string {
@@ -263,7 +258,6 @@ export function loadLedger(repo: KlaroRepository, now: Date, localMonthlyBudget:
   const period = payPeriodAt(now)
   const month = calendarMonth(today)
   const monthStats = repo.periodStats(month.start, month.end, minDate)
-  const periodStats = repo.periodStats(period.start, period.end, minDate)
   const olderLineVisible = freeHistory && cutoff != null && repo.hasVisibleBefore(cutoff)
   const budgetRows = monthlyBudget(
     month.month,
@@ -281,9 +275,9 @@ export function loadLedger(repo: KlaroRepository, now: Date, localMonthlyBudget:
   const expenseTotals = monthStats.categories.map((row) => ({ name: row.name, amount: roundMoney(row.amount) }))
   const dateCounts = monthStats.dates.map((row) => ({ date: row.date, count: row.count }))
   const recent = pageHistory(repo, now, null, 5).rows
-  const previous = previousPayPeriod(period)
-  const previousStats = repo.periodStats(previous.start, previous.end, minDate)
-  const foodSpent = foodTotal(periodStats.categories)
+  const previousMonth = calendarMonth(shiftIsoDate(month.start, -1))
+  const previousStats = repo.periodStats(previousMonth.start, previousMonth.end, minDate)
+  const foodSpent = foodTotal(monthStats.categories)
   const previousFoodSpent = foodTotal(previousStats.categories)
 
   const signedIn = repo.sessionUserId() != null
@@ -364,10 +358,7 @@ function inMonth(date: string, view: LedgerSnapshot): boolean {
 }
 
 function fold(view: LedgerSnapshot, row: HistoryRow, sign: 1 | -1): Pick<LedgerSnapshot, 'spent' | 'incomeTotal' | 'expenseTotals' | 'dateCounts' | 'foodSpent'> {
-  const countsForMonth = inMonth(row.date, view)
-  const countsForPeriod = inPeriod(row.date, view.period)
-  const foodDelta = row.kind === 'expense' && countsForPeriod && isFoodCategory(row.category) ? sign * row.amount : 0
-  if (!countsForMonth && foodDelta === 0) {
+  if (!inMonth(row.date, view)) {
     return {
       spent: view.spent,
       incomeTotal: view.incomeTotal,
@@ -376,17 +367,9 @@ function fold(view: LedgerSnapshot, row: HistoryRow, sign: 1 | -1): Pick<LedgerS
       foodSpent: view.foodSpent,
     }
   }
-  const dateCounts = countsForMonth ? bumpDate(view.dateCounts, row.date, sign) : view.dateCounts
+  const dateCounts = bumpDate(view.dateCounts, row.date, sign)
+  const foodDelta = row.kind === 'expense' && isFoodCategory(row.category) ? sign * row.amount : 0
   const foodSpent = roundMoney(view.foodSpent + foodDelta)
-  if (!countsForMonth) {
-    return {
-      spent: view.spent,
-      incomeTotal: view.incomeTotal,
-      expenseTotals: view.expenseTotals,
-      dateCounts,
-      foodSpent,
-    }
-  }
   if (row.kind === 'expense') {
     return {
       spent: roundMoney(view.spent + sign * row.amount),

@@ -8,12 +8,11 @@ import { ScreenHeader } from '../components/Header'
 import { StarterGoals } from '../components/StarterGoals'
 import { Card, FitLine, ScreenScroll, T, YellowButton } from '../components/ui'
 import { useTheme } from '../components/ThemeProvider'
-import { monthBudgetLine } from '../ui/budgetMath'
-import { formatPesoShort, formatWholePeso, monthKicker, signedPeso } from '../ui/format'
+import { elapsedDaysInMonth, monthBudgetLine } from '../ui/budgetMath'
+import { formatPesoShort, formatWholePeso, monthKicker, signedPeso, signedWholePeso } from '../ui/format'
 import { rowHeadline, rowSignedAmount } from '../ui/historyGroups'
 import { homeInsight } from '../ui/insight'
 import type { HistoryRow, LedgerSnapshot } from '../ui/ledger'
-import { elapsedPeriodDays } from '../ui/payday'
 import { moneyLeft } from '../ui/saveToast'
 import { SUGGESTED_PERIOD_BUDGET, type StarterGoal } from '../ui/starters'
 import type { SyncPill } from '../ui/syncStatus'
@@ -55,7 +54,7 @@ export function HomeScreen({
   const left = moneyLeft(snapshot.budget, snapshot.spent)
   const wholeLeft = left == null ? null : Math.round(left)
   const line = wholeLeft == null ? null : monthBudgetLine(wholeLeft, snapshot.today)
-  const elapsed = elapsedPeriodDays(snapshot.period, snapshot.today)
+  const elapsed = elapsedDaysInMonth(snapshot.today)
   const insight = homeInsight({
     foodSpent: snapshot.foodSpent,
     previousFoodSpent: snapshot.previousFoodSpent,
@@ -153,7 +152,7 @@ export function HomeScreen({
             <>
               <CategoryIcon name={snapshot.topCategory.icon} size={28} />
               <T size={13} weight="bold" numberOfLines={2}>{snapshot.topCategory.name}</T>
-              <T size={12} color={colors.muted}>{`Top · ${formatPesoShort(snapshot.topCategory.amount)}`}</T>
+              <T size={12} color={colors.muted}>{`Top · ${formatWholePeso(snapshot.topCategory.amount)}`}</T>
             </>
           ) : (
             <>
@@ -190,7 +189,7 @@ export function HomeScreen({
           </View>
           <Card style={styles.recentCard}>
             {snapshot.recent.map((row, index) => (
-              <EntryRow key={`${row.kind}-${row.id}`} row={row} grouped divider={index < snapshot.recent.length - 1} onPress={() => onOpenEntry(row)} />
+              <EntryRow key={`${row.kind}-${row.id}`} row={row} grouped whole divider={index < snapshot.recent.length - 1} onPress={() => onOpenEntry(row)} />
             ))}
           </Card>
         </View>
@@ -267,17 +266,20 @@ export function EntryRow({
   onPress,
   grouped,
   divider,
+  whole = false,
 }: {
   row: HistoryRow
   onPress?: () => void
   grouped?: boolean
   divider?: boolean
+  whole?: boolean
 }) {
   const { colors } = useTheme()
   const note = row.description.trim()
   const headline = rowHeadline(row)
   const sub = note ? row.category : row.kind === 'income' ? 'Income' : ''
-  const amount = signedPeso(rowSignedAmount(row))
+  const signed = rowSignedAmount(row)
+  const amount = whole ? signedWholePeso(signed) : signedPeso(signed)
   return (
     <Pressable
       accessibilityRole="button"

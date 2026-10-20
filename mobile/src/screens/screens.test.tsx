@@ -186,6 +186,8 @@ describe('screen components', () => {
       )
     })
     const text = collect(renderer!.toJSON())
+    expect(text).toContain('This month')
+    expect(text.toLowerCase()).not.toContain('kinsena')
     expect(text).toContain(OLDER_ENTRIES_LINE)
     expect(text).toContain('Groceries')
     expect(renderer!.root.findByProps({ accessibilityLabel: 'Edit Groceries' })).toBeTruthy()
@@ -233,11 +235,58 @@ describe('screen components', () => {
       )
     })
     const text = collect(renderer.toJSON())
+    expect(text).toContain('2/20')
     expect(text).toContain('₱3,500 left this month · 12 days left')
     expect(text).toContain('Your budget is now monthly: ₱1,800')
     expect(text.toLowerCase()).not.toContain('payday')
     press(renderer, 'Edit')
     expect(onEdit).toHaveBeenCalledOnce()
+    const withMoney = {
+      ...homeSnapshot({ budget: 12000, spent: 8500 }),
+      daysLogged: 3,
+      topCategory: { name: 'Groceries', amount: 3545.99, icon: 'cart-outline' as const },
+      recent: [{
+        id: '1',
+        kind: 'expense' as const,
+        date: '2026-10-20',
+        createdAt: '2026-10-20T00:00:00.000Z',
+        amount: 1240.5,
+        title: 'Groceries',
+        category: 'Groceries',
+        description: 'Puregold weekly',
+        icon: 'cart-outline' as const,
+        amountLabel: '₱1,240.50',
+        dateLabel: 'Oct 20',
+        detail: 'Need',
+      }],
+    }
+    let pesos!: ReturnType<typeof create>
+    act(() => {
+      pesos = create(
+        <ThemeProvider>
+          <HomeScreen
+            snapshot={withMoney}
+            pill={localPill}
+            greeting="Magandang umaga"
+            onOpenSettings={() => undefined}
+            onOpenEntry={() => undefined}
+            onEditBudget={() => undefined}
+            onUseSuggestedBudget={() => undefined}
+            onSeeAll={() => undefined}
+            onAdd={() => undefined}
+            onAddStarter={() => undefined}
+            onCustomGoal={() => undefined}
+          />
+        </ThemeProvider>,
+      )
+    })
+    const pesoText = collect(pesos.toJSON())
+    expect(pesoText).toContain('3/20')
+    expect(pesoText).toContain('Top · ₱3,546')
+    expect(pesoText).toContain('−₱1,241')
+    expect(pesoText).not.toContain('₱3,545.99')
+    expect(pesoText).not.toContain('₱1,240.50')
+    expect(pesoText.toLowerCase()).not.toContain('kinsena')
     let over!: ReturnType<typeof create>
     act(() => {
       over = create(
@@ -296,20 +345,22 @@ describe('screen components', () => {
 
   it('shows the save toast and undo in the same turn', () => {
     const onUndo = vi.fn()
+    const message = 'Saved · ₱10,760 left this month'
     const started = performance.now()
     let renderer!: ReturnType<typeof create>
     act(() => {
       renderer = create(
         <ThemeProvider>
-          <SaveToast message="Saved · ₱3,250 left this month" onUndo={onUndo} />
+          <SaveToast message={message} onUndo={onUndo} />
         </ThemeProvider>,
       )
     })
     expect(performance.now() - started).toBeLessThan(300)
     const toastText = collect(renderer.toJSON())
-    expect(toastText).toContain('₱3,250')
+    expect(toastText).toContain('₱10,760')
     expect(toastText).toContain('left this month')
     expect(toastText).not.toContain('payday')
+    expect(renderer.root.findByProps({ numberOfLines: 2 })).toBeTruthy()
     expect(renderer.root.findByProps({ testID: 'save-check' })).toBeTruthy()
     press(renderer, 'Undo')
     expect(onUndo).toHaveBeenCalledOnce()

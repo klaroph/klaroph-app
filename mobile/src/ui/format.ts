@@ -50,6 +50,13 @@ export function formatPesoShort(amount: number): string {
   return `${negative ? '-' : ''}₱${grouped}`
 }
 
+/** Same leading plus or minus as signedPeso, in whole pesos. */
+export function signedWholePeso(amount: number): string {
+  if (amount > 0) return `+${formatWholePeso(amount)}`
+  if (amount < 0) return `−${formatWholePeso(Math.abs(amount))}`
+  return formatWholePeso(0)
+}
+
 /** Leading plus, or a minus, so a day total reads the same way as a row. */
 export function signedPeso(amount: number): string {
   if (amount > 0) return `+${formatPeso(amount)}`

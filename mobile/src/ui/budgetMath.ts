@@ -38,6 +38,13 @@ export function calendarMonth(isoDate: string): { month: string; start: string; 
   }
 }
 
+/** Days from the 1st through today in that Manila month, including today. */
+export function elapsedDaysInMonth(isoDate: string): number {
+  const day = Number(isoDate.slice(8, 10))
+  if (!Number.isFinite(day) || day < 1) return 0
+  return day
+}
+
 /** Days from today through the last day of that Manila month, including today. */
 export function daysLeftInMonth(isoDate: string): number {
   const last = Number(calendarMonth(isoDate).end.slice(8, 10))

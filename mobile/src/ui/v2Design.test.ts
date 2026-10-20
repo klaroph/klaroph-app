@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { openTestRepository } from '../db/testDb'
 import { commitEntry } from './actions'
 import { orderCategoryChips, repeatChips } from './chips'
-import { groupHistoryByDay, rowHeadline } from './historyGroups'
+import { filterHistoryRows, groupHistoryByDay, rowHeadline } from './historyGroups'
 import { homeInsight } from './insight'
 import type { HistoryRow } from './ledger'
-import { daysLeftInMonth, monthBudgetLine } from './budgetMath'
+import { daysLeftInMonth, elapsedDaysInMonth, monthBudgetLine } from './budgetMath'
 import { launchRevealPlan, SAVE_CHECK_DP, SPLASH_REVEAL_MS } from './launchReveal'
 import { daysToPaydayAt, daysToPaydayOn, paydayCardTitle } from './payday'
 import { emptyDraft } from './quickAdd'
@@ -167,6 +167,9 @@ describe('days to payday', () => {
 
 describe('month budget line', () => {
   it('counts days left in the Manila month, including leap February, and the over state', () => {
+    expect(elapsedDaysInMonth('2026-10-01')).toBe(1)
+    expect(elapsedDaysInMonth('2026-10-20')).toBe(20)
+    expect(elapsedDaysInMonth('2024-02-29')).toBe(29)
     expect(daysLeftInMonth('2026-10-20')).toBe(12)
     expect(daysLeftInMonth('2026-10-15')).toBe(17)
     expect(daysLeftInMonth('2026-10-31')).toBe(1)
@@ -194,14 +197,42 @@ describe('month budget line', () => {
 })
 
 describe('home insight', () => {
-  it('compares food with the previous kinsena when both periods have some', () => {
+  it('compares food with last month and otherwise talks about this month', () => {
     expect(homeInsight({
       foodSpent: 82,
       previousFoodSpent: 100,
       topCategory: 'Groceries',
       daysLogged: 4,
       hasActivity: true,
-    })).toBe('18% less on food than last kinsena')
+    })).toBe('18% less on food than last month')
+    expect(homeInsight({
+      foodSpent: 150,
+      previousFoodSpent: 100,
+      topCategory: 'Groceries',
+      daysLogged: 4,
+      hasActivity: true,
+    })).toBe('50% more on food than last month')
+    expect(homeInsight({
+      foodSpent: 100,
+      previousFoodSpent: 100,
+      topCategory: 'Groceries',
+      daysLogged: 4,
+      hasActivity: true,
+    })).toBe('Food matches last month')
+    expect(homeInsight({
+      foodSpent: 0,
+      previousFoodSpent: 0,
+      topCategory: 'Rent / Mortgage',
+      daysLogged: 2,
+      hasActivity: true,
+    })).toBe('Rent / Mortgage is your biggest spend this month')
+    expect(homeInsight({
+      foodSpent: 0,
+      previousFoodSpent: 0,
+      topCategory: null,
+      daysLogged: 1,
+      hasActivity: true,
+    })).toBe("You've logged 1 day this month")
     expect(homeInsight({
       foodSpent: 0,
       previousFoodSpent: 0,
@@ -209,5 +240,15 @@ describe('home insight', () => {
       daysLogged: 0,
       hasActivity: false,
     })).toBeNull()
+  })
+
+  it('keeps This month inside the Manila calendar month', () => {
+    const rows = [
+      row({ id: 'early', date: '2026-10-01', amount: 20, category: 'Groceries' }),
+      row({ id: 'today', date: '2026-10-20', amount: 13, category: 'Transportation' }),
+      row({ id: 'sept', date: '2026-09-30', amount: 40, category: 'Dining Out' }),
+    ]
+    const visible = filterHistoryRows(rows, 'month', '', { start: '2026-10-01', end: '2026-10-31' })
+    expect(visible.map((item) => item.id)).toEqual(['early', 'today'])
   })
 })

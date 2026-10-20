@@ -3,7 +3,7 @@ import { formatPrettyDate, formatWeekdayShort, signedPeso } from './format'
 import type { EntryKind } from './categories'
 import type { HistoryRow } from './ledger'
 
-export type HistoryFilter = 'kinsena' | 'expenses' | 'income' | 'window'
+export type HistoryFilter = 'month' | 'expenses' | 'income' | 'window'
 
 export type HistoryDay = {
   date: string
@@ -69,7 +69,7 @@ export function filterHistoryRows(
   rows: readonly HistoryRow[],
   filter: HistoryFilter,
   query: string,
-  period: { start: string; end: string } | null,
+  month: { start: string; end: string } | null,
 ): HistoryRow[] {
   const needle = query.trim().toLowerCase()
   return rows.filter((row) => {
@@ -80,8 +80,8 @@ export function filterHistoryRows(
       case 'income':
         if (row.kind !== 'income') return false
         break
-      case 'kinsena':
-        if (period && (row.date < period.start || row.date > period.end)) return false
+      case 'month':
+        if (month && (row.date < month.start || row.date > month.end)) return false
         break
       case 'window':
         break

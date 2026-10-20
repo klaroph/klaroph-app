@@ -127,8 +127,15 @@ describe('home month budget', () => {
     expect(view.ring).toBeCloseTo(700 / 3100)
     expect(view.overBudget).toBe(false)
     expect(view.daysLogged).toBe(3)
+    expect(view.foodSpent).toBe(700)
+    expect(view.previousFoodSpent).toBe(0)
     expect(view.topCategory).toMatchObject({ name: 'Groceries', amount: 500 })
     expect(monthBudgetLine((view.budget ?? 0) - view.spent, view.today)).toBe('₱2,400 left this month · 12 days left')
+    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 40, date: '2026-09-30' })
+    repo.createExpense({ userId: null, category: 'Dining Out', type: 'wants', amount: 60, date: '2026-09-01' })
+    const withLastMonth = loadLedger(repo, NOW)
+    expect(withLastMonth.foodSpent).toBe(700)
+    expect(withLastMonth.previousFoodSpent).toBe(100)
     const month = monthlyBudget('2026-10', [{ category: 'Groceries', amount: 1000 }, { category: 'Dining Out', amount: 1000 }], [
       { category: 'Groceries', amount: 310, month: '2026-10-01' },
     ])
