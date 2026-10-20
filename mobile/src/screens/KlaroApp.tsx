@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { AppRuntime } from '../app/runtime'
+import type { AppRuntime } from '../runtime/runtime'
 import { useTheme } from '../components/ThemeProvider'
 import { TabBar, type TabId } from '../components/TabBar'
 import { commitDeleteEntry, commitDeleteGoal, commitDeposit, commitEntry, commitGoal } from '../ui/actions'

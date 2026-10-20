@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { describe, expect, it, vi } from 'vitest'
-import { supabaseAuthStorageKey } from '../app/supabaseAuth'
+import { supabaseAuthStorageKey } from '../runtime/supabaseAuth'
 import { openTestRepository } from '../db/testDb'
 import type { KlaroDb } from '../db/repository'
 import { schema } from '../db/schema'
