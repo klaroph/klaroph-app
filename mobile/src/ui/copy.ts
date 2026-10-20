@@ -23,7 +23,7 @@ export function unsyncedSignOutLine(count: number): string {
 
 export const FIRST_RUN_PAGES = [
   {
-    title: 'Your payday budget, on this phone',
+    title: 'Your budget, on this phone',
     body: 'Log an expense in a few seconds. Klaro works offline, and an account is optional.',
     action: 'Continue',
   },
@@ -31,7 +31,7 @@ export const FIRST_RUN_PAGES = [
     title: 'Before you start',
     points: [
       'The yellow + adds an entry. A recent one saves in one more tap.',
-      'Home follows this payday period.',
+      'Home shows what is left this month.',
       UNINSTALL_WARNING,
     ],
     action: 'Start',

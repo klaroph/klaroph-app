@@ -32,7 +32,7 @@ export function BudgetSheet({
   }
 
   return (
-    <Sheet title="Pay period budget" onClose={onClose} testID="budget-sheet">
+    <Sheet title="Monthly budget" onClose={onClose} testID="budget-sheet">
       <View style={styles.body}>
         <Field
           label="Amount"

@@ -1,15 +1,9 @@
 import { roundMoney } from '../domain/money'
-import { daysInMonth, type PayPeriod } from '../domain/payPeriod'
-import { formatPeso } from './format'
-
-export function inclusiveDays(start: string, end: string): number {
-  const startMs = Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10)))
-  const endMs = Date.UTC(Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1, Number(end.slice(8, 10)))
-  return Math.round((endMs - startMs) / 86_400_000) + 1
-}
+import { daysInMonth } from '../domain/payPeriod'
+import { formatWholePeso } from './format'
 
 /**
- * Monthly category budget for the payday period's month.
+ * Monthly category budget for a Manila calendar month.
  * A month override replaces that category's plan. Categories with only an override still count.
  */
 export function monthlyBudget(
@@ -31,25 +25,44 @@ export function monthlyBudget(
   return { amount: roundMoney(total), hasRows: true }
 }
 
+/** Inclusive Manila calendar month for a YYYY-MM-DD date. */
+export function calendarMonth(isoDate: string): { month: string; start: string; end: string } {
+  const year = Number(isoDate.slice(0, 4))
+  const monthNumber = Number(isoDate.slice(5, 7))
+  const month = isoDate.slice(0, 7)
+  const last = daysInMonth(year, monthNumber)
+  return {
+    month,
+    start: `${month}-01`,
+    end: `${month}-${String(last).padStart(2, '0')}`,
+  }
+}
+
+/** Days from the 1st through today in that Manila month, including today. */
+export function elapsedDaysInMonth(isoDate: string): number {
+  const day = Number(isoDate.slice(8, 10))
+  if (!Number.isFinite(day) || day < 1) return 0
+  return day
+}
+
+/** Days from today through the last day of that Manila month, including today. */
+export function daysLeftInMonth(isoDate: string): number {
+  const last = Number(calendarMonth(isoDate).end.slice(8, 10))
+  const day = Number(isoDate.slice(8, 10))
+  return Math.max(last - day + 1, 0)
+}
+
 /**
- * Category budgets from the account win. Otherwise the ring uses one amount
- * stored for this pay period on the phone. That amount is already a period total.
+ * Category budgets from the account are already the calendar month.
+ * Otherwise the ring uses one monthly amount stored on the phone.
  */
 export function ringBudget(
   category: { amount: number; hasRows: boolean },
-  period: PayPeriod,
-  localPeriodAmount: number | null,
+  localMonthlyAmount: number | null,
 ): number | null {
-  if (category.hasRows) return prorateToPeriod(category.amount, period)
-  if (localPeriodAmount == null) return null
-  return roundMoney(localPeriodAmount)
-}
-
-/** The pay period's share of the monthly budget, by days in the period over days in that month. */
-export function prorateToPeriod(amount: number, period: PayPeriod): number {
-  const [year, month] = period.month.split('-').map(Number)
-  const length = daysInMonth(year, month)
-  return roundMoney((amount * inclusiveDays(period.start, period.end)) / length)
+  if (category.hasRows) return roundMoney(category.amount)
+  if (localMonthlyAmount == null) return null
+  return roundMoney(localMonthlyAmount)
 }
 
 export function ringProgress(spent: number, budget: number | null): { progress: number; over: boolean } {
@@ -64,8 +77,32 @@ export function budgetPercent(spent: number, budget: number | null): number | nu
   return Math.round((spent / budget) * 100)
 }
 
+/**
+ * Whole pesos of the month remainder.
+ * Money still left rounds to the nearest peso. An over amount rounds up, so 500.50 over is 501.
+ * The sign is negative only when the rounded over amount is at least one peso.
+ */
+export function displayMonthRemainder(left: number): number {
+  const cents = roundMoney(left)
+  if (cents < 0) return -Math.ceil(Math.abs(cents))
+  return Math.round(cents)
+}
+
+/** Whole pesos of the month remainder. Below zero uses the absolute value and "over". */
+export function monthBudgetLine(left: number, isoDate: string): string {
+  const whole = displayMonthRemainder(left)
+  const money = formatWholePeso(Math.abs(whole))
+  const days = daysLeftInMonth(isoDate)
+  const noun = days === 1 ? 'day' : 'days'
+  const side = `${days} ${noun} left`
+  if (whole < 0) return `${money} over this month · ${side}`
+  return `${money} left this month · ${side}`
+}
+
 export function budgetRingLabel(spent: number, budget: number | null, over: boolean): string {
-  if (budget == null) return `Spent ${formatPeso(spent)} this pay period. No budget yet.`
-  if (over) return `Spent ${formatPeso(spent)} of ${formatPeso(budget)} this pay period. Over budget.`
-  return `Spent ${formatPeso(spent)} of ${formatPeso(budget)} this pay period.`
+  const spentLabel = formatWholePeso(spent)
+  if (budget == null) return `Spent ${spentLabel} this month. No budget yet.`
+  const budgetLabel = formatWholePeso(budget)
+  if (over) return `Spent ${spentLabel} of ${budgetLabel} this month. Over budget.`
+  return `Spent ${spentLabel} of ${budgetLabel} this month.`
 }

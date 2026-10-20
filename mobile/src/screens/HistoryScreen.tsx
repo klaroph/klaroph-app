@@ -1,7 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View, type GestureResponderEvent } from 'react-native'
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
-import type { PayPeriod } from '../domain/payPeriod'
 import { ScreenHeader } from '../components/Header'
 import { useTheme } from '../components/ThemeProvider'
 import { Card, Chip, T } from '../components/ui'
@@ -13,7 +12,7 @@ import { font, space } from '../ui/theme'
 import { EntryRow, ignoreEntryPressAfterSwipe, resetEntryPressIgnore } from './HomeScreen'
 
 const FILTERS: readonly { id: HistoryFilter; label: string }[] = [
-  { id: 'kinsena', label: 'This kinsena' },
+  { id: 'month', label: 'This month' },
   { id: 'expenses', label: 'Expenses' },
   { id: 'income', label: 'Income' },
   { id: 'window', label: '90 days' },
@@ -25,7 +24,7 @@ export function HistoryScreen({
   emptyLabel,
   pill,
   today = '',
-  period = null,
+  month = null,
   revealFirst = false,
   onOpenSettings,
   onEdit,
@@ -37,7 +36,7 @@ export function HistoryScreen({
   emptyLabel: string
   pill?: SyncPill
   today?: string
-  period?: PayPeriod | null
+  month?: { start: string; end: string } | null
   revealFirst?: boolean
   onOpenSettings: () => void
   onEdit: (row: HistoryRow) => void
@@ -45,10 +44,10 @@ export function HistoryScreen({
   onLoadMore?: () => void
 }) {
   const { colors } = useTheme()
-  const [filter, setFilter] = useState<HistoryFilter>('kinsena')
+  const [filter, setFilter] = useState<HistoryFilter>('month')
   const [query, setQuery] = useState('')
   const [openKey, setOpenKey] = useState<string | null>(null)
-  const visible = filterHistoryRows(rows, filter, query, period)
+  const visible = filterHistoryRows(rows, filter, query, month)
   const days = groupHistoryByDay(visible, today)
   return (
     <FlatList
@@ -85,6 +84,7 @@ export function HistoryScreen({
                 key={item.id}
                 label={item.label}
                 tone="yellow"
+                dense
                 selected={filter === item.id}
                 onPress={() => setFilter(item.id)}
               />
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   filters: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   day: {
     gap: 6,

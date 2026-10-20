@@ -1,9 +1,9 @@
 import type { KlaroRepository } from '../db/repository'
 import { roundMoney } from '../domain/money'
-import type { PayPeriod } from '../domain/payPeriod'
 import { commitDeleteEntry } from './actions'
+import { displayMonthRemainder } from './budgetMath'
 import type { EntryKind } from './categories'
-import { formatPeso } from './format'
+import { formatWholePeso } from './format'
 
 export function moneyLeft(budget: number | null, spent: number): number | null {
   if (budget == null) return null
@@ -12,13 +12,15 @@ export function moneyLeft(budget: number | null, spent: number): number | null {
 
 export function saveToastMessage(left: number | null): string {
   if (left == null) return 'Saved'
-  return `Saved · ${formatPeso(left)} left until payday`
+  const whole = displayMonthRemainder(left)
+  if (whole < 0) return `Saved · ${formatWholePeso(Math.abs(whole))} over this month`
+  return `Saved · ${formatWholePeso(whole)} left this month`
 }
 
-function countsTowardSpent(kind: EntryKind, date: string, period: PayPeriod): boolean {
+function countsTowardSpent(kind: EntryKind, date: string, month: { start: string; end: string }): boolean {
   switch (kind) {
     case 'expense':
-      return date >= period.start && date <= period.end
+      return date >= month.start && date <= month.end
     case 'income':
       return false
     default: {
@@ -33,9 +35,9 @@ export function toastForSave(input: {
   budget: number | null
   spentBefore: number
   row: { kind: EntryKind; amount: number; date: string }
-  period: PayPeriod
+  month: { start: string; end: string }
 }): { message: string; left: number | null } {
-  const spent = countsTowardSpent(input.row.kind, input.row.date, input.period)
+  const spent = countsTowardSpent(input.row.kind, input.row.date, input.month)
     ? input.spentBefore + input.row.amount
     : input.spentBefore
   const left = moneyLeft(input.budget, roundMoney(spent))

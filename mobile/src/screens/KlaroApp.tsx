@@ -7,7 +7,7 @@ import { useTheme } from '../components/ThemeProvider'
 import { TabBar, type TabId } from '../components/TabBar'
 import { roundMoney } from '../domain/money'
 import { payPeriodAt } from '../domain/payPeriod'
-import { commitDeleteEntry, commitDeleteGoal, commitDeposit, commitEntry, commitGoal, commitPeriodBudget } from '../ui/actions'
+import { commitDeleteEntry, commitDeleteGoal, commitDeposit, commitEntry, commitGoal, commitMonthlyBudget } from '../ui/actions'
 import type { SignInResult } from '../ui/accountFlow'
 import { ISOLATED_ACCOUNT_NOTICE, SIGN_OUT_WARNING } from '../ui/copy'
 import { errorText } from '../ui/format'
@@ -28,6 +28,7 @@ import {
   type LedgerSnapshot,
 } from '../ui/ledger'
 import { manilaGreeting } from '../ui/payday'
+import { usePrefersReducedMotion } from '../ui/motion'
 import { newEntryDraft, type EntryDraft } from '../ui/quickAdd'
 import { moneyLeft, toastForSave, undoSavedEntry } from '../ui/saveToast'
 import { SUGGESTED_PERIOD_BUDGET, type StarterGoal } from '../ui/starters'
@@ -81,7 +82,12 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   const [offline, setOffline] = useState(false)
   const [notices, setNotices] = useState<string[]>([])
   const [engineMessage, setEngineMessage] = useState<string | null>(null)
-  const [home, setHome] = useState<LedgerSnapshot>(() => readHome(repo, prefs))
+  const [home, setHome] = useState<LedgerSnapshot>(() => {
+    prefs.migratePaydayBudget(payPeriodAt(new Date()).start)
+    return readHome(repo, prefs)
+  })
+  const [budgetNotice, setBudgetNotice] = useState<string | null>(() => prefs.monthlyBudgetNotice()?.message ?? null)
+  const reduceMotion = usePrefersReducedMotion()
   const [toast, setToast] = useState<SaveNotice | null>(null)
   const [quickRows, setQuickRows] = useState<HistoryRow[]>([])
   const [revealHistory, setRevealHistory] = useState(false)
@@ -118,6 +124,11 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
     setHome(readHome(repo, prefs))
     setRevision((value) => value + 1)
   }, [repo, prefs])
+
+  useEffect(() => {
+    if (!budgetNotice) return
+    prefs.acknowledgeMonthlyBudgetNotice()
+  }, [budgetNotice, prefs])
 
   const showHistoryPage = useCallback((before: HistoryCursor | null, append: boolean) => {
     const page = pageHistory(repo, new Date(), before, HISTORY_PAGE_SIZE)
@@ -345,7 +356,12 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
           setHome(readHome(repo, prefs))
           setToast({
             row,
-            message: toastForSave({ budget: before.budget, spentBefore: before.spent, row, period: before.period }).message,
+            message: toastForSave({
+              budget: before.budget,
+              spentBefore: before.spent,
+              row,
+              month: { start: before.monthStart, end: before.monthEnd },
+            }).message,
           })
         } else {
           replaceHome()
@@ -439,7 +455,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   }
 
   function useSuggestedBudget() {
-    commitPeriodBudget(prefs, home.period.start, String(SUGGESTED_PERIOD_BUDGET))
+    commitMonthlyBudget(prefs, String(SUGGESTED_PERIOD_BUDGET))
     replaceHome()
   }
 
@@ -520,6 +536,12 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             onOpenEntry={openEdit}
             onEditBudget={() => setOverlay({ type: 'budget' })}
             onUseSuggestedBudget={useSuggestedBudget}
+            budgetNotice={budgetNotice}
+            onEditBudgetNotice={() => {
+              prefs.acknowledgeMonthlyBudgetNotice()
+              setBudgetNotice(null)
+              setOverlay({ type: 'budget' })
+            }}
             onSeeAll={() => setTab('history')}
             onAdd={openAdd}
             onAddStarter={addStarter}
@@ -533,7 +555,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             emptyLabel={home.freeHistory ? 'No entries in the last 90 days.' : 'No entries yet.'}
             pill={pill}
             today={home.today}
-            period={home.period}
+            month={{ start: home.monthStart, end: home.monthEnd }}
             revealFirst={revealHistory}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
             onEdit={openEdit}
@@ -568,7 +590,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       />
       {toast ? (
         <View pointerEvents="box-none" style={styles.toastSlot}>
-          <SaveToast message={toast.message} onUndo={undoToast} />
+          <SaveToast message={toast.message} onUndo={undoToast} reduceMotion={reduceMotion} />
         </View>
       ) : null}
       {overlay ? (
@@ -578,7 +600,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
           cutoff={home.freeHistory ? home.cutoff : null}
           lastExpense={prefs.lastCategory('expense')}
           lastIncome={prefs.lastCategory('income')}
-          localBudget={formatStoredBudget(prefs.periodBudget(home.period.start))}
+          localBudget={formatStoredBudget(prefs.monthlyBudget())}
           recent={quickRows}
           moneyLeft={draftMoneyLeft(home, overlay.type === 'edit-entry' ? overlay.row : null)}
           status={pill}
@@ -601,7 +623,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
                   budget: home.budget,
                   spentBefore: home.spent,
                   row,
-                  period: home.period,
+                  month: { start: home.monthStart, end: home.monthEnd },
                 }).message,
               })
             }
@@ -609,7 +631,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             finishLocal()
           }}
           onSaveBudget={(amount) => {
-            commitPeriodBudget(prefs, home.period.start, amount)
+            commitMonthlyBudget(prefs, amount)
             replaceHome()
             setOverlay(null)
           }}
@@ -775,7 +797,7 @@ function OverlaySheet({
 
 function readHome(repo: AppRuntime['repo'], prefs: AppRuntime['prefs']): LedgerSnapshot {
   const now = new Date()
-  return loadLedger(repo, now, prefs.periodBudget(payPeriodAt(now).start))
+  return loadLedger(repo, now, prefs.monthlyBudget())
 }
 
 function formatStoredBudget(amount: number | null): string {
@@ -785,7 +807,7 @@ function formatStoredBudget(amount: number | null): string {
 function draftMoneyLeft(home: LedgerSnapshot, editing: HistoryRow | null): number | null {
   if (home.budget == null) return null
   let spent = home.spent
-  if (editing && editing.kind === 'expense' && editing.date >= home.period.start && editing.date <= home.period.end) {
+  if (editing && editing.kind === 'expense' && editing.date >= home.monthStart && editing.date <= home.monthEnd) {
     spent = roundMoney(spent - editing.amount)
   }
   return moneyLeft(home.budget, spent)
@@ -795,7 +817,7 @@ function seedV2Sample(repo: AppRuntime['repo'], prefs: AppRuntime['prefs']) {
   const now = new Date()
   const today = manilaToday(now)
   const period = payPeriodAt(now)
-  commitPeriodBudget(prefs, period.start, '12000')
+  commitMonthlyBudget(prefs, '12000')
   const userId = repo.sessionUserId()
   const on = (delta: number) => shiftIsoDate(today, delta)
   repo.createExpense({
@@ -804,7 +826,7 @@ function seedV2Sample(repo: AppRuntime['repo'], prefs: AppRuntime['prefs']) {
     type: 'needs',
     amount: 2305.49,
     date: shiftIsoDate(period.start, -1),
-    description: 'Last kinsena market',
+    description: 'Weekend market',
   })
   repo.createIncome({ userId, totalAmount: 18500, date: period.start, incomeSource: 'Salary' })
   repo.createExpense({ userId, category: 'Rent / Mortgage', type: 'needs', amount: 3000, date: on(-4), description: 'October rent' })

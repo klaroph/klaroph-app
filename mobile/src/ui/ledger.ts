@@ -3,12 +3,11 @@ import { parseMoney, roundMoney } from '../domain/money'
 import { payPeriodAt, type PayHalf, type PayPeriod } from '../domain/payPeriod'
 import { FREE_PLAN_MAX_GOALS, goalCapMessage } from '../domain/planLimits'
 import type { SyncRow, SyncedTable } from '../sync/model'
-import { monthlyBudget, ringBudget, ringProgress } from './budgetMath'
+import { calendarMonth, monthlyBudget, ringBudget, ringProgress } from './budgetMath'
 import { iconForCategory, type CategoryIconName, type EntryKind } from './categories'
 import { formatPeriodRange, formatPeso, formatPrettyDate } from './format'
 import { foodTotal, isFoodCategory } from './insight'
-import { previousPayPeriod } from './payday'
-import { historyCutoff, manilaToday, showsFreeHistory } from './historyWindow'
+import { historyCutoff, manilaToday, shiftIsoDate, showsFreeHistory } from './historyWindow'
 
 export const HISTORY_PAGE_SIZE = 40
 
@@ -55,6 +54,10 @@ export type LedgerSnapshot = {
   period: PayPeriod
   halfLabel: string
   periodRange: string
+  /** Manila calendar month, YYYY-MM. The ring uses this, not the pay period. */
+  month: string
+  monthStart: string
+  monthEnd: string
   spent: number
   incomeTotal: number
   budget: number | null
@@ -70,9 +73,9 @@ export type LedgerSnapshot = {
   capMessage: string | null
   expenseTotals: CategoryTotal[]
   dateCounts: DatedCount[]
-  /** Food (groceries and dining) inside this pay period. */
+  /** Food (groceries and dining) inside this Manila calendar month. */
   foodSpent: number
-  /** Food in the previous pay period, from the same local rows. */
+  /** Food in the previous calendar month, from the same local rows. */
   previousFoodSpent: number
 }
 
@@ -101,10 +104,6 @@ function money(row: SyncRow, key: string): number {
   const value = row.values[key]
   if (value == null || value === '') return 0
   return parseMoney(value)
-}
-
-function inPeriod(date: string, period: PayPeriod): boolean {
-  return date >= period.start && date <= period.end
 }
 
 function halfLabel(half: PayHalf): string {
@@ -254,13 +253,14 @@ export function pageHistory(
   }
 }
 
-export function loadLedger(repo: KlaroRepository, now: Date, localPeriodBudget: number | null = null): LedgerSnapshot {
+export function loadLedger(repo: KlaroRepository, now: Date, localMonthlyBudget: number | null = null): LedgerSnapshot {
   const { today, freeHistory, cutoff, minDate } = windowFor(repo, now)
   const period = payPeriodAt(now)
-  const stats = repo.periodStats(period.start, period.end, minDate)
+  const month = calendarMonth(today)
+  const monthStats = repo.periodStats(month.start, month.end, minDate)
   const olderLineVisible = freeHistory && cutoff != null && repo.hasVisibleBefore(cutoff)
   const budgetRows = monthlyBudget(
-    period.month,
+    month.month,
     deviceRows(repo, 'budget_plans').map((row) => ({ category: text(row, 'category'), amount: money(row, 'amount') })),
     deviceRows(repo, 'budget_overrides').map((row) => ({
       category: text(row, 'category'),
@@ -268,16 +268,16 @@ export function loadLedger(repo: KlaroRepository, now: Date, localPeriodBudget: 
       month: text(row, 'month'),
     })),
   )
-  const budget = ringBudget(budgetRows, period, localPeriodBudget)
-  const spent = roundMoney(stats.spent)
-  const incomeTotal = roundMoney(stats.income)
+  const budget = ringBudget(budgetRows, localMonthlyBudget)
+  const spent = roundMoney(monthStats.spent)
+  const incomeTotal = roundMoney(monthStats.income)
   const ring = ringProgress(spent, budget)
-  const expenseTotals = stats.categories.map((row) => ({ name: row.name, amount: roundMoney(row.amount) }))
-  const dateCounts = stats.dates.map((row) => ({ date: row.date, count: row.count }))
+  const expenseTotals = monthStats.categories.map((row) => ({ name: row.name, amount: roundMoney(row.amount) }))
+  const dateCounts = monthStats.dates.map((row) => ({ date: row.date, count: row.count }))
   const recent = pageHistory(repo, now, null, 5).rows
-  const previous = previousPayPeriod(period)
-  const previousStats = repo.periodStats(previous.start, previous.end, minDate)
-  const foodSpent = foodTotal(expenseTotals)
+  const previousMonth = calendarMonth(shiftIsoDate(month.start, -1))
+  const previousStats = repo.periodStats(previousMonth.start, previousMonth.end, minDate)
+  const foodSpent = foodTotal(monthStats.categories)
   const previousFoodSpent = foodTotal(previousStats.categories)
 
   const signedIn = repo.sessionUserId() != null
@@ -314,6 +314,9 @@ export function loadLedger(repo: KlaroRepository, now: Date, localPeriodBudget: 
     period,
     halfLabel: halfLabel(period.half),
     periodRange: formatPeriodRange(period.start, period.end),
+    month: month.month,
+    monthStart: month.start,
+    monthEnd: month.end,
     spent,
     incomeTotal,
     budget,
@@ -350,9 +353,12 @@ function bumpCategory(totals: CategoryTotal[], name: string, delta: number): Cat
   return next.filter((item) => item.amount > 0)
 }
 
+function inMonth(date: string, view: LedgerSnapshot): boolean {
+  return date >= view.monthStart && date <= view.monthEnd
+}
+
 function fold(view: LedgerSnapshot, row: HistoryRow, sign: 1 | -1): Pick<LedgerSnapshot, 'spent' | 'incomeTotal' | 'expenseTotals' | 'dateCounts' | 'foodSpent'> {
-  const foodDelta = row.kind === 'expense' && isFoodCategory(row.category) ? sign * row.amount : 0
-  if (!inPeriod(row.date, view.period)) {
+  if (!inMonth(row.date, view)) {
     return {
       spent: view.spent,
       incomeTotal: view.incomeTotal,
@@ -362,6 +368,7 @@ function fold(view: LedgerSnapshot, row: HistoryRow, sign: 1 | -1): Pick<LedgerS
     }
   }
   const dateCounts = bumpDate(view.dateCounts, row.date, sign)
+  const foodDelta = row.kind === 'expense' && isFoodCategory(row.category) ? sign * row.amount : 0
   const foodSpent = roundMoney(view.foodSpent + foodDelta)
   if (row.kind === 'expense') {
     return {

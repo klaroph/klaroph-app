@@ -292,12 +292,14 @@ export function Chip({
   onPress,
   tone = 'blue',
   icon,
+  dense = false,
 }: {
   label: string
   selected: boolean
   onPress: () => void
   tone?: 'blue' | 'yellow'
   icon?: ReactNode
+  dense?: boolean
 }) {
   const { colors } = useTheme()
   const selectedBg = tone === 'yellow' ? colors.yellow : colors.blue
@@ -310,11 +312,12 @@ export function Chip({
       onPress={onPress}
       style={[
         styles.chip,
+        dense ? styles.chipDense : null,
         { backgroundColor: selected ? selectedBg : colors.card, borderColor: selected ? selectedBg : colors.border },
       ]}
     >
       {icon}
-      <T size={14} weight="semibold" color={selected ? selectedFg : colors.text}>{label}</T>
+      <T size={dense ? 13 : 14} weight="semibold" color={selected ? selectedFg : colors.text}>{label}</T>
     </Pressable>
   )
 }
@@ -390,6 +393,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
+  },
+  chipDense: {
+    paddingHorizontal: 8,
   },
   fit: {
     alignSelf: 'stretch',
