@@ -1,4 +1,4 @@
-import { DEFAULT_EXPENSE_CATEGORY, DEFAULT_INCOME_SOURCE, type EntryKind } from './categories'
+import { chipOptions, DEFAULT_EXPENSE_CATEGORY, DEFAULT_INCOME_SOURCE, type EntryKind } from './categories'
 
 export type EntryDraft = {
   kind: EntryKind
@@ -9,14 +9,25 @@ export type EntryDraft = {
   description: string
 }
 
-export function emptyDraft(today: string, kind: EntryKind = 'expense'): EntryDraft {
+export function categoryForNewEntry(kind: EntryKind, lastCategory: string | null): string {
+  const fallback = kind === 'expense' ? DEFAULT_EXPENSE_CATEGORY : DEFAULT_INCOME_SOURCE
+  if (lastCategory == null || lastCategory.trim() === '') return fallback
+  return chipOptions(kind, lastCategory).includes(lastCategory) ? lastCategory : fallback
+}
+
+/** Groceries (or Salary) until a category has been saved. After that, the last one used for this kind. */
+export function newEntryDraft(today: string, kind: EntryKind, lastCategory: string | null): EntryDraft {
   return {
     kind,
     amount: '',
-    category: kind === 'expense' ? DEFAULT_EXPENSE_CATEGORY : DEFAULT_INCOME_SOURCE,
+    category: categoryForNewEntry(kind, lastCategory),
     date: today,
     description: '',
   }
+}
+
+export function emptyDraft(today: string, kind: EntryKind = 'expense'): EntryDraft {
+  return newEntryDraft(today, kind, null)
 }
 
 export function sanitizeAmountInput(raw: string): string {

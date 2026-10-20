@@ -456,6 +456,46 @@ export class KlaroRepository implements LocalStore {
     return Number(row?.n ?? 0)
   }
 
+  /**
+   * Dirty rows for the signed-in user, including tombstones and rows still
+   * waiting for a user id. Zero when nobody is signed in.
+   */
+  countUnsyncedRows(): number {
+    const userId = this.sessionUserId()
+    if (!userId) return 0
+    let total = 0
+    for (const table of SYNCED_TABLES) total += this.countDirty(table, userId)
+    return total
+  }
+
+  /** Removes those dirty rows from this phone. Does not push or change sync rules. */
+  discardUnsyncedRows(): number {
+    const userId = this.sessionUserId()
+    if (!userId) return 0
+    const removed = this.countUnsyncedRows()
+    if (removed === 0) return 0
+    this.withTx((tx) => {
+      for (const table of SYNCED_TABLES) {
+        tx.run(sql`
+          delete from ${sql.identifier(table)}
+          where dirty = 1
+            and (user_id = ${userId} or user_id is null)
+        `)
+      }
+    })
+    return removed
+  }
+
+  private countDirty(table: SyncedTable, userId: string): number {
+    const row = this.db.get<{ n: number }>(sql`
+      select count(*) as n
+      from ${sql.identifier(table)}
+      where dirty = 1
+        and (user_id = ${userId} or user_id is null)
+    `)
+    return Number(row?.n ?? 0)
+  }
+
   private countVisible(table: SyncedTable, userId: string): number {
     const row = this.db.get<{ n: number }>(sql`
       select count(*) as n

@@ -12,6 +12,18 @@ export const ISOLATED_ACCOUNT_NOTICE = "Signed in to a different account. The pr
 /** Same sentence `createGoal` throws when the device is already at the plan cap. */
 export const LOCAL_GOAL_CAP_MESSAGE = 'Goal count is already at the plan max_goals.'
 
+export const FUTURE_DATE_MESSAGE = 'Dates stop at today.'
+
+/** Shown in the pay-period budget sheet. The amount is not a synced budget row. */
+export const PERIOD_BUDGET_LINE = "This amount stays on this phone and doesn't sync."
+
+export const DELETE_UNSYNCED_LABEL = 'Delete unsynced entries'
+
+export function unsyncedSignOutLine(count: number): string {
+  if (count === 1) return '1 entry has not synced.'
+  return `${count} entries have not synced.`
+}
+
 export const FIRST_RUN_PAGES = [
   {
     title: 'Your payday budget, on this phone',

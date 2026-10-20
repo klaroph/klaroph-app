@@ -55,3 +55,11 @@ export function entryReadOnly(date: string, free: boolean, cutoff: string | null
   if (!free || cutoff == null) return false
   return isOlderThanFreeWindow(date, cutoff)
 }
+
+/** Entry dates cannot move past today, or before the Free cutoff when one applies. */
+export function canShiftEntryDate(date: string, delta: number, today: string, cutoff: string | null): boolean {
+  const next = shiftIsoDate(date, delta)
+  if (next > today) return false
+  if (cutoff != null && next < cutoff) return false
+  return true
+}

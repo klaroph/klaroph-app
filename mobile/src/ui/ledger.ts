@@ -2,8 +2,8 @@ import type { KlaroRepository } from '../db/repository'
 import { parseMoney, roundMoney } from '../domain/money'
 import { payPeriodAt, type PayHalf, type PayPeriod } from '../domain/payPeriod'
 import { FREE_PLAN_MAX_GOALS } from '../domain/planLimits'
-import { SYNCED_TABLES, type SyncRow, type SyncedTable } from '../sync/model'
-import { monthlyBudget, prorateToPeriod, ringProgress } from './budgetMath'
+import type { SyncRow, SyncedTable } from '../sync/model'
+import { monthlyBudget, ringBudget, ringProgress } from './budgetMath'
 import { iconForCategory, type CategoryIconName, type EntryKind } from './categories'
 import { LOCAL_GOAL_CAP_MESSAGE } from './copy'
 import { formatPeriodRange, formatPeso, formatPrettyDate } from './format'
@@ -141,16 +141,10 @@ function featuredGoal(goals: readonly GoalCard[]): GoalCard | null {
 }
 
 export function hasUnsyncedChanges(repo: KlaroRepository): boolean {
-  const userId = repo.sessionUserId()
-  if (!userId) return false
-  for (const table of SYNCED_TABLES) {
-    if (repo.listDirty(table, userId).length > 0) return true
-    if (repo.listLive(table, null).some((row) => row.dirty)) return true
-  }
-  return false
+  return repo.countUnsyncedRows() > 0
 }
 
-export function loadLedger(repo: KlaroRepository, now: Date): LedgerSnapshot {
+export function loadLedger(repo: KlaroRepository, now: Date, localPeriodBudget: number | null = null): LedgerSnapshot {
   const today = manilaToday(now)
   const signedIn = repo.sessionUserId() != null
   const freeHistory = showsFreeHistory(repo.knownPlan(), signedIn)
@@ -176,7 +170,7 @@ export function loadLedger(repo: KlaroRepository, now: Date): LedgerSnapshot {
     month: text(row, 'month'),
   }))
   const monthly = monthlyBudget(period.month, plans, overrides)
-  const budget = monthly.hasRows ? prorateToPeriod(monthly.amount, period) : null
+  const budget = ringBudget(monthly, period, localPeriodBudget)
   const ring = ringProgress(spent, budget)
 
   const dates = new Set<string>()

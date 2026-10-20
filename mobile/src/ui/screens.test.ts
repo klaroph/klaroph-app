@@ -10,14 +10,14 @@ import { GOAL_GRACE_BLOCK_MESSAGE } from '../domain/planLimits'
 import { MemoryTokenStore } from '../sync/tokenStore'
 import { emptyCounts } from '../sync/model'
 import { signInAndAdopt, signOutKeepingIntro } from './accountFlow'
-import { commitDeleteEntry, commitDeposit, commitEntry, commitGoal } from './actions'
+import { commitDeleteEntry, commitDeposit, commitEntry, commitGoal, commitPeriodBudget } from './actions'
 import { monthlyBudget, prorateToPeriod, ringProgress } from './budgetMath'
-import { FIRST_RUN_PAGES, OLDER_ENTRIES_LINE, UNINSTALL_WARNING } from './copy'
-import { historyCutoff, manilaToday } from './historyWindow'
+import { FIRST_RUN_PAGES, FUTURE_DATE_MESSAGE, OLDER_ENTRIES_LINE, PERIOD_BUDGET_LINE, UNINSTALL_WARNING, unsyncedSignOutLine } from './copy'
+import { canShiftEntryDate, historyCutoff, manilaToday } from './historyWindow'
 import { hasUnsyncedChanges, loadLedger } from './ledger'
 import { ScreenPrefs } from './prefs'
 import { readPublicSupabaseConfig } from './publicConfig'
-import { canSaveQuickAdd, emptyDraft, parseQuickAmount, sanitizeAmountInput } from './quickAdd'
+import { canSaveQuickAdd, categoryForNewEntry, emptyDraft, newEntryDraft, parseQuickAmount, sanitizeAmountInput } from './quickAdd'
 import { canAddGoal, visibleGoalBanner } from './goalCopy'
 import { reportLooksOffline, syncPill } from './syncStatus'
 import { lightColors, radius } from './theme'
@@ -101,6 +101,19 @@ describe('home payday card', () => {
     expect(prorateToPeriod(month.amount, view.period)).toBe(676.13)
     expect(ringProgress(2000, 1600)).toEqual({ progress: 1, over: true })
   })
+
+  it('uses a phone-only pay period amount until category budgets exist', () => {
+    const { sqlite, repo } = openTestRepository({ now: () => NOW })
+    const prefs = prefsFor(sqlite)
+    const start = '2026-10-15'
+    expect(loadLedger(repo, NOW, prefs.periodBudget(start)).budget).toBeNull()
+    commitPeriodBudget(prefs, start, '900')
+    expect(prefs.periodBudget(start)).toBe(900)
+    expect(loadLedger(repo, NOW, prefs.periodBudget(start)).budget).toBe(900)
+    expect(PERIOD_BUDGET_LINE).toBe("This amount stays on this phone and doesn't sync.")
+    repo.createBudgetPlan({ userId: null, category: 'Groceries', amount: 3100 })
+    expect(loadLedger(repo, NOW, prefs.periodBudget(start)).budget).toBe(1600)
+  })
 })
 
 describe('goals on screen', () => {
@@ -136,7 +149,14 @@ describe('quick add and sync pill', () => {
     expect(parseQuickAmount('0')).toBeNull()
     const draft = emptyDraft('2026-10-20')
     expect(draft.category).toBe('Groceries')
+    expect(newEntryDraft('2026-10-20', 'expense', null).category).toBe('Groceries')
+    expect(newEntryDraft('2026-10-20', 'income', null).category).toBe('Salary')
+    expect(categoryForNewEntry('expense', 'Dining Out')).toBe('Dining Out')
+    expect(categoryForNewEntry('income', 'Freelance / Online Work')).toBe('Freelance / Online Work')
     expect(canSaveQuickAdd({ ...draft, amount: '50' })).toBe(true)
+    expect(canShiftEntryDate('2026-10-20', 1, '2026-10-20', '2026-07-22')).toBe(false)
+    expect(canShiftEntryDate('2026-10-20', -1, '2026-10-20', '2026-07-22')).toBe(true)
+    expect(canShiftEntryDate('2026-07-22', -1, '2026-10-20', '2026-07-22')).toBe(false)
     expect(syncPill({ signedIn: false, syncEnabled: true, syncing: false, offline: false, pending: true })).toEqual({ tone: 'local', label: 'On this phone' })
     expect(syncPill({ signedIn: true, syncEnabled: false, syncing: false, offline: false, pending: true })).toEqual({ tone: 'off', label: 'Sync off' })
     expect(syncPill({ signedIn: true, syncEnabled: true, syncing: false, offline: true, pending: true })).toEqual({ tone: 'offline', label: 'Offline' })
@@ -150,6 +170,34 @@ describe('quick add and sync pill', () => {
     expect(hasUnsyncedChanges(repo)).toBe(false)
     repo.setSessionUserId(USER)
     expect(hasUnsyncedChanges(repo)).toBe(true)
+    expect(repo.countUnsyncedRows()).toBe(1)
+    expect(unsyncedSignOutLine(repo.countUnsyncedRows())).toBe('1 entry has not synced.')
+  })
+
+  it('rejects a future date and still rejects a Free date older than 90 days', () => {
+    const { repo } = openTestRepository({ now: () => NOW })
+    expect(() => commitEntry(repo, { ...emptyDraft('2026-10-20'), amount: '10', date: '2026-10-21' }, NOW)).toThrow(FUTURE_DATE_MESSAGE)
+    expect(() => commitEntry(repo, { ...emptyDraft('2026-10-20'), amount: '10', date: '2026-07-21' }, NOW)).toThrow(OLDER_ENTRIES_LINE)
+    commitEntry(repo, { ...emptyDraft('2026-10-20'), amount: '10', date: '2026-10-20' }, NOW)
+    expect(repo.listLive('expenses', null)).toHaveLength(1)
+  })
+
+  it('blocks sign-out on the real unsynced count and can drop only those rows', () => {
+    const { sqlite, repo } = openTestRepository({ now: () => NOW })
+    repo.setSessionUserId(USER)
+    const pending = repo.createExpense({ userId: USER, category: 'Groceries', type: 'needs', amount: 10, date: '2026-10-20' })
+    const saved = repo.createExpense({ userId: USER, category: 'Dining Out', type: 'wants', amount: 20, date: '2026-10-20' })
+    sqlite.prepare('update expenses set dirty = 0 where id = ?').run(saved.id)
+    const removed = repo.createExpense({ userId: USER, category: 'Shopping', type: 'wants', amount: 5, date: '2026-10-19' })
+    repo.softDeleteExpense(removed.id)
+    expect(repo.countUnsyncedRows()).toBe(2)
+    expect(unsyncedSignOutLine(2)).toBe('2 entries have not synced.')
+    expect(repo.discardUnsyncedRows()).toBe(2)
+    expect(repo.getRow('expenses', pending.id)).toBeNull()
+    expect(repo.getRow('expenses', removed.id)).toBeNull()
+    expect(repo.getRow('expenses', saved.id)?.dirty).toBe(false)
+    expect(repo.countUnsyncedRows()).toBe(0)
+    expect(unsyncedSignOutLine(1)).toBe('1 entry has not synced.')
   })
 })
 
@@ -218,6 +266,19 @@ describe('account flow for the settings sheet', () => {
     })
     expect(repo.listLive('expenses', null)).toHaveLength(0)
     expect(prefs.firstRunDone()).toBe(true)
+    expect(prefs.syncEnabled()).toBe(true)
+    prefs.setLastCategory('expense', 'Dining Out')
+    commitPeriodBudget(prefs, '2026-10-15', '900')
+    const kept = prefs.exportKeptPrefs()
+    await signOutKeepingIntro({
+      local: repo,
+      tokens: new MemoryTokenStore(),
+      restoreIntro: true,
+      markIntroDone: () => prefs.setFirstRunDone(true),
+    })
+    prefs.restoreKeptPrefs(kept)
+    expect(prefs.lastCategory('expense')).toBe('Dining Out')
+    expect(prefs.periodBudget('2026-10-15')).toBe(900)
     expect(prefs.syncEnabled()).toBe(true)
   })
 })

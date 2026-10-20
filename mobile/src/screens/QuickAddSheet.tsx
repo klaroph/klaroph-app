@@ -3,27 +3,26 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { Sheet } from '../components/Sheet'
 import { useTheme } from '../components/ThemeProvider'
 import { Chip, PrimaryButton, T } from '../components/ui'
-import {
-  chipOptions,
-  DEFAULT_EXPENSE_CATEGORY,
-  DEFAULT_INCOME_SOURCE,
-  type EntryKind,
-} from '../ui/categories'
+import { chipOptions, type EntryKind } from '../ui/categories'
 import { errorText, formatPrettyDate } from '../ui/format'
-import { shiftIsoDate } from '../ui/historyWindow'
-import { canSaveQuickAdd, sanitizeAmountInput, type EntryDraft } from '../ui/quickAdd'
+import { canShiftEntryDate, shiftIsoDate } from '../ui/historyWindow'
+import { canSaveQuickAdd, categoryForNewEntry, sanitizeAmountInput, type EntryDraft } from '../ui/quickAdd'
 import { font } from '../ui/theme'
 
 export function QuickAddSheet({
   initial,
   today,
   cutoff,
+  lastExpense,
+  lastIncome,
   onClose,
   onSave,
 }: {
   initial: EntryDraft
   today: string
   cutoff: string | null
+  lastExpense: string | null
+  lastIncome: string | null
   onClose: () => void
   onSave: (draft: EntryDraft) => void
 }) {
@@ -34,15 +33,15 @@ export function QuickAddSheet({
   const [saving, setSaving] = useState(false)
   const editing = draft.id != null
   const chips = chipOptions(draft.kind, draft.category)
-  const atMin = cutoff != null && draft.date <= cutoff
+  const atMin = !canShiftEntryDate(draft.date, -1, today, cutoff)
+  const atMax = !canShiftEntryDate(draft.date, 1, today, cutoff)
 
   function chooseKind(kind: EntryKind) {
+    const last = kind === 'expense' ? lastExpense : lastIncome
     setDraft((current) => ({
       ...current,
       kind,
-      category: chipOptions(kind, '').includes(current.category)
-        ? current.category
-        : kind === 'expense' ? DEFAULT_EXPENSE_CATEGORY : DEFAULT_INCOME_SOURCE,
+      category: categoryForNewEntry(kind, last),
     }))
   }
 
@@ -111,8 +110,10 @@ export function QuickAddSheet({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Next day"
+              accessibilityState={{ disabled: atMax }}
+              disabled={atMax}
               onPress={() => setDraft((current) => ({ ...current, date: shiftIsoDate(current.date, 1) }))}
-              style={[styles.step, { borderColor: colors.border }]}
+              style={[styles.step, { opacity: atMax ? 0.35 : 1, borderColor: colors.border }]}
             >
               <T size={20} weight="bold">+</T>
             </Pressable>

@@ -10,12 +10,12 @@ Light mode is the primary palette: blue `#0038A8`, yellow `#FCD116`, off-white c
 
 - First run is two screens. Then Home, History, and Goals, with a yellow + in the middle of the tab bar.
 - Home shows this payday period, a budget ring, an on-this-phone / synced pill, days logged, top category, goal progress, and recent entries.
-- Quick add opens from the +. Amount, category, save. The date starts as today in Asia/Manila. On Free, the date control stops 90 days back.
+- Quick add opens from the +. Amount, category, save. The date starts as today in Asia/Manila and cannot move past today. On Free, it also stops 90 days back. The category starts as Groceries (Salary for income) until one has been saved; the next add uses the last category for that kind.
 - History lists expenses and income with edit and delete. Free shows the last 90 days and the line "Entries older than 90 days are saved. Upgrade to Pro to see them." Older rows stay stored and cannot be edited or deleted on Free.
 - Goals show progress as the sum of live allocations, or `saved_amount` when a goal has none. Deposit writes an allocation. Limit and past-due grace copy comes from the sync engine.
-- Settings sits behind the avatar: sync switch, email sign-in, and the uninstall warning. Sign-out still clears local rows. The intro flag is written back so those two screens do not replay.
+- Settings sits behind the avatar: sync switch, email sign-in, and the uninstall warning. Sign-out clears local financial rows. The intro flag, last categories, and phone-only pay-period amounts are written back. If any rows have not synced, sign-out is blocked and the screen shows the count. The way through is the red "Delete unsynced entries" button, after a confirmation.
 
-The budget ring uses the payday helper. It takes the monthly category budget (each plan, replaced by that month's override) and prorates it by the period's share of days in the month. There is no budget editor in this version, so the ring uses budgets already on the phone.
+The budget ring uses the payday helper. When category budgets are already on the phone, it prorates that monthly total by the period's share of days in the month. Otherwise it uses one amount for the current pay period, stored only on the phone. Tap the ring to set it. That amount is not pushed.
 
 ## Run locally
 
@@ -26,6 +26,13 @@ cd mobile
 npm install
 npm test
 npx expo start
+```
+
+Phone-width web, including the local SQLite worker. The dev server sends `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` so `SharedArrayBuffer` is available. Open the app at a 390×844 viewport.
+
+```bash
+cd mobile
+npx expo start --web
 ```
 
 `npm test` runs the sync, repository, payday, and screen tests. It does not need a device or a Supabase project.
@@ -99,4 +106,4 @@ Signed-in budget creates, replacements, and override saves follow the web routes
 
 ## Not in this version
 
-Pro checkout, reports, exports, a budget editor, and Google or magic-link sign-in. Payday periods (`src/domain/payPeriod.ts`) use Asia/Manila and match the payday email window. Period A is the previous month's last day through the 14th. Period B is the 15th through the day before the month's last day. The last day of a month starts the next month's period A.
+Pro checkout, reports, exports, category budget editing, and Google or magic-link sign-in. The phone can set one pay-period amount locally. It does not edit per-category budgets. Payday periods (`src/domain/payPeriod.ts`) use Asia/Manila and match the payday email window. Period A is the previous month's last day through the 14th. Period B is the 15th through the day before the month's last day. The last day of a month starts the next month's period A.

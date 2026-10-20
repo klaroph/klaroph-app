@@ -115,6 +115,34 @@ export function PrimaryButton({
   )
 }
 
+export function DangerButton({
+  label,
+  onPress,
+  accessibilityLabel,
+  testID,
+}: {
+  label: string
+  onPress: () => void
+  accessibilityLabel?: string
+  testID?: string
+}) {
+  const { colors } = useTheme()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      testID={testID}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.button,
+        { backgroundColor: colors.danger, opacity: pressed ? 0.88 : 1 },
+      ]}
+    >
+      <T size={16} weight="bold" color={colors.background} center>{label}</T>
+    </Pressable>
+  )
+}
+
 export function YellowButton({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
   const { colors } = useTheme()
   return (

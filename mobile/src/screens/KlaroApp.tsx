@@ -4,14 +4,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { AppRuntime } from '../runtime/runtime'
 import { useTheme } from '../components/ThemeProvider'
 import { TabBar, type TabId } from '../components/TabBar'
-import { commitDeleteEntry, commitDeleteGoal, commitDeposit, commitEntry, commitGoal } from '../ui/actions'
+import { payPeriodAt } from '../domain/payPeriod'
+import { commitDeleteEntry, commitDeleteGoal, commitDeposit, commitEntry, commitGoal, commitPeriodBudget } from '../ui/actions'
 import type { SignInResult } from '../ui/accountFlow'
 import { ISOLATED_ACCOUNT_NOTICE, SIGN_OUT_WARNING } from '../ui/copy'
 import { errorText } from '../ui/format'
 import { canAddGoal, engineGoalMessage, visibleGoalBanner } from '../ui/goalCopy'
 import { hasUnsyncedChanges, loadLedger, type GoalCard, type HistoryRow } from '../ui/ledger'
-import { emptyDraft, type EntryDraft } from '../ui/quickAdd'
+import { newEntryDraft, type EntryDraft } from '../ui/quickAdd'
 import { reportLooksOffline, syncNotices, syncPill, uniqueLines } from '../ui/syncStatus'
+import { BudgetSheet } from './BudgetSheet'
 import { FirstRun } from './FirstRun'
 import { DepositSheet, GoalSheet } from './GoalSheets'
 import { GoalsScreen } from './GoalsScreen'
@@ -24,6 +26,7 @@ type Overlay =
   | { type: 'settings' }
   | { type: 'quick-add' }
   | { type: 'edit-entry'; row: HistoryRow }
+  | { type: 'budget' }
   | { type: 'add-goal' }
   | { type: 'edit-goal'; goal: GoalCard }
   | { type: 'deposit'; goal: GoalCard }
@@ -52,8 +55,12 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   const [engineMessage, setEngineMessage] = useState<string | null>(null)
   const refresh = () => setRevision((value) => value + 1)
   const now = useMemo(() => new Date(), [revision])
-  const snapshot = useMemo(() => loadLedger(repo, now), [repo, now])
+  const snapshot = useMemo(
+    () => loadLedger(repo, now, prefs.periodBudget(payPeriodStart(now))),
+    [repo, now, prefs, revision],
+  )
   const pending = useMemo(() => hasUnsyncedChanges(repo), [repo, revision])
+  const unsyncedCount = useMemo(() => repo.countUnsyncedRows(), [repo, revision])
   const signedIn = repo.sessionUserId() != null
   const syncEnabled = prefs.syncEnabled()
   const pill = syncPill({ signedIn, syncEnabled, syncing, offline, pending })
@@ -161,6 +168,18 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
     ])
   }
 
+  function deleteUnsyncedAndSignOut() {
+    repo.discardUnsyncedRows()
+    void runtime.signOut().then(() => {
+      setEngineMessage(null)
+      setNotices([])
+      setOffline(false)
+      setOverlay(null)
+      setTab('home')
+      refresh()
+    })
+  }
+
   function confirmSignOut() {
     Alert.alert('Sign out?', SIGN_OUT_WARNING, [
       { text: 'Cancel', style: 'cancel' },
@@ -201,6 +220,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             pill={pill}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
             onOpenEntry={(row) => setOverlay({ type: 'edit-entry', row })}
+            onEditBudget={() => setOverlay({ type: 'budget' })}
           />
         ) : null}
         {tab === 'history' ? (
@@ -236,9 +256,17 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
           overlay={overlay}
           today={snapshot.today}
           cutoff={snapshot.freeHistory ? snapshot.cutoff : null}
+          lastExpense={prefs.lastCategory('expense')}
+          lastIncome={prefs.lastCategory('income')}
+          localBudget={formatStoredBudget(prefs.periodBudget(snapshot.period.start))}
           onClose={() => setOverlay(null)}
           onSaveEntry={(draft) => {
             commitEntry(repo, draft, new Date())
+            prefs.setLastCategory(draft.kind, draft.category)
+            finishWrite()
+          }}
+          onSaveBudget={(amount) => {
+            commitPeriodBudget(prefs, snapshot.period.start, amount)
             finishWrite()
           }}
           onSaveGoal={(name, target, id) => {
@@ -265,6 +293,8 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
               applySignIn(outcome)
             },
             onSignOut: confirmSignOut,
+            unsyncedCount,
+            onDeleteUnsynced: deleteUnsyncedAndSignOut,
           }}
         />
       ) : null}
@@ -277,17 +307,25 @@ function OverlaySheet({
   today,
   cutoff,
   onClose,
+  lastExpense,
+  lastIncome,
+  localBudget,
   onSaveEntry,
   onSaveGoal,
+  onSaveBudget,
   onDeposit,
   settings,
 }: {
   overlay: Overlay
   today: string
   cutoff: string | null
+  lastExpense: string | null
+  lastIncome: string | null
+  localBudget: string
   onClose: () => void
   onSaveEntry: (draft: EntryDraft) => void
   onSaveGoal: (name: string, target: string, id?: string) => void
+  onSaveBudget: (amount: string) => void
   onDeposit: (goalId: string, amount: string) => void
   settings: {
     syncEnabled: boolean
@@ -295,9 +333,11 @@ function OverlaySheet({
     configured: boolean
     notices: string[]
     pill: ReturnType<typeof syncPill>
+    unsyncedCount: number
     onToggleSync: (enabled: boolean) => void
     onSignIn: (email: string, password: string) => Promise<void>
     onSignOut: () => void
+    onDeleteUnsynced: () => void
   }
 }) {
   switch (overlay.type) {
@@ -306,9 +346,11 @@ function OverlaySheet({
     case 'quick-add':
       return (
         <QuickAddSheet
-          initial={emptyDraft(today)}
+          initial={newEntryDraft(today, 'expense', lastExpense)}
           today={today}
           cutoff={cutoff}
+          lastExpense={lastExpense}
+          lastIncome={lastIncome}
           onClose={onClose}
           onSave={onSaveEntry}
         />
@@ -319,8 +361,18 @@ function OverlaySheet({
           initial={historyDraft(overlay.row)}
           today={today}
           cutoff={cutoff}
+          lastExpense={lastExpense}
+          lastIncome={lastIncome}
           onClose={onClose}
           onSave={onSaveEntry}
+        />
+      )
+    case 'budget':
+      return (
+        <BudgetSheet
+          initialAmount={localBudget}
+          onClose={onClose}
+          onSave={onSaveBudget}
         />
       )
     case 'add-goal':
@@ -356,6 +408,14 @@ function OverlaySheet({
       return neverOverlay
     }
   }
+}
+
+function payPeriodStart(now: Date): string {
+  return payPeriodAt(now).start
+}
+
+function formatStoredBudget(amount: number | null): string {
+  return amount == null ? '' : amount.toFixed(2)
 }
 
 const styles = StyleSheet.create({

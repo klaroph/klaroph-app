@@ -13,11 +13,13 @@ export function HomeScreen({
   pill,
   onOpenSettings,
   onOpenEntry,
+  onEditBudget,
 }: {
   snapshot: LedgerSnapshot
   pill: SyncPill
   onOpenSettings: () => void
   onOpenEntry: (row: HistoryRow) => void
+  onEditBudget: () => void
 }) {
   const { colors } = useTheme()
   const budgetLabel = snapshot.budget == null ? 'No budget yet' : `of ${formatPeso(snapshot.budget)}`
@@ -34,7 +36,14 @@ export function HomeScreen({
           <Pill label={pill.label} tone={pill.tone} />
         </View>
         <View style={styles.ringRow}>
-          <BudgetRing spent={snapshot.spent} budget={snapshot.budget} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit pay period budget"
+            testID="edit-budget"
+            onPress={onEditBudget}
+          >
+            <BudgetRing spent={snapshot.spent} budget={snapshot.budget} />
+          </Pressable>
           <View style={styles.spent}>
             <T size={13} weight="bold" color={colors.muted}>Spent</T>
             <T size={26} weight="bold">{formatPeso(snapshot.spent)}</T>

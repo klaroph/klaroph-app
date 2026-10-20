@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { StyleSheet, Switch, View } from 'react-native'
 import { Sheet } from '../components/Sheet'
 import { useTheme } from '../components/ThemeProvider'
-import { Card, Field, GhostButton, Pill, PrimaryButton, T } from '../components/ui'
-import { MISSING_SUPABASE_CONFIG, SIGN_OUT_WARNING, UNINSTALL_WARNING } from '../ui/copy'
+import { Card, DangerButton, Field, GhostButton, Pill, PrimaryButton, T } from '../components/ui'
+import { DELETE_UNSYNCED_LABEL, MISSING_SUPABASE_CONFIG, SIGN_OUT_WARNING, UNINSTALL_WARNING, unsyncedSignOutLine } from '../ui/copy'
 import { errorText } from '../ui/format'
 import type { SyncPill } from '../ui/syncStatus'
 
@@ -17,22 +17,27 @@ export function SettingsSheet({
   onToggleSync,
   onSignIn,
   onSignOut,
+  unsyncedCount,
+  onDeleteUnsynced,
 }: {
   syncEnabled: boolean
   signedIn: boolean
   configured: boolean
   notices: string[]
   pill: SyncPill
+  unsyncedCount: number
   onClose: () => void
   onToggleSync: (enabled: boolean) => void
   onSignIn: (email: string, password: string) => Promise<void>
   onSignOut: () => void
+  onDeleteUnsynced: () => void
 }) {
   const { colors } = useTheme()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   async function signIn() {
     setBusy(true)
@@ -66,10 +71,29 @@ export function SettingsSheet({
         <T key={notice} size={14} color={colors.blue}>{notice}</T>
       ))}
       {signedIn ? (
-        <View style={styles.block}>
-          <T size={14} color={colors.muted}>{SIGN_OUT_WARNING}</T>
-          <GhostButton label="Sign out" danger onPress={onSignOut} />
-        </View>
+        unsyncedCount > 0 ? (
+          <View style={styles.block}>
+            <T weight="bold" color={colors.danger}>{unsyncedSignOutLine(unsyncedCount)}</T>
+            {confirmDelete ? (
+              <>
+                <T size={14} color={colors.muted}>Deleting them signs you out and clears the entries on this phone.</T>
+                <DangerButton
+                  label={DELETE_UNSYNCED_LABEL}
+                  accessibilityLabel="Confirm delete unsynced entries"
+                  onPress={onDeleteUnsynced}
+                />
+                <GhostButton label="Cancel" onPress={() => setConfirmDelete(false)} />
+              </>
+            ) : (
+              <DangerButton label={DELETE_UNSYNCED_LABEL} onPress={() => setConfirmDelete(true)} />
+            )}
+          </View>
+        ) : (
+          <View style={styles.block}>
+            <T size={14} color={colors.muted}>{SIGN_OUT_WARNING}</T>
+            <GhostButton label="Sign out" danger onPress={onSignOut} />
+          </View>
+        )
       ) : configured ? (
         <View style={styles.block}>
           <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoFocus />

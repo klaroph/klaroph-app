@@ -1,10 +1,11 @@
 import type { KlaroRepository } from '../db/repository'
+import type { ScreenPrefs } from './prefs'
 import { DomainError } from '../domain/errors'
 import { manilaCivilDate } from '../domain/payPeriod'
 import { assertNever } from '../sync/assertNever'
 import { expenseTypeFor, type EntryKind } from './categories'
-import { OLDER_ENTRIES_LINE } from './copy'
-import { entryReadOnly, historyCutoff, showsFreeHistory } from './historyWindow'
+import { FUTURE_DATE_MESSAGE, OLDER_ENTRIES_LINE } from './copy'
+import { entryReadOnly, historyCutoff, manilaToday, showsFreeHistory } from './historyWindow'
 import { parseQuickAmount, type EntryDraft } from './quickAdd'
 
 function requireAmount(raw: string, label = 'amount'): number {
@@ -14,6 +15,8 @@ function requireAmount(raw: string, label = 'amount'): number {
 }
 
 function assertMutable(repo: KlaroRepository, date: string, now: Date): void {
+  const today = manilaToday(now)
+  if (date > today) throw new DomainError('FUTURE_DATE', FUTURE_DATE_MESSAGE)
   const free = showsFreeHistory(repo.knownPlan(), repo.sessionUserId() != null)
   const cutoff = free ? historyCutoff(manilaCivilDate(now)) : null
   if (entryReadOnly(date, free, cutoff)) throw new DomainError('ENTRY_READ_ONLY', OLDER_ENTRIES_LINE)
@@ -116,4 +119,13 @@ export function commitDeposit(repo: KlaroRepository, goalId: string, amountRaw: 
 
 export function commitDeleteGoal(repo: KlaroRepository, id: string): void {
   repo.softDeleteGoal(id)
+}
+
+/** Stores one pay-period total on the phone. An empty amount clears it. Nothing is synced. */
+export function commitPeriodBudget(prefs: ScreenPrefs, periodStart: string, raw: string): void {
+  if (raw.trim() === '') {
+    prefs.setPeriodBudget(periodStart, null)
+    return
+  }
+  prefs.setPeriodBudget(periodStart, requireAmount(raw, 'budget'))
 }

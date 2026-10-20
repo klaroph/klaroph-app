@@ -1,5 +1,4 @@
-import { klaroDb } from '../db/client'
-import { KlaroRepository } from '../db/repository'
+import { KlaroRepository, type KlaroDb } from '../db/repository'
 import { SyncEngine, type SyncReport } from '../sync/engine'
 import { createSecureTokenStore } from '../sync/secureTokenStore'
 import { createKlaroSupabase, createSupabaseRemote, tokenStoreStorage } from '../sync/supabaseRemote'
@@ -18,9 +17,9 @@ export type AppRuntime = {
   sync(): Promise<SyncReport | null>
 }
 
-export function createAppRuntime(): AppRuntime {
-  const repo = new KlaroRepository({ db: klaroDb })
-  const prefs = new ScreenPrefs(klaroDb)
+export function createAppRuntime(db: KlaroDb): AppRuntime {
+  const repo = new KlaroRepository({ db })
+  const prefs = new ScreenPrefs(db)
   const tokens = createSecureTokenStore()
   const config = readPublicSupabaseConfig(process.env as Record<string, string | undefined>)
   const client = config ? createKlaroSupabase(config.url, config.anonKey, tokenStoreStorage(tokens)) : null
@@ -49,6 +48,7 @@ export function createAppRuntime(): AppRuntime {
     },
     async signOut() {
       const restoreIntro = prefs.firstRunDone()
+      const kept = prefs.exportKeptPrefs()
       if (client) await client.auth.signOut({ scope: 'local' }).catch(() => undefined)
       await signOutKeepingIntro({
         local: repo,
@@ -56,6 +56,7 @@ export function createAppRuntime(): AppRuntime {
         restoreIntro,
         markIntroDone: () => prefs.setFirstRunDone(true),
       })
+      prefs.restoreKeptPrefs(kept)
     },
     sync() {
       const userId = repo.sessionUserId()

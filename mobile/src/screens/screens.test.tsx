@@ -3,9 +3,11 @@ import { create, type ReactTestRendererJSON } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { BudgetRing } from '../components/BudgetRing'
 import { ThemeProvider } from '../components/ThemeProvider'
-import { OLDER_ENTRIES_LINE, UNINSTALL_WARNING } from '../ui/copy'
+import { DELETE_UNSYNCED_LABEL, OLDER_ENTRIES_LINE, PERIOD_BUDGET_LINE, UNINSTALL_WARNING, unsyncedSignOutLine } from '../ui/copy'
+import { BudgetSheet } from './BudgetSheet'
 import { FirstRun } from './FirstRun'
 import { HistoryScreen } from './HistoryScreen'
+import { SettingsSheet } from './SettingsSheet'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -129,5 +131,48 @@ describe('screen components', () => {
     const ring = renderer!.root.findByProps({ testID: 'budget-ring' })
     expect(ring.props.accessibilityLabel).toBe('Spent ₱800.00 of ₱1,600.00 this pay period.')
     expect(collect(renderer!.toJSON())).toContain('50%')
+  })
+
+  it('blocks sign-out with the unsynced count until the red button is confirmed', () => {
+    const onSignOut = vi.fn()
+    const onDelete = vi.fn()
+    let renderer!: ReturnType<typeof create>
+    act(() => {
+      renderer = create(
+        <ThemeProvider>
+          <SettingsSheet
+            syncEnabled
+            signedIn
+            configured
+            notices={[]}
+            pill={{ tone: 'pending', label: 'Not synced' }}
+            unsyncedCount={2}
+            onClose={() => undefined}
+            onToggleSync={() => undefined}
+            onSignIn={async () => undefined}
+            onSignOut={onSignOut}
+            onDeleteUnsynced={onDelete}
+          />
+        </ThemeProvider>,
+      )
+    })
+    expect(collect(renderer.toJSON())).toContain(unsyncedSignOutLine(2))
+    expect(collect(renderer.toJSON())).not.toContain('Sign out')
+    press(renderer, DELETE_UNSYNCED_LABEL)
+    expect(onDelete).not.toHaveBeenCalled()
+    press(renderer, 'Confirm delete unsynced entries')
+    expect(onDelete).toHaveBeenCalledOnce()
+  })
+
+  it('tells the reader the pay-period amount stays on the phone', () => {
+    let renderer!: ReturnType<typeof create>
+    act(() => {
+      renderer = create(
+        <ThemeProvider>
+          <BudgetSheet initialAmount="900.00" onClose={() => undefined} onSave={() => undefined} />
+        </ThemeProvider>,
+      )
+    })
+    expect(collect(renderer.toJSON())).toContain(PERIOD_BUDGET_LINE)
   })
 })

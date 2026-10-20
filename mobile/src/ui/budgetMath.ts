@@ -31,6 +31,20 @@ export function monthlyBudget(
   return { amount: roundMoney(total), hasRows: true }
 }
 
+/**
+ * Category budgets from the account win. Otherwise the ring uses one amount
+ * stored for this pay period on the phone. That amount is already a period total.
+ */
+export function ringBudget(
+  category: { amount: number; hasRows: boolean },
+  period: PayPeriod,
+  localPeriodAmount: number | null,
+): number | null {
+  if (category.hasRows) return prorateToPeriod(category.amount, period)
+  if (localPeriodAmount == null) return null
+  return roundMoney(localPeriodAmount)
+}
+
 /** The pay period's share of the monthly budget, by days in the period over days in that month. */
 export function prorateToPeriod(amount: number, period: PayPeriod): number {
   const [year, month] = period.month.split('-').map(Number)
