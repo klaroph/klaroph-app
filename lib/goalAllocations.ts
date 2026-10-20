@@ -35,12 +35,25 @@ type OwnedAllocation = {
   incomeTotal: number
   /** Sum of the income's other allocations (excluding this one). */
   otherAllocated: number
+  /** User client, or the service-role client when the parent income is outside the free window. */
+  incomeClient: SupabaseClient
+}
+
+async function readOwnedIncome(client: SupabaseClient, userId: string, incomeId: string) {
+  const { data } = await liveOnly(
+    client.from('income_records').select('id, total_amount')
+  )
+    .eq('id', incomeId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return data as { id: string; total_amount: number } | null
 }
 
 async function loadOwnedAllocation(
   supabase: SupabaseClient,
   userId: string,
-  allocationId: string
+  allocationId: string,
+  incomeReader?: SupabaseClient
 ): Promise<OwnedAllocation | null> {
   if (!UUID_RE.test(allocationId)) return null
 
@@ -53,12 +66,12 @@ async function loadOwnedAllocation(
 
   const incomeId = (allocation as { income_record_id: string | null }).income_record_id
   if (!incomeId) return null
-  const { data: income } = await liveOnly(
-    supabase.from('income_records').select('id, total_amount')
-  )
-    .eq('id', incomeId)
-    .eq('user_id', userId)
-    .maybeSingle()
+  let incomeClient = supabase
+  let income = await readOwnedIncome(supabase, userId, incomeId)
+  if (!income && incomeReader) {
+    income = await readOwnedIncome(incomeReader, userId, incomeId)
+    incomeClient = incomeReader
+  }
   if (!income) return null
 
   const { data: siblings } = await liveOnly(
@@ -74,11 +87,12 @@ async function loadOwnedAllocation(
     incomeId,
     incomeTotal: Number((income as { total_amount: number }).total_amount) || 0,
     otherAllocated,
+    incomeClient,
   }
 }
 
-async function syncDisposable(supabase: SupabaseClient, userId: string, owned: OwnedAllocation, allocated: number) {
-  await supabase
+async function syncDisposable(userId: string, owned: OwnedAllocation, allocated: number) {
+  await owned.incomeClient
     .from('income_records')
     .update({ disposable_amount: Math.max(0, owned.incomeTotal - allocated) })
     .eq('id', owned.incomeId)
@@ -89,12 +103,13 @@ export async function updateGoalAllocation(
   supabase: SupabaseClient,
   userId: string,
   allocationId: string,
-  rawAmount: unknown
+  rawAmount: unknown,
+  incomeReader?: SupabaseClient
 ): Promise<AllocationMutationResult> {
   const parsed = parseAllocationAmount(rawAmount)
   if (!parsed.ok) return { ok: false, status: 400, error: parsed.error }
 
-  const owned = await loadOwnedAllocation(supabase, userId, allocationId)
+  const owned = await loadOwnedAllocation(supabase, userId, allocationId, incomeReader)
   if (!owned) return NOT_FOUND
 
   const available = owned.incomeTotal - owned.otherAllocated
@@ -112,16 +127,17 @@ export async function updateGoalAllocation(
   if (error) return { ok: false, status: 500, error: 'Could not update allocation.' }
   if (!updated || updated.length === 0) return NOT_FOUND
 
-  await syncDisposable(supabase, userId, owned, owned.otherAllocated + parsed.amount)
+  await syncDisposable(userId, owned, owned.otherAllocated + parsed.amount)
   return { ok: true, amount: parsed.amount }
 }
 
 export async function removeGoalAllocation(
   supabase: SupabaseClient,
   userId: string,
-  allocationId: string
+  allocationId: string,
+  incomeReader?: SupabaseClient
 ): Promise<AllocationMutationResult> {
-  const owned = await loadOwnedAllocation(supabase, userId, allocationId)
+  const owned = await loadOwnedAllocation(supabase, userId, allocationId, incomeReader)
   if (!owned) return NOT_FOUND
 
   const { data: removed, error } = await softDelete(supabase.from('income_allocations'))
@@ -130,6 +146,6 @@ export async function removeGoalAllocation(
   if (error) return { ok: false, status: 500, error: 'Could not remove allocation.' }
   if (!removed || removed.length === 0) return NOT_FOUND
 
-  await syncDisposable(supabase, userId, owned, owned.otherAllocated)
+  await syncDisposable(userId, owned, owned.otherAllocated)
   return { ok: true, amount: owned.amount }
 }

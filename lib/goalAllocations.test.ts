@@ -162,6 +162,51 @@ describe('removeGoalAllocation', () => {
   })
 })
 
+describe('hidden parent income', () => {
+  it('updates disposable_amount through the service-role reader when the user client cannot see the income', async () => {
+    const userTables: Tables = {
+      income_records: [],
+      income_allocations: [
+        { id: ALLOC, income_record_id: INCOME, goal_id: GOAL.id, amount: 10_000 },
+      ],
+    }
+    const adminTables: Tables = {
+      income_records: [
+        { id: INCOME, user_id: ME, total_amount: 30_000, disposable_amount: 20_000, date: '2020-01-01', income_source: 'Salary' },
+      ],
+      income_allocations: [],
+    }
+    const result = await updateGoalAllocation(fakeSupabase(userTables), ME, ALLOC, 7_500, fakeSupabase(adminTables))
+    expect(result).toEqual({ ok: true, amount: 7_500 })
+    expect(userTables.income_allocations.find((row) => row.id === ALLOC)?.amount).toBe(7_500)
+    expect(adminTables.income_records[0]).toMatchObject({
+      total_amount: 30_000,
+      date: '2020-01-01',
+      income_source: 'Salary',
+      disposable_amount: 22_500,
+    })
+    expect(userTables.income_records).toEqual([])
+  })
+
+  it('does not use another user income from the service-role reader', async () => {
+    const userTables: Tables = {
+      income_records: [],
+      income_allocations: [
+        { id: ALLOC, income_record_id: OTHER_INCOME, goal_id: GOAL.id, amount: 10_000 },
+      ],
+    }
+    const adminTables: Tables = {
+      income_records: [
+        { id: OTHER_INCOME, user_id: OTHER, total_amount: 50_000, disposable_amount: 45_000, date: '2020-01-01', income_source: 'Salary' },
+      ],
+      income_allocations: [],
+    }
+    const result = await updateGoalAllocation(fakeSupabase(userTables), ME, ALLOC, 1, fakeSupabase(adminTables))
+    expect(result).toEqual({ ok: false, status: 404, error: 'Allocation not found.' })
+    expect(adminTables.income_records[0]?.disposable_amount).toBe(45_000)
+  })
+})
+
 describe('parseAllocationAmount', () => {
   it('accepts positive amounts up to the ceiling', () => {
     expect(parseAllocationAmount(1_000_000_000_000)).toEqual({ ok: true, amount: 1_000_000_000_000 })

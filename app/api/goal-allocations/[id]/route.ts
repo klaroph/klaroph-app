@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { removeGoalAllocation, updateGoalAllocation, type AllocationMutationResult } from '@/lib/goalAllocations'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -25,7 +26,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = (await request.json().catch(() => null)) as { amount?: unknown } | null
-    return respond(await updateGoalAllocation(supabase, user.id, id, body?.amount))
+    return respond(await updateGoalAllocation(supabase, user.id, id, body?.amount, supabaseAdmin))
   } catch (e) {
     console.error('PATCH /api/goal-allocations/[id]', e instanceof Error ? e.message : 'unknown error')
     return NextResponse.json({ error: 'Something went wrong.' }, { status: 500 })
@@ -38,7 +39,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     const { supabase, user } = await authedClient()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    return respond(await removeGoalAllocation(supabase, user.id, id))
+    return respond(await removeGoalAllocation(supabase, user.id, id, supabaseAdmin))
   } catch (e) {
     console.error('DELETE /api/goal-allocations/[id]', e instanceof Error ? e.message : 'unknown error')
     return NextResponse.json({ error: 'Something went wrong.' }, { status: 500 })

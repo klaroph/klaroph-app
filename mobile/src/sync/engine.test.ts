@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '../domain/budgetLock'
 import { GOAL_GRACE_BLOCK_MESSAGE } from '../domain/planLimits'
+import { freeHistoryCutoffDate, HISTORY_LOCKED_MESSAGE } from '../domain/historyLock'
 import { DomainError } from '../domain/errors'
 import { openTestRepository } from '../db/testDb'
 import type { KlaroRepository } from '../db/repository'
@@ -12,6 +13,8 @@ import { activateAccount, signOut } from './session'
 import { MemoryTokenStore } from './tokenStore'
 
 const USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+/** On or after the Manila cutoff, so a Free sync still allows edits. */
+const INSIDE_HISTORY = freeHistoryCutoffDate()
 const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 type Stored = {
@@ -127,6 +130,13 @@ class FakeRemote implements RemoteSync {
     if ('saved_amount' in payload) this.savedAmountSends += 1
     if ('updated_at' in payload) this.updatedAtSends += 1
     const id = String(payload.id)
+    const lockKey = `${table}:${id}`
+    if (this.lockedIds.has(lockKey)) {
+      throw new DomainError('HISTORY_LOCKED', 'HISTORY_LOCKED: entries older than 90 days are read-only on the Free plan')
+    }
+    if (this.missingIds.has(lockKey)) {
+      throw new DomainError('PGRST116', 'Cannot coerce the result to a single JSON object')
+    }
     const existing = this.rows.get(this.key(table, id))
     if (mode === 'insert' && !existing && table === 'goals' && payload.deleted_at == null) {
       const live = await this.countLive('goals', String(payload.user_id))
@@ -162,8 +172,20 @@ class FakeRemote implements RemoteSync {
     return { id, updated_at: updatedAt, deleted_at: deletedAt }
   }
 
+  readonly lockedIds = new Set<string>()
+  readonly missingIds = new Set<string>()
+
+  hide(table: SyncedTable, id: string): void {
+    const row = this.rows.get(this.key(table, id))
+    if (row) row.hidden = true
+  }
+
   async countLive(table: SyncedTable, userId: string): Promise<number> {
-    return [...this.rows.values()].filter((row) => row.table === table && row.user_id === userId && row.deleted_at == null).length
+    // Hidden rows model the free 90-day SELECT policy. They are still stored.
+    // A lower count is not a delete.
+    return [...this.rows.values()].filter((row) => (
+      row.table === table && row.user_id === userId && row.deleted_at == null && !row.hidden
+    )).length
   }
 
   async resolveAccount(): Promise<AccountFeatures> {
@@ -221,7 +243,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 50,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     remote.insert('expenses', {
       id: 'server-expense',
@@ -229,7 +251,7 @@ describe('sync engine', () => {
       category: 'Rent',
       type: 'needs',
       amount: 100,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: '2026-02-01T00:00:00.000Z',
       updated_at: '2026-02-01T00:00:00.000Z',
@@ -269,7 +291,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     remote.failNext = true
     const failed = await engine.sync(USER_A)
@@ -291,7 +313,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     await engine.sync(USER_A)
     repo.updateExpense(expense.id, { amount: 99 })
@@ -312,7 +334,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     await engine.sync(USER_A)
     remote.edit('expenses', expense.id, { amount: 80 })
@@ -332,7 +354,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     await engine.sync(USER_A)
     repo.updateExpense(expense.id, { amount: 30 })
@@ -355,7 +377,7 @@ describe('sync engine', () => {
       category: 'Fare',
       type: 'needs',
       amount: 15,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: '2026-10-19T00:00:00.000Z',
       updated_at: '2026-10-19T00:00:00.000Z',
@@ -367,7 +389,7 @@ describe('sync engine', () => {
       category: 'Rent',
       type: 'needs',
       amount: 100,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: '2026-10-19T00:00:10.000Z',
       updated_at: '2026-10-19T00:00:10.000Z',
@@ -392,7 +414,7 @@ describe('sync engine', () => {
       category: 'Fare',
       type: 'needs',
       amount: 15,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: '2026-10-19T00:00:00.000Z',
       updated_at: '2026-10-19T00:00:00.000Z',
@@ -404,7 +426,7 @@ describe('sync engine', () => {
       category: 'Rent',
       type: 'needs',
       amount: 100,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: '2026-10-19T00:00:10.000Z',
       updated_at: '2026-10-19T00:00:10.000Z',
@@ -425,7 +447,7 @@ describe('sync engine', () => {
       category: 'B',
       type: 'wants',
       amount: 2,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: stamp,
       updated_at: stamp,
@@ -437,7 +459,7 @@ describe('sync engine', () => {
       category: 'A',
       type: 'needs',
       amount: 1,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: stamp,
       updated_at: stamp,
@@ -465,7 +487,7 @@ describe('sync engine', () => {
       category: 'Coffee',
       type: 'wants',
       amount: 5,
-      date: '2026-02-02',
+      date: INSIDE_HISTORY,
     })
     repo.softDeleteExpense(fresh.id)
     await engine.sync(USER_A)
@@ -538,14 +560,14 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     const syncedExpense = repo.createExpense({
       userId: USER_A,
       category: 'Rent',
       type: 'needs',
       amount: 100,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     remote.insert('goals', {
       id: 'server-goal',
@@ -625,7 +647,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     const created = await engine.sync(USER_A)
     expect(created.errors).toEqual([])
@@ -663,7 +685,7 @@ describe('sync engine', () => {
       category: 'Fare',
       type: 'needs',
       amount: 15,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     remote.modes.length = 0
     const replaced = await engine.sync(USER_A)
@@ -683,7 +705,7 @@ describe('sync engine', () => {
       category: 'Snack',
       type: 'wants',
       amount: 5,
-      date: '2026-02-02',
+      date: INSIDE_HISTORY,
     })
     const blocked = await engine.sync(USER_A)
     expect(blocked.errors.map((error) => error.code)).toContain('GOAL_LIMIT_REACHED')
@@ -700,7 +722,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     await engine.sync(USER_A)
     repo.updateExpense(expense.id, { amount: 50 })
@@ -725,7 +747,7 @@ describe('sync engine', () => {
         category: 'Fare',
         type: 'needs',
         amount: 1,
-        date: '2026-02-01',
+        date: INSIDE_HISTORY,
         description: null,
         created_at: stamp,
         updated_at: stamp,
@@ -767,7 +789,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     await signIn(repo, tokens, USER_A, 'token-a')
     await engine.sync(USER_A)
@@ -787,7 +809,7 @@ describe('sync engine', () => {
       category: 'Groceries',
       type: 'needs',
       amount: 20,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     const first = await signIn(repo, tokens, USER_A, 'token-a')
     expect(first.isolated).toBe(false)
@@ -832,7 +854,7 @@ describe('sync engine', () => {
       category: 'Fare',
       type: 'needs',
       amount: 15,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     const report = await engine.sync(USER_A)
     expect(report.errors.map((error) => error.code)).toEqual(['42501', 'GOAL_LIMIT_REACHED'])
@@ -873,7 +895,7 @@ describe('sync engine', () => {
       category: 'Fare',
       type: 'needs',
       amount: 15,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     const report = await engine.sync(USER_A)
     expect(report.errors).toEqual([{
@@ -987,7 +1009,7 @@ describe('sync engine', () => {
       category: 'Fare',
       type: 'needs',
       amount: 15,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     const preview = await engine.preview(USER_A)
     expect(preview.goalLimitMessage).toBe(GOAL_GRACE_BLOCK_MESSAGE)
@@ -1014,7 +1036,7 @@ describe('sync engine', () => {
       category: 'Fare',
       type: 'needs',
       amount: 15,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     remote.insert('expenses', {
       id: 'late-expense',
@@ -1022,7 +1044,7 @@ describe('sync engine', () => {
       category: 'Late',
       type: 'needs',
       amount: 1,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: '2026-10-19T00:00:00.000Z',
       updated_at: '2026-10-21T00:00:00.000Z',
@@ -1088,7 +1110,7 @@ describe('sync engine', () => {
       category: 'Fare',
       type: 'needs',
       amount: 15,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
     })
     remote.insert('expenses', {
       id: 'late-expense',
@@ -1096,7 +1118,7 @@ describe('sync engine', () => {
       category: 'Late',
       type: 'needs',
       amount: 1,
-      date: '2026-02-01',
+      date: INSIDE_HISTORY,
       description: null,
       created_at: '2026-10-19T00:00:00.000Z',
       updated_at: '2026-10-21T00:00:00.000Z',
@@ -1116,5 +1138,319 @@ describe('sync engine', () => {
     expect(repo.goalCreatesBlocked()).toBe(true)
     expect(remote.get('expenses', expense.id)?.category).toBe('Fare')
     expect(repo.getRow('expenses', 'late-expense')?.values.category).toBe('Late')
+  })
+
+  it('blocks edits of old rows after a Free sync and does not read a hidden count as a delete', async () => {
+    const { repo, remote, engine } = harness()
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Groceries',
+      type: 'needs',
+      amount: 20,
+      date: '2020-01-01',
+    })
+    const income = repo.createIncome({
+      userId: USER_A,
+      totalAmount: 100,
+      date: '2020-01-02',
+    })
+    const recent = repo.createExpense({
+      userId: USER_A,
+      category: 'Fare',
+      type: 'needs',
+      amount: 15,
+      date: INSIDE_HISTORY,
+    })
+    await engine.sync(USER_A)
+    expect(repo.freeHistoryCutoff()).toBe(freeHistoryCutoffDate())
+    expect(repo.knownPlan()?.name).toBe('Free')
+    remote.hide('expenses', expense.id)
+    remote.hide('income_records', income.id)
+    const hidden = await engine.sync(USER_A)
+    expect(hidden.errors).toEqual([])
+    expect(repo.getRow('expenses', expense.id)?.deleted_at).toBeNull()
+    expect(repo.getRow('income_records', income.id)?.deleted_at).toBeNull()
+    expect(repo.listLive('expenses', USER_A)).toHaveLength(2)
+    expect(await remote.countLive('expenses', USER_A)).toBe(1)
+
+    const attempts = remote.payloads.filter((entry) => entry.payload.id === expense.id).length
+    expect(() => repo.updateExpense(expense.id, { amount: 99 })).toThrow(HISTORY_LOCKED_MESSAGE)
+    expect(() => repo.softDeleteExpense(expense.id)).toThrow(HISTORY_LOCKED_MESSAGE)
+    expect(() => repo.updateExpense(expense.id, { date: INSIDE_HISTORY })).toThrow(HISTORY_LOCKED_MESSAGE)
+    expect(() => repo.updateIncome(income.id, { totalAmount: 80 })).toThrow(HISTORY_LOCKED_MESSAGE)
+    expect(() => repo.softDeleteIncome(income.id)).toThrow(HISTORY_LOCKED_MESSAGE)
+    expect(() => repo.updateExpense(recent.id, { date: '2020-01-01' })).toThrow(HISTORY_LOCKED_MESSAGE)
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(false)
+    expect(repo.getRow('expenses', expense.id)?.values.amount).toBe('20.00')
+    expect(repo.getRow('expenses', recent.id)?.dirty).toBe(false)
+    expect(repo.getRow('expenses', recent.id)?.values.date).toBe(INSIDE_HISTORY)
+    const again = await engine.sync(USER_A)
+    expect(again.errors).toEqual([])
+    expect(remote.payloads.filter((entry) => entry.payload.id === expense.id)).toHaveLength(attempts)
+    expect(remote.get('expenses', expense.id)?.amount).toBe(20)
+  })
+
+  it('reverts phone 99 to the last synced 10 and does not upload it after Pro', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Groceries',
+      type: 'needs',
+      amount: 10,
+      date: '2020-01-01',
+    })
+    await engine.sync(USER_A)
+    expect(remote.get('expenses', expense.id)?.amount).toBe(10)
+    repo.updateExpense(expense.id, { amount: 99 })
+    expect(repo.getRow('expenses', expense.id)?.values.amount).toBe('99.00')
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(true)
+
+    remote.account = {
+      plan: { name: 'Free', maxGoals: 2 },
+      fullBudgeting: false,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    remote.lockedIds.add(`expenses:${expense.id}`)
+    const before = remote.payloads.length
+    const refused = await engine.sync(USER_A)
+    expect(refused.errors).toEqual([{
+      table: 'expenses',
+      id: expense.id,
+      message: HISTORY_LOCKED_MESSAGE,
+      code: 'HISTORY_LOCKED',
+    }])
+    expect(repo.getRow('expenses', expense.id)?.values.amount).toBe('10.00')
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(false)
+    expect(repo.getRow('expenses', expense.id)?.deleted_at).toBeNull()
+    expect(remote.get('expenses', expense.id)?.amount).toBe(10)
+
+    remote.lockedIds.clear()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const afterRefusal = remote.payloads.length
+    const upgraded = await engine.sync(USER_A)
+    expect(upgraded.errors).toEqual([])
+    expect(remote.payloads.slice(afterRefusal).filter((entry) => entry.payload.id === expense.id)).toHaveLength(0)
+    expect(remote.payloads.slice(before).some((entry) => entry.payload.amount === 99 && entry.payload.id === expense.id)).toBe(true)
+    expect(remote.get('expenses', expense.id)?.amount).toBe(10)
+    expect(repo.getRow('expenses', expense.id)?.values.amount).toBe('10.00')
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(false)
+  })
+
+  it('keeps income allocations when an old income delete is history-locked and uploads both on Pro', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const goal = repo.createGoal({ userId: USER_A, name: 'Emergency', targetAmount: 500 })
+    const income = repo.createIncome({
+      userId: USER_A,
+      totalAmount: 100,
+      date: '2020-01-01',
+    })
+    const deposit = repo.createDeposit({
+      userId: USER_A,
+      goalId: goal.id,
+      amount: 25,
+      incomeRecordId: income.id,
+    })
+    await engine.sync(USER_A)
+    repo.softDeleteIncome(income.id)
+    remote.account = {
+      plan: { name: 'Free', maxGoals: 2 },
+      fullBudgeting: false,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    remote.lockedIds.add(`income_records:${income.id}`)
+    const before = remote.payloads.length
+    const refused = await engine.sync(USER_A)
+    expect(refused.errors.map((error) => error.code)).toEqual(['HISTORY_LOCKED'])
+    expect(repo.getRow('income_records', income.id)?.deleted_at).toBeNull()
+    expect(repo.getRow('income_allocations', deposit.id)?.deleted_at).toBeNull()
+    expect(remote.get('income_records', income.id)?.deleted_at).toBeNull()
+    expect(remote.get('income_allocations', deposit.id)?.deleted_at).toBeNull()
+    expect(remote.payloads.slice(before).some((entry) => entry.table === 'income_allocations')).toBe(false)
+
+    remote.lockedIds.clear()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    await engine.sync(USER_A)
+    repo.softDeleteIncome(income.id)
+    const removed = await engine.sync(USER_A)
+    expect(removed.errors).toEqual([])
+    expect(remote.get('income_records', income.id)?.deleted_at).toEqual(expect.any(String))
+    expect(remote.get('income_allocations', deposit.id)?.deleted_at).toEqual(expect.any(String))
+  })
+
+  it('retries PGRST116 on a row inside the free window', async () => {
+    const { repo, remote, engine } = harness()
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Groceries',
+      type: 'needs',
+      amount: 20,
+      date: freeHistoryCutoffDate(),
+    })
+    await engine.sync(USER_A)
+    remote.missingIds.add(`expenses:${expense.id}`)
+    repo.updateExpense(expense.id, { amount: 30 })
+    const missing = await engine.sync(USER_A)
+    expect(missing.errors.map((error) => error.code)).toEqual(['PGRST116'])
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(true)
+    const attempts = remote.payloads.filter((entry) => entry.payload.id === expense.id).length
+    await engine.sync(USER_A)
+    expect(remote.payloads.filter((entry) => entry.payload.id === expense.id).length).toBeGreaterThan(attempts)
+  })
+
+  it('locks an old expense on HISTORY_LOCKED or PGRST116 and does not read a hidden count as a delete', async () => {
+    const { repo, remote, engine } = harness()
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Groceries',
+      type: 'needs',
+      amount: 20,
+      date: '2020-01-01',
+    })
+    const income = repo.createIncome({
+      userId: USER_A,
+      totalAmount: 100,
+      date: '2020-01-02',
+    })
+    await engine.sync(USER_A)
+    remote.hide('expenses', expense.id)
+    remote.hide('income_records', income.id)
+    const hidden = await engine.sync(USER_A)
+    expect(hidden.errors).toEqual([])
+    expect(repo.getRow('expenses', expense.id)?.deleted_at).toBeNull()
+    expect(repo.getRow('income_records', income.id)?.deleted_at).toBeNull()
+    expect(repo.listLive('expenses', USER_A)).toHaveLength(1)
+    expect(await remote.countLive('expenses', USER_A)).toBe(0)
+
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    await engine.sync(USER_A)
+    repo.updateExpense(expense.id, { amount: 30 })
+    remote.account = {
+      plan: { name: 'Free', maxGoals: 2 },
+      fullBudgeting: false,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    remote.lockedIds.add(`expenses:${expense.id}`)
+    const locked = await engine.sync(USER_A)
+    expect(locked.errors).toEqual([{
+      table: 'expenses',
+      id: expense.id,
+      message: HISTORY_LOCKED_MESSAGE,
+      code: 'HISTORY_LOCKED',
+    }])
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(false)
+    expect(repo.getRow('expenses', expense.id)?.deleted_at).toBeNull()
+    expect(repo.getRow('expenses', expense.id)?.values.amount).toBe('20.00')
+    expect(remote.get('expenses', expense.id)?.amount).toBe(20)
+    const attempts = remote.payloads.filter((entry) => entry.payload.id === expense.id).length
+    const again = await engine.sync(USER_A)
+    expect(again.errors).toEqual([])
+    expect(remote.payloads.filter((entry) => entry.payload.id === expense.id)).toHaveLength(attempts)
+    expect(() => repo.updateExpense(expense.id, { amount: 40 })).toThrow(HISTORY_LOCKED_MESSAGE)
+    expect(() => repo.softDeleteExpense(expense.id)).toThrow(HISTORY_LOCKED_MESSAGE)
+
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    await engine.sync(USER_A)
+    repo.updateIncome(income.id, { totalAmount: 80 })
+    remote.account = {
+      plan: { name: 'Free', maxGoals: 2 },
+      fullBudgeting: false,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    remote.missingIds.add(`income_records:${income.id}`)
+    const missing = await engine.sync(USER_A)
+    expect(missing.errors).toEqual([{
+      table: 'income_records',
+      id: income.id,
+      message: HISTORY_LOCKED_MESSAGE,
+      code: 'HISTORY_LOCKED',
+    }])
+    expect(repo.getRow('income_records', income.id)?.deleted_at).toBeNull()
+    expect(repo.getRow('income_records', income.id)?.dirty).toBe(false)
+    expect(repo.getRow('income_records', income.id)?.values.total_amount).toBe('100.00')
+    const incomeAttempts = remote.payloads.filter((entry) => entry.payload.id === income.id).length
+    await engine.sync(USER_A)
+    expect(remote.payloads.filter((entry) => entry.payload.id === income.id)).toHaveLength(incomeAttempts)
+  })
+
+  it('restores a local delete of an old row and uploads it again on Pro', async () => {
+    const { repo, remote, engine } = harness()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const expense = repo.createExpense({
+      userId: USER_A,
+      category: 'Groceries',
+      type: 'needs',
+      amount: 20,
+      date: '2020-01-01',
+    })
+    await engine.sync(USER_A)
+    repo.softDeleteExpense(expense.id)
+    remote.account = {
+      plan: { name: 'Free', maxGoals: 2 },
+      fullBudgeting: false,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    remote.lockedIds.add(`expenses:${expense.id}`)
+    const refused = await engine.sync(USER_A)
+    expect(refused.errors.map((error) => error.code)).toEqual(['HISTORY_LOCKED'])
+    expect(repo.getRow('expenses', expense.id)?.deleted_at).toBeNull()
+    expect(remote.get('expenses', expense.id)?.deleted_at).toBeNull()
+
+    remote.lockedIds.clear()
+    remote.account = {
+      plan: { name: 'Pro', maxGoals: 20 },
+      fullBudgeting: true,
+      accountCreatedAt: '2020-01-01T00:00:00.000Z',
+      simulateBudgetExpired: false,
+    }
+    const released = await engine.sync(USER_A)
+    expect(released.errors).toEqual([])
+    expect(repo.isHistoryLocked('expenses', expense.id)).toBe(false)
+    repo.updateExpense(expense.id, { amount: 25 })
+    const upgraded = await engine.sync(USER_A)
+    expect(upgraded.errors).toEqual([])
+    expect(repo.getRow('expenses', expense.id)?.dirty).toBe(false)
+    expect(remote.get('expenses', expense.id)?.amount).toBe(25)
   })
 })

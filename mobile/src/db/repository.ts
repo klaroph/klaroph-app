@@ -6,6 +6,7 @@ import { goalProgressAmount } from '../domain/goalTotal'
 import { createId } from '../domain/ids'
 import { assertNonNegativeMoney, assertPositiveMoney, moneyToText } from '../domain/money'
 import { FREE_PLAN_MAX_GOALS, GOAL_CREATION_GRACE, GOAL_GRACE_BLOCK_MESSAGE, GOAL_LIMIT_REACHED, type ResolvedPlanCap } from '../domain/planLimits'
+import { HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE } from '../domain/historyLock'
 import { canonicalTimestamp, optionalNote, optionalText, requireIsoDate, requireText } from '../domain/time'
 import { assertNever } from '../sync/assertNever'
 import type { ApplyServerResult, LocalStore } from '../sync/localStore'
@@ -31,6 +32,8 @@ export type KlaroDb = BaseSQLiteDatabase<'sync', RunResult, typeof schema>
 const SESSION_USER_KEY = 'session_user_id'
 const BUDGET_ACCESS_KEY = 'budget_access'
 const GOAL_CREATES_BLOCKED_KEY = 'goal_creates_blocked'
+const HISTORY_LOCK_KEY = 'history_locked'
+const HISTORY_CUTOFF_KEY = 'history_cutoff'
 const KNOWN_PLAN_KEY = 'known_plan'
 const nextRevision = sql`revision + 1`
 
@@ -317,6 +320,49 @@ export class KlaroRepository implements LocalStore {
     )).run()
   }
 
+  isHistoryLocked(table: SyncedTable, id: string): boolean {
+    return this.readHistoryLocks().includes(`${table}:${id}`)
+  }
+
+  lockHistory(table: SyncedTable, id: string): void {
+    if (table !== 'expenses' && table !== 'income_records') return
+    const keys = new Set(this.readHistoryLocks())
+    keys.add(`${table}:${id}`)
+    this.setMeta(HISTORY_LOCK_KEY, JSON.stringify([...keys]))
+    this.setHistoryDirty(table, id, false)
+  }
+
+  restoreHistoryRow(table: SyncedTable, id: string): void {
+    if (table !== 'expenses' && table !== 'income_records') return
+    this.clearHistoryTombstone(table, id)
+  }
+
+  releaseHistoryLocks(): void {
+    this.setMeta(HISTORY_LOCK_KEY, null)
+  }
+
+  setFreeHistoryCutoff(cutoff: string | null): void {
+    this.setMeta(HISTORY_CUTOFF_KEY, cutoff)
+  }
+
+  freeHistoryCutoff(): string | null {
+    return this.meta(HISTORY_CUTOFF_KEY)
+  }
+
+  /**
+   * Restores the copy saved on this phone at the last successful sync or pull.
+   * Clears dirty so the rejected edit is not uploaded after an upgrade.
+   */
+  revertQueuedHistoryEdit(table: SyncedTable, id: string): void {
+    if (table !== 'expenses' && table !== 'income_records') return
+    const current = this.getRow(table, id)
+    if (!current) return
+    if (current.deleted_at) this.restoreHistoryRow(table, id)
+    const snapshot = this.readHistorySnapshot(table, id)
+    if (snapshot) this.applyHistorySnapshot(table, id, snapshot)
+    this.lockHistory(table, id)
+  }
+
   private unsyncedLiveGoalIds(userId: string): string[] {
     return this.db.select({ id: goals.id }).from(goals).where(and(
       isNull(goals.deletedAt),
@@ -489,6 +535,7 @@ export class KlaroRepository implements LocalStore {
     date: string
     description?: string | null
   }): SyncRow {
+    this.assertFreeHistoryDate(input.date)
     const now = this.now()
     const id = this.nextId()
     this.db.insert(expenses).values({
@@ -508,6 +555,7 @@ export class KlaroRepository implements LocalStore {
   }
 
   updateExpense(id: string, input: { category?: string; type?: string; amount?: number; date?: string; description?: string | null }): SyncRow {
+    this.assertHistoryWritable('expenses', id, input.date)
     const current = this.requireRow('expenses', id)
     this.db.update(expenses).set({
       category: input.category != null ? requireText(input.category, 'category') : requiredValueText(current, 'category'),
@@ -523,6 +571,7 @@ export class KlaroRepository implements LocalStore {
   }
 
   softDeleteExpense(id: string): void {
+    this.assertHistoryWritable('expenses', id)
     this.tombstone('Expense not found.', (now) => this.db.update(expenses).set({
       deletedAt: now,
       updatedAt: now,
@@ -537,6 +586,7 @@ export class KlaroRepository implements LocalStore {
     date: string
     incomeSource?: string | null
   }): SyncRow {
+    this.assertFreeHistoryDate(input.date)
     const total = moneyToText(assertPositiveMoney(input.totalAmount, 'total'))
     const now = this.now()
     const id = this.nextId()
@@ -556,6 +606,7 @@ export class KlaroRepository implements LocalStore {
   }
 
   updateIncome(id: string, input: { totalAmount?: number; date?: string; incomeSource?: string | null }): SyncRow {
+    this.assertHistoryWritable('income_records', id, input.date)
     const current = this.requireRow('income_records', id)
     const total = input.totalAmount != null
       ? assertPositiveMoney(input.totalAmount, 'total')
@@ -577,6 +628,7 @@ export class KlaroRepository implements LocalStore {
   }
 
   softDeleteIncome(id: string): void {
+    this.assertHistoryWritable('income_records', id)
     const current = this.getRow('income_records', id)
     if (!current || current.deleted_at) throw new DomainError('NOT_FOUND', 'Income record not found.')
     const now = this.now()
@@ -903,6 +955,7 @@ export class KlaroRepository implements LocalStore {
         budgetsKeptFromAccount = this.retireClashingBudget(database, table, row)
         this.upsertServer(table, row, deletedAt, database)
       })
+      this.writeHistorySnapshotFromServer(table, row, deletedAt)
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new DomainError('UNIQUE_CONFLICT', `Unique constraint on ${table}.`)
@@ -917,6 +970,7 @@ export class KlaroRepository implements LocalStore {
     if (!local) return
     const releaseDeposits = table === 'goals' && local.base_updated_at == null && local.deleted_at == null
     const updatedAt = canonicalTimestamp(stamp.updated_at)
+    if (local.revision === revision) this.writeHistorySnapshot(local)
     if (local.revision !== revision) {
       this.patchMeta(table, id, {
         updatedAt: local.updated_at,
@@ -1010,6 +1064,166 @@ export class KlaroRepository implements LocalStore {
       eq(budgetOverrides.month, month),
       userId == null ? isNull(budgetOverrides.userId) : eq(budgetOverrides.userId, userId),
     )).get()
+  }
+
+  private readHistoryLocks(): string[] {
+    const raw = this.meta(HISTORY_LOCK_KEY)
+    if (!raw) return []
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      if (!Array.isArray(parsed)) return []
+      return parsed.filter((item): item is string => typeof item === 'string')
+    } catch {
+      return []
+    }
+  }
+
+  private assertFreeHistoryDate(date: string): void {
+    const cutoff = this.activeFreeHistoryCutoff()
+    if (!cutoff || date.slice(0, 10) >= cutoff) return
+    throw new DomainError(HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE)
+  }
+
+  private assertHistoryWritable(table: 'expenses' | 'income_records', id: string, nextDate?: string): void {
+    if (this.isHistoryLocked(table, id)) {
+      throw new DomainError(HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE)
+    }
+    const cutoff = this.activeFreeHistoryCutoff()
+    if (!cutoff) return
+    const current = this.getRow(table, id)
+    const date = current?.values.date
+    if (typeof date === 'string' && date.slice(0, 10) < cutoff) {
+      throw new DomainError(HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE)
+    }
+    if (nextDate != null && nextDate.slice(0, 10) < cutoff) {
+      throw new DomainError(HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE)
+    }
+  }
+
+  private activeFreeHistoryCutoff(): string | null {
+    if (this.knownPlan()?.name !== 'Free') return null
+    return this.freeHistoryCutoff()
+  }
+
+  private historySyncKey(table: 'expenses' | 'income_records', id: string): string {
+    return `history_sync:${table}:${id}`
+  }
+
+  private writeHistorySnapshot(row: SyncRow): void {
+    if (row.table !== 'expenses' && row.table !== 'income_records') return
+    this.setMeta(this.historySyncKey(row.table, row.id), JSON.stringify({
+      deleted_at: row.deleted_at,
+      values: row.values,
+    }))
+  }
+
+  private writeHistorySnapshotFromServer(table: SyncedTable, row: ServerRow, deletedAt: string | null): void {
+    if (table !== 'expenses' && table !== 'income_records') return
+    this.setMeta(this.historySyncKey(table, row.id), JSON.stringify({
+      deleted_at: deletedAt,
+      values: row.values,
+    }))
+  }
+
+  private readHistorySnapshot(table: 'expenses' | 'income_records', id: string): { deleted_at: string | null; values: Record<string, string | null> } | null {
+    const raw = this.meta(this.historySyncKey(table, id))
+    if (!raw) return null
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+      const record = parsed as { deleted_at?: unknown; values?: unknown }
+      if (record.values == null || typeof record.values !== 'object' || Array.isArray(record.values)) return null
+      const values: Record<string, string | null> = {}
+      for (const [key, value] of Object.entries(record.values)) {
+        values[key] = value == null ? null : String(value)
+      }
+      return {
+        deleted_at: typeof record.deleted_at === 'string' ? record.deleted_at : null,
+        values,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  private applyHistorySnapshot(
+    table: 'expenses' | 'income_records',
+    id: string,
+    snapshot: { deleted_at: string | null; values: Record<string, string | null> },
+  ): void {
+    const values = snapshot.values
+    switch (table) {
+      case 'expenses':
+        this.db.update(expenses).set({
+          category: values.category ?? '',
+          type: values.type === 'wants' ? 'wants' : 'needs',
+          amount: values.amount ?? '0.00',
+          date: values.date ?? '',
+          description: values.description ?? null,
+          deletedAt: snapshot.deleted_at,
+          dirty: false,
+        }).where(eq(expenses.id, id)).run()
+        return
+      case 'income_records':
+        this.db.update(incomeRecords).set({
+          totalAmount: values.total_amount ?? '0.00',
+          disposableAmount: values.disposable_amount ?? '0.00',
+          date: values.date ?? '',
+          incomeSource: values.income_source ?? null,
+          deletedAt: snapshot.deleted_at,
+          dirty: false,
+        }).where(eq(incomeRecords.id, id)).run()
+        return
+      default: {
+        const neverTable: never = table
+        throw new DomainError('SYNC', `Cannot restore ${String(neverTable)}.`)
+      }
+    }
+  }
+
+  private setHistoryDirty(table: 'expenses' | 'income_records', id: string, dirty: boolean): void {
+    switch (table) {
+      case 'expenses':
+        this.db.update(expenses).set({ dirty }).where(eq(expenses.id, id)).run()
+        return
+      case 'income_records':
+        this.db.update(incomeRecords).set({ dirty }).where(eq(incomeRecords.id, id)).run()
+        return
+      default: {
+        const neverTable: never = table
+        throw new DomainError('SYNC', `Cannot lock ${String(neverTable)}.`)
+      }
+    }
+  }
+
+  private clearHistoryTombstone(table: 'expenses' | 'income_records', id: string): void {
+    switch (table) {
+      case 'expenses':
+        this.db.update(expenses).set({ deletedAt: null, dirty: false }).where(eq(expenses.id, id)).run()
+        return
+      case 'income_records':
+        this.withTx((tx) => {
+          const income = tx.select().from(incomeRecords).where(eq(incomeRecords.id, id)).get()
+          const deletedAt = income?.deletedAt ?? null
+          tx.update(incomeRecords).set({ deletedAt: null, dirty: false }).where(eq(incomeRecords.id, id)).run()
+          if (deletedAt) {
+            const children = tx.select().from(incomeAllocations).where(eq(incomeAllocations.incomeRecordId, id)).all()
+            for (const child of children) {
+              if (child.deletedAt !== deletedAt) continue
+              tx.update(incomeAllocations).set({
+                deletedAt: null,
+                dirty: child.baseUpdatedAt == null,
+              }).where(eq(incomeAllocations.id, child.id)).run()
+            }
+          }
+          this.syncDisposable(tx, id)
+        })
+        return
+      default: {
+        const neverTable: never = table
+        throw new DomainError('SYNC', `Cannot restore ${String(neverTable)}.`)
+      }
+    }
   }
 
   private tombstone(message: string, update: (now: string) => RunResult): void {

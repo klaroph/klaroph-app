@@ -3,6 +3,8 @@ import { liveOnly, softDelete } from '@/lib/liveRows'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { plainDbError } from '@/lib/apiError'
 import { getTypeForCategory } from '@/lib/expenseCategories'
+import { historyLockedResponse, isHistoryLockedError, isMissingSingleRowError } from '@/lib/freeHistory'
+import { freeUserOwnsOldRow } from '@/lib/freeHistoryLock'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -66,6 +68,11 @@ export async function PUT(request: Request, { params }: RouteParams) {
       .select('id, category, type, amount, date, description')
       .single()
 
+    if (isHistoryLockedError(error)) return historyLockedResponse()
+    if (error && isMissingSingleRowError(error)) {
+      if (await freeUserOwnsOldRow('expenses', user.id, id)) return historyLockedResponse()
+      return NextResponse.json({ error: 'Expense not found.' }, { status: 404 })
+    }
     if (error) {
       return NextResponse.json(
         { error: plainDbError(error, 'save', 'PUT /api/expenses/[id] update error:') },
@@ -73,6 +80,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
       )
     }
     if (!data) {
+      if (await freeUserOwnsOldRow('expenses', user.id, id)) return historyLockedResponse()
       return NextResponse.json({ error: 'Expense not found.' }, { status: 404 })
     }
     return NextResponse.json(data)
@@ -100,15 +108,21 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { error } = await softDelete(supabase.from('expenses'))
+    const { data, error } = await softDelete(supabase.from('expenses'))
       .eq('id', id)
       .eq('user_id', user.id)
+      .select('id')
 
+    if (isHistoryLockedError(error)) return historyLockedResponse()
     if (error) {
       return NextResponse.json(
         { error: plainDbError(error, 'delete', 'DELETE /api/expenses/[id] error:') },
         { status: 500 }
       )
+    }
+    if (!data || data.length === 0) {
+      if (await freeUserOwnsOldRow('expenses', user.id, id)) return historyLockedResponse()
+      return NextResponse.json({ error: 'Expense not found.' }, { status: 404 })
     }
     return NextResponse.json({ ok: true })
   } catch (e) {

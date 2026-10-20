@@ -8,6 +8,7 @@ function readText(file: string): string {
 }
 
 const migration = readText('supabase/migrations/20261019000003_lifetime_pro_entitlement.sql')
+const historyLock = readText('supabase/migrations/20261020140000_free_history_lock.sql')
 const check = readText('supabase/scripts/lifetime_pro_entitlement_check.sql')
 const refund = readText('supabase/scripts/revoke_pro_after_refund.sql')
 const grant = readText('supabase/migrations/20261019000002_grant_lifetime_to_verified_payers.sql')
@@ -110,7 +111,16 @@ function checkoutPaidPayload(userId: string, paymentId: string) {
 
 describe('lifetime Pro database checks', () => {
   it('treats is_lifetime as Pro ahead of plan, status, and period end', () => {
-    expect(migration).toContain('CREATE OR REPLACE FUNCTION public.is_free_analytics_user(p_user_id uuid)')
+    expect(historyLock).toContain('CREATE OR REPLACE FUNCTION public.is_free_analytics_user(p_user_id uuid)')
+    expect(historyLock).toContain('COALESCE(s.is_lifetime, false)')
+    expect(historyLock).toContain('ORDER BY s.current_period_end DESC NULLS LAST')
+    expect(historyLock).toContain("lower(btrim(s.status)) = 'past_due'")
+    expect(historyLock).toContain('AND now() < s.grace_period_until')
+    expect(historyLock).toContain("lower(btrim(p.name)) IN ('pro', 'clarity_premium')")
+    expect(historyLock).toContain('HISTORY_LOCKED')
+    expect(historyLock).toContain('DROP POLICY IF EXISTS "Users can manage own expenses" ON public.expenses;')
+    expect(historyLock).toContain('DROP POLICY IF EXISTS "Users can manage own income" ON public.income_records;')
+    expect(historyLock).toContain('BEFORE UPDATE OF date ON public.expenses')
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.enforce_goal_plan_limit()')
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.consume_import_quota()')
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.get_user_features(p_user_id uuid)')

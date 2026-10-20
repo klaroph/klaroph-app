@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isImportQuotaExceededError, plainDbError } from '@/lib/apiError'
 import { resolveUserPlan } from '@/lib/resolveUserPlan'
 import { validateIncomeCsv, validateImportRows, INCOME_SOURCES_SET, type ImportRow } from '@/lib/expensesImport'
+import { historyLockedResponse, historySkipMessage, isHistoryLockedError, partitionFreeHistory } from '@/lib/freeHistory'
 
 const FREE_IMPORT_LIMIT = 2
 
@@ -66,7 +67,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing rows or csv in body.' }, { status: 400 })
     }
 
-    const inserts = rows.map((r) => ({
+    const partitioned = partitionFreeHistory(rows, plan.plan_name !== 'pro')
+    if (partitioned.keep.length === 0) {
+      return NextResponse.json({
+        imported: 0,
+        skippedHistory: partitioned.skipped,
+        message: historySkipMessage(partitioned.skipped),
+      })
+    }
+
+    const inserts = partitioned.keep.map((r) => ({
       user_id: user.id,
       total_amount: r.amount,
       disposable_amount: r.amount,
@@ -96,13 +106,21 @@ export async function POST(request: Request) {
       if (refundError) {
         console.error('POST /api/income/import/confirm refund error:', refundError.message)
       }
+      if (isHistoryLockedError(insertError)) return historyLockedResponse()
       return NextResponse.json(
         { error: plainDbError(insertError, 'save', 'POST /api/income/import/confirm insert error:') },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({ imported: rows.length }, { status: 200 })
+    const result: { imported: number; skippedHistory?: number; message?: string } = {
+      imported: partitioned.keep.length,
+    }
+    if (partitioned.skipped > 0) {
+      result.skippedHistory = partitioned.skipped
+      result.message = historySkipMessage(partitioned.skipped)
+    }
+    return NextResponse.json(result, { status: 200 })
   } catch (e) {
     console.error('POST /api/income/import/confirm', e)
     return NextResponse.json(

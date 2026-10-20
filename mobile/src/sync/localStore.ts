@@ -61,4 +61,23 @@ export interface LocalStore {
   holdAllocationsForUnsyncedGoals(userId: string): void
   /** Puts a held goal's allocations back on the push queue after the goal uploads. */
   releaseAllocationsForGoal(goalId: string): void
+  /** True when a Free history lock stopped retries for this expense or income row. */
+  isHistoryLocked(table: SyncedTable, id: string): boolean
+  /**
+   * Keeps the row on the device, clears dirty, and stops further pushes.
+   * Does not set deleted_at.
+   */
+  lockHistory(table: SyncedTable, id: string): void
+  /** Undoes a local tombstone that the server refused because the row is history-locked. */
+  restoreHistoryRow(table: SyncedTable, id: string): void
+  /**
+   * Puts back this device's last synced copy, then drops the queued edit.
+   * Does not read the server. A later upgrade does not upload that edit.
+   */
+  revertQueuedHistoryEdit(table: SyncedTable, id: string): void
+  /** Manila cutoff learned from the last Free sync. `null` clears it. */
+  setFreeHistoryCutoff(cutoff: string | null): void
+  freeHistoryCutoff(): string | null
+  /** Pro, grace, and lifetime can edit rows that Free had locked. Does not requeue them. */
+  releaseHistoryLocks(): void
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { plainDbError } from '@/lib/apiError'
+import { historyLockedResponse, isHistoryLockedError } from '@/lib/freeHistory'
 import { getTypeForCategory } from '@/lib/expenseCategories'
 import { toLocalDateString } from '@/lib/format'
 
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
       .select('id, category, type, amount, date, description')
       .single()
 
+    if (isHistoryLockedError(error)) return historyLockedResponse()
     if (error) {
       return NextResponse.json(
         { error: plainDbError(error, 'save', 'POST /api/expenses insert error:') },
