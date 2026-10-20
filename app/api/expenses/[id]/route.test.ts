@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const LOCKED = {
-  error: 'Entries older than 90 days are read-only on the Free plan.',
+  error: 'Entries older than 90 days are read-only on Free. Upgrade to edit them.',
   code: 'HISTORY_LOCKED',
 }
 
@@ -137,10 +137,10 @@ describe('DELETE /api/expenses/[id]', () => {
     ])
   })
 
-  it('keeps ok when the delete matches nothing and the row is not an old owned row', async () => {
+  it('returns 404 when the delete matches nothing and the row is not an old owned row', async () => {
     state.response = { data: [], error: null }
     const res = await DELETE(new Request('http://localhost'), params)
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ ok: true })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Expense not found.' })
   })
 })

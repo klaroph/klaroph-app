@@ -242,7 +242,7 @@ describe('POST /api/expenses/import/confirm', () => {
     const res = await post()
     expect(res.status).toBe(403)
     expect(await res.json()).toEqual({
-      error: 'Entries older than 90 days are read-only on the Free plan.',
+      error: 'Entries older than 90 days are read-only on Free. Upgrade to edit them.',
       code: 'HISTORY_LOCKED',
     })
     expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert', 'admin:refund_import_quota'])

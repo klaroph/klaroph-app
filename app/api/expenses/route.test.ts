@@ -37,7 +37,7 @@ describe('POST /api/expenses', () => {
     )
     expect(res.status).toBe(403)
     expect(await res.json()).toEqual({
-      error: 'Entries older than 90 days are read-only on the Free plan.',
+      error: 'Entries older than 90 days are read-only on Free. Upgrade to edit them.',
       code: 'HISTORY_LOCKED',
     })
   })

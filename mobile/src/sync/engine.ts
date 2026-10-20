@@ -8,7 +8,7 @@ import {
   goalAdoptionBlockMessage,
   type ResolvedPlanCap,
 } from '../domain/planLimits'
-import { HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE, isOlderThanFreeHistory } from '../domain/historyLock'
+import { freeHistoryCutoffDate, HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE, isOlderThanFreeHistory } from '../domain/historyLock'
 import { clampPageSize, DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
 import type { LocalStore } from './localStore'
 import {
@@ -199,7 +199,11 @@ export class SyncEngine {
     const resolved = plan ?? account.plan
     this.local.setKnownPlan(resolved)
     this.local.setGoalCreatesBlocked(resolved.blocksNewGoals === true)
-    if (resolved.name !== 'Free') this.local.releaseHistoryLocks()
+    if (resolved.name === 'Free') this.local.setFreeHistoryCutoff(freeHistoryCutoffDate())
+    else {
+      this.local.releaseHistoryLocks()
+      this.local.setFreeHistoryCutoff(null)
+    }
     return resolved
   }
 
@@ -372,8 +376,7 @@ export class SyncEngine {
         return
       }
       if (isHistoryLockFailure(error, row)) {
-        if (row.deleted_at != null) this.local.restoreHistoryRow(row.table, row.id)
-        this.local.lockHistory(row.table, row.id)
+        this.local.revertQueuedHistoryEdit(row.table, row.id)
         report.errors.push({
           table: row.table,
           id: row.id,

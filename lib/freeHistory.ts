@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
-import { toLocalDateString } from '@/lib/format'
 
-/** Same window as `(current_date - interval '90 days')::date` on the SELECT policies. */
+/** Same window as `public.free_history_cutoff()`: Manila's calendar date minus 90 days. */
 export const FREE_HISTORY_DAYS = 90
+
+const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
 
 export const HISTORY_LOCKED = 'HISTORY_LOCKED'
 
 export const FREE_HISTORY_NOTICE = 'Entries older than 90 days are saved. Upgrade to Pro to see them.'
 
-export const HISTORY_LOCKED_ERROR = 'Entries older than 90 days are read-only on the Free plan.'
+export const HISTORY_LOCKED_ERROR = 'Entries older than 90 days are read-only on Free. Upgrade to edit them.'
 
 type DbErrorLike = {
   message?: string | null
@@ -18,11 +19,19 @@ type DbErrorLike = {
 
 /**
  * First day a Free user may select. A row dated this day is still visible.
- * Matches the SELECT policy cutoff: date >= (current_date - interval '90 days')::date.
+ * Matches `public.free_history_cutoff()`: `(now() AT TIME ZONE 'Asia/Manila')::date - 90`.
+ * The device timezone is not used.
  */
 export function freeHistoryCutoffDate(now = new Date()): string {
-  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - FREE_HISTORY_DAYS)
-  return toLocalDateString(cutoff)
+  const manila = new Date(now.getTime() + MANILA_OFFSET_MS)
+  const cutoff = new Date(Date.UTC(
+    manila.getUTCFullYear(),
+    manila.getUTCMonth(),
+    manila.getUTCDate() - FREE_HISTORY_DAYS,
+  ))
+  const month = String(cutoff.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(cutoff.getUTCDate()).padStart(2, '0')
+  return `${cutoff.getUTCFullYear()}-${month}-${day}`
 }
 
 export function isOlderThanFreeHistory(date: string, now = new Date()): boolean {

@@ -1,18 +1,25 @@
 export const HISTORY_LOCKED = 'HISTORY_LOCKED'
 
-export const HISTORY_LOCKED_MESSAGE = 'Entries older than 90 days are read-only on the Free plan.'
+export const HISTORY_LOCKED_MESSAGE = 'Entries older than 90 days are read-only on Free. Upgrade to edit them.'
 
 const FREE_HISTORY_DAYS = 90
 
+const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+
 /**
- * First day a Free user may pick. Same cutoff as
- * `(current_date - interval '90 days')::date` on the expenses and income SELECT policies.
+ * First day a Free user may pick. Same cutoff as `public.free_history_cutoff()`:
+ * `(now() AT TIME ZONE 'Asia/Manila')::date - 90`. The device timezone is not used.
  */
 export function freeHistoryCutoffDate(now = new Date()): string {
-  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - FREE_HISTORY_DAYS)
-  const month = String(cutoff.getMonth() + 1).padStart(2, '0')
-  const day = String(cutoff.getDate()).padStart(2, '0')
-  return `${cutoff.getFullYear()}-${month}-${day}`
+  const manila = new Date(now.getTime() + MANILA_OFFSET_MS)
+  const cutoff = new Date(Date.UTC(
+    manila.getUTCFullYear(),
+    manila.getUTCMonth(),
+    manila.getUTCDate() - FREE_HISTORY_DAYS,
+  ))
+  const month = String(cutoff.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(cutoff.getUTCDate()).padStart(2, '0')
+  return `${cutoff.getUTCFullYear()}-${month}-${day}`
 }
 
 export function isOlderThanFreeHistory(date: string, now = new Date()): boolean {

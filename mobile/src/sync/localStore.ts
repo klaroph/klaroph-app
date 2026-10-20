@@ -70,6 +70,14 @@ export interface LocalStore {
   lockHistory(table: SyncedTable, id: string): void
   /** Undoes a local tombstone that the server refused because the row is history-locked. */
   restoreHistoryRow(table: SyncedTable, id: string): void
-  /** Pro, grace, and lifetime can edit and upload rows that Free had locked. */
+  /**
+   * Puts back this device's last synced copy, then drops the queued edit.
+   * Does not read the server. A later upgrade does not upload that edit.
+   */
+  revertQueuedHistoryEdit(table: SyncedTable, id: string): void
+  /** Manila cutoff learned from the last Free sync. `null` clears it. */
+  setFreeHistoryCutoff(cutoff: string | null): void
+  freeHistoryCutoff(): string | null
+  /** Pro, grace, and lifetime can edit rows that Free had locked. Does not requeue them. */
   releaseHistoryLocks(): void
 }

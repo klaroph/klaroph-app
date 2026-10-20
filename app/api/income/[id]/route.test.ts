@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const LOCKED = {
-  error: 'Entries older than 90 days are read-only on the Free plan.',
+  error: 'Entries older than 90 days are read-only on Free. Upgrade to edit them.',
   code: 'HISTORY_LOCKED',
 }
 
@@ -130,11 +130,11 @@ describe('DELETE /api/income/[id]', () => {
     expect(state.tables).toEqual(['income_records', 'admin:income_records'])
   })
 
-  it('keeps ok without touching allocations when nothing was deleted', async () => {
+  it('returns 404 without touching allocations when the income id is unknown', async () => {
     state.deleteData = []
     const res = await DELETE(new Request('http://localhost'), params)
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ ok: true })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Income record not found.' })
     expect(state.tables).toEqual(['income_records', 'admin:income_records'])
     expect(state.adminFilters).toEqual([
       ['id', 'income-1'],

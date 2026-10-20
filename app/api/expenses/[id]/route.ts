@@ -122,6 +122,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     }
     if (!data || data.length === 0) {
       if (await freeUserOwnsOldRow('expenses', user.id, id)) return historyLockedResponse()
+      return NextResponse.json({ error: 'Expense not found.' }, { status: 404 })
     }
     return NextResponse.json({ ok: true })
   } catch (e) {

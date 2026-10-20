@@ -3,10 +3,8 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { resolveUserPlanFromSubscription } from '@/lib/resolveUserPlan'
 import { resolveSubscriptionState } from '@/lib/subscriptionState'
 import { getBudgetEditingAllowed, getBudgetTrialDaysLeft } from '@/lib/entitlements'
-import { toLocalDateString } from '@/lib/format'
+import { freeHistoryCutoffDate } from '@/lib/freeHistory'
 import type { UserFeaturesWithSubscription } from '@/types/features'
-
-const FREE_ANALYTICS_DAYS = 90
 
 function toFeaturesResponse(
   plan: Awaited<ReturnType<typeof resolveUserPlanFromSubscription>>,
@@ -17,9 +15,7 @@ function toFeaturesResponse(
   userCreatedAt: string | null | undefined,
   importCount: number
 ): UserFeaturesWithSubscription {
-  const now = new Date()
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - FREE_ANALYTICS_DAYS)
-  const analyticsCutoffDate = plan.plan_name === 'free' ? toLocalDateString(d) : null
+  const analyticsCutoffDate = plan.plan_name === 'free' ? freeHistoryCutoffDate() : null
   const has_budget_editing = getBudgetEditingAllowed(plan, userCreatedAt)
   const budget_trial_days_left = getBudgetTrialDaysLeft(plan, userCreatedAt)
   return {
@@ -47,8 +43,6 @@ function toFeaturesResponse(
 
 /** Safe FREE fallback when anything fails. Never throw. */
 function freeFallback(): UserFeaturesWithSubscription {
-  const d = new Date()
-  d.setDate(d.getDate() - 90)
   return toFeaturesResponse(
     {
       plan_name: 'free',

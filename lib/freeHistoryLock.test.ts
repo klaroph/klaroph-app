@@ -157,9 +157,14 @@ describe('enforce_free_history_lock', () => {
 
     await db.exec(`
       INSERT INTO public.expenses (user_id, date, amount)
-        VALUES ('${USER}', (current_date - interval '90 days')::date, 1);
+        VALUES ('${USER}', public.free_history_cutoff(), 1);
     `)
     expect(await expenseCount(db, USER)).toBe(1)
+
+    await expect(db.exec(`
+      INSERT INTO public.expenses (user_id, date, amount)
+        VALUES ('${USER}', public.free_history_cutoff() - 1, 2);
+    `)).rejects.toThrow(/HISTORY_LOCKED/)
   })
 
   it('rolls back a mixed insert so one old row does not save the recent rows either', async () => {
@@ -176,5 +181,99 @@ describe('enforce_free_history_lock', () => {
         VALUES ('${IN_GRACE}', (current_date - interval '400 days')::date, 9);
     `)
     expect(await expenseCount(db, IN_GRACE)).toBe(1)
+  })
+})
+
+describe('Manila cutoff and hidden income ownership', () => {
+  it('uses Asia/Manila for the cutoff, including 8 AM Manila and the previous Los Angeles day', async () => {
+    const db = await database()
+    const dates = await db.query<{ label: string; cutoff: string }>(`
+      SELECT 'before' AS label, ((timestamptz '2026-10-19 15:59:59+00' AT TIME ZONE 'Asia/Manila')::date - 90)::text AS cutoff
+      UNION ALL
+      SELECT 'midnight', ((timestamptz '2026-10-19 16:00:00+00' AT TIME ZONE 'Asia/Manila')::date - 90)::text
+      UNION ALL
+      SELECT 'eight', ((timestamptz '2026-10-20 00:00:00+00' AT TIME ZONE 'Asia/Manila')::date - 90)::text
+    `)
+    const byLabel = Object.fromEntries(dates.rows.map((row) => [row.label, row.cutoff]))
+    expect(byLabel.before).toBe('2026-07-21')
+    expect(byLabel.midnight).toBe('2026-07-22')
+    expect(byLabel.eight).toBe('2026-07-22')
+    const helper = await db.query<{ same: boolean }>(`
+      SELECT public.free_history_cutoff() = ((now() AT TIME ZONE 'Asia/Manila')::date - 90) AS same
+    `)
+    expect(helper.rows[0]?.same).toBe(true)
+  })
+
+  it('lets a Free user update an allocation when the parent income is hidden', async () => {
+    const db = await database()
+    const incomeId = '66666666-6666-4666-8666-666666666666'
+    const otherIncome = '77777777-7777-4777-8777-777777777777'
+    const goalId = '88888888-8888-4888-8888-888888888888'
+    const allocationId = '99999999-9999-4999-8999-999999999999'
+    const otherAllocation = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab'
+    await db.exec(`
+      CREATE TABLE public.goals (
+        id uuid PRIMARY KEY,
+        user_id uuid NOT NULL,
+        deleted_at timestamptz
+      );
+      CREATE TABLE public.income_allocations (
+        id uuid PRIMARY KEY,
+        user_id uuid,
+        goal_id uuid NOT NULL,
+        income_record_id uuid,
+        amount numeric NOT NULL,
+        deleted_at timestamptz
+      );
+      ALTER TABLE public.income_records DISABLE TRIGGER income_records_history_locked_insert;
+      INSERT INTO public.income_records (id, user_id, date, total_amount)
+        VALUES ('${incomeId}', '${USER}', '2020-01-01', 100),
+               ('${otherIncome}', '${LIFETIME}', '2020-01-01', 50);
+      ALTER TABLE public.income_records ENABLE TRIGGER income_records_history_locked_insert;
+      INSERT INTO public.goals (id, user_id) VALUES ('${goalId}', '${USER}');
+      INSERT INTO public.income_allocations (id, user_id, goal_id, income_record_id, amount)
+        VALUES ('${allocationId}', '${USER}', '${goalId}', '${incomeId}', 10),
+               ('${otherAllocation}', '${USER}', '${goalId}', '${otherIncome}', 4);
+      ALTER TABLE public.income_records ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "income_records_select_90d_free" ON public.income_records;
+      CREATE POLICY "income_records_select_90d_free" ON public.income_records
+        FOR SELECT USING (
+          auth.uid() = user_id
+          AND (
+            NOT public.is_free_analytics_user(auth.uid())
+            OR date >= public.free_history_cutoff()
+          )
+        );
+      DROP TRIGGER IF EXISTS income_allocations_enforce_owner ON public.income_allocations;
+      CREATE TRIGGER income_allocations_enforce_owner
+        BEFORE UPDATE ON public.income_allocations
+        FOR EACH ROW EXECUTE FUNCTION public.income_allocations_enforce_owner();
+      CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+      LANGUAGE sql STABLE AS $$
+        SELECT NULLIF(current_setting('klaro.user_id', true), '')::uuid
+      $$;
+      GRANT USAGE ON SCHEMA public TO authenticated;
+      GRANT SELECT ON public.goals, public.income_records TO authenticated;
+      GRANT SELECT, UPDATE ON public.income_allocations TO authenticated;
+    `)
+    await db.exec(`SELECT set_config('klaro.user_id', '${USER}', false)`)
+    await db.exec('SET ROLE authenticated')
+    const visible = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM public.income_records WHERE id = '${incomeId}'`,
+    )
+    expect(visible.rows[0]?.n).toBe(0)
+    const owned = await db.query<{ owned: boolean }>(
+      `SELECT public.income_record_owned_by('${incomeId}'::uuid, '${USER}'::uuid) AS owned`,
+    )
+    expect(owned.rows[0]?.owned).toBe(true)
+    await db.exec(`UPDATE public.income_allocations SET amount = 25 WHERE id = '${allocationId}'`)
+    await expect(db.exec(
+      `UPDATE public.income_allocations SET amount = 3 WHERE id = '${otherAllocation}'`,
+    )).rejects.toThrow(/Income record not found or unauthorized/)
+    await db.exec('RESET ROLE')
+    const saved = await db.query<{ amount: string }>(
+      `SELECT amount::text FROM public.income_allocations WHERE id = '${allocationId}'`,
+    )
+    expect(saved.rows[0]?.amount).toBe('25')
   })
 })

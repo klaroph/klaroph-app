@@ -162,7 +162,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     }
     if (!removed || removed.length === 0) {
       if (await freeUserOwnsOldRow('income_records', user.id, id)) return historyLockedResponse()
-      return NextResponse.json({ ok: true })
+      return NextResponse.json({ error: 'Income record not found.' }, { status: 404 })
     }
 
     const { error: allocError } = await softDelete(supabase.from('income_allocations')).eq(
