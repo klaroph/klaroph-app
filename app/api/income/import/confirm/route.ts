@@ -113,14 +113,14 @@ export async function POST(request: Request) {
       )
     }
 
-    const body: { imported: number; skippedHistory?: number; message?: string } = {
+    const result: { imported: number; skippedHistory?: number; message?: string } = {
       imported: partitioned.keep.length,
     }
     if (partitioned.skipped > 0) {
-      body.skippedHistory = partitioned.skipped
-      body.message = historySkipMessage(partitioned.skipped)
+      result.skippedHistory = partitioned.skipped
+      result.message = historySkipMessage(partitioned.skipped)
     }
-    return NextResponse.json(body, { status: 200 })
+    return NextResponse.json(result, { status: 200 })
   } catch (e) {
     console.error('POST /api/income/import/confirm', e)
     return NextResponse.json(

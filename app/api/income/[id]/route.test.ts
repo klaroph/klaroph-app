@@ -135,7 +135,11 @@ describe('DELETE /api/income/[id]', () => {
     const res = await DELETE(new Request('http://localhost'), params)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ ok: true })
-    expect(state.tables).toEqual(['income_records'])
+    expect(state.tables).toEqual(['income_records', 'admin:income_records'])
+    expect(state.adminFilters).toEqual([
+      ['id', 'income-1'],
+      ['user_id', 'user-1'],
+    ])
   })
 
   it('soft-deletes allocations only after the income delete matches', async () => {

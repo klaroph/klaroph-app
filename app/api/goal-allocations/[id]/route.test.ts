@@ -5,6 +5,10 @@ const state = vi.hoisted(() => ({
   calls: [] as { op: string; userId: string; id: string; amount?: unknown }[],
 }))
 
+vi.mock('@/lib/supabaseAdmin', () => ({
+  supabaseAdmin: {},
+}))
+
 vi.mock('@/lib/supabaseServer', () => ({
   createSupabaseServerClient: async () => ({
     auth: { getUser: async () => ({ data: { user: state.user } }) },
