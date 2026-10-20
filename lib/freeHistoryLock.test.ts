@@ -277,6 +277,7 @@ describe('Manila cutoff and hidden income ownership', () => {
     await db.exec(`
       SELECT set_config('klaro.user_id', '${USER}', false);
       SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+      SELECT set_config('request.jwt.claims', '{"role":"authenticated"}', false);
     `)
     await db.exec('SET ROLE authenticated')
     const visible = await db.query<{ n: number }>(
@@ -309,6 +310,7 @@ describe('Manila cutoff and hidden income ownership', () => {
     await db.exec(`
       SELECT set_config('klaro.user_id', '', false);
       SELECT set_config('request.jwt.claim.role', 'service_role', false);
+      SELECT set_config('request.jwt.claims', '{"role":"service_role"}', false);
     `)
     const asService = await db.query<{ owned: boolean; mismatch: boolean }>(`
       SELECT
@@ -342,6 +344,7 @@ describe('Manila cutoff and hidden income ownership', () => {
     await db.exec(`
       SELECT set_config('klaro.user_id', '${USER}', false);
       SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+      SELECT set_config('request.jwt.claims', '{"role":"authenticated"}', false);
     `)
     await db.exec('SET ROLE authenticated')
     const asOwner = await db.query<{ own: boolean; probe: boolean }>(`
@@ -357,6 +360,7 @@ describe('Manila cutoff and hidden income ownership', () => {
     await db.exec(`
       SELECT set_config('klaro.user_id', '', false);
       SELECT set_config('request.jwt.claim.role', 'service_role', false);
+      SELECT set_config('request.jwt.claims', '{"role":"service_role"}', false);
     `)
     const asService = await db.query<{ own: boolean; other: boolean; mismatch: boolean }>(`
       SELECT
@@ -367,5 +371,65 @@ describe('Manila cutoff and hidden income ownership', () => {
     expect(asService.rows[0]?.own).toBe(true)
     expect(asService.rows[0]?.other).toBe(true)
     expect(asService.rows[0]?.mismatch).toBe(false)
+  })
+
+  it('lets a postgres session with no JWT claims update an allocation, and a probe with claims stays false', async () => {
+    const db = await database()
+    const incomeId = '66666666-6666-4666-8666-666666666666'
+    const otherIncome = '77777777-7777-4777-8777-777777777777'
+    const goalId = '88888888-8888-4888-8888-888888888888'
+    const allocationId = '99999999-9999-4999-8999-999999999999'
+    await db.exec(`
+      CREATE TABLE public.goals (
+        id uuid PRIMARY KEY,
+        user_id uuid NOT NULL,
+        deleted_at timestamptz
+      );
+      CREATE TABLE public.income_allocations (
+        id uuid PRIMARY KEY,
+        user_id uuid,
+        goal_id uuid NOT NULL,
+        income_record_id uuid,
+        amount numeric NOT NULL,
+        deleted_at timestamptz
+      );
+      ALTER TABLE public.income_records DISABLE TRIGGER income_records_history_locked_insert;
+      INSERT INTO public.income_records (id, user_id, date, total_amount)
+        VALUES ('${incomeId}', '${USER}', '2020-01-01', 100),
+               ('${otherIncome}', '${LIFETIME}', '2020-01-01', 50);
+      ALTER TABLE public.income_records ENABLE TRIGGER income_records_history_locked_insert;
+      INSERT INTO public.goals (id, user_id) VALUES ('${goalId}', '${USER}');
+      INSERT INTO public.income_allocations (id, user_id, goal_id, income_record_id, amount)
+        VALUES ('${allocationId}', '${USER}', '${goalId}', '${incomeId}', 10);
+      DROP TRIGGER IF EXISTS income_allocations_enforce_owner ON public.income_allocations;
+      CREATE TRIGGER income_allocations_enforce_owner
+        BEFORE UPDATE ON public.income_allocations
+        FOR EACH ROW EXECUTE FUNCTION public.income_allocations_enforce_owner();
+      CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+      LANGUAGE sql STABLE AS $$
+        SELECT NULLIF(current_setting('klaro.user_id', true), '')::uuid
+      $$;
+      SELECT set_config('klaro.user_id', '', false);
+      SELECT set_config('request.jwt.claim.role', '', false);
+      SELECT set_config('request.jwt.claims', '', false);
+    `)
+    const session = await db.query<{ current_user: string }>(`SELECT current_user`)
+    expect(session.rows[0]?.current_user).toBe('postgres')
+    await db.exec(`UPDATE public.income_allocations SET amount = 15 WHERE id = '${allocationId}'`)
+    const saved = await db.query<{ amount: string }>(
+      `SELECT amount::text FROM public.income_allocations WHERE id = '${allocationId}'`,
+    )
+    expect(saved.rows[0]?.amount).toBe('15')
+
+    await db.exec(`
+      SELECT set_config('klaro.user_id', '${USER}', false);
+      SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+      SELECT set_config('request.jwt.claims', '{"role":"authenticated"}', false);
+    `)
+    await db.exec('SET ROLE authenticated')
+    const probe = await db.query<{ owned: boolean }>(
+      `SELECT public.income_record_owned_by('${otherIncome}'::uuid, '${LIFETIME}'::uuid) AS owned`,
+    )
+    expect(probe.rows[0]?.owned).toBe(false)
   })
 })
