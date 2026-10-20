@@ -1,8 +1,21 @@
 # Klaro Native
 
-Offline-first Android app for KlaroPH. This folder is the non-visual foundation: a local SQLite database, a repository, and a push/pull sync engine. The screen is only a placeholder.
+Offline-first Android app for KlaroPH. Local SQLite, the repository, and the push/pull sync engine stay the source of truth. Screens read and write through those APIs and do not change sync rules.
 
 The Next.js app at the repo root does not import this package. `mobile/` is excluded from the root TypeScript project, ESLint, and Vitest so Vercel still builds only the web app.
+
+## Screens
+
+Light mode is the primary palette: blue `#0038A8`, yellow `#FCD116`, off-white cards with 26px corners. Dark mode follows the system appearance. Nunito is the rounded sans. Category icons are bundled in the app.
+
+- First run is two screens. Then Home, History, and Goals, with a yellow + in the middle of the tab bar.
+- Home shows this payday period, a budget ring, an on-this-phone / synced pill, days logged, top category, goal progress, and recent entries.
+- Quick add opens from the +. Amount, category, save. The date starts as today in Asia/Manila and cannot move past today. On Free, it also stops 90 days back. The category starts as Groceries (Salary for income) until one has been saved; the next add uses the last category for that kind.
+- History lists expenses and income with edit and delete. Free shows the last 90 days and the line "Entries older than 90 days are saved. Upgrade to Pro to see them." Older rows stay stored and cannot be edited or deleted on Free.
+- Goals show progress as the sum of live allocations, or `saved_amount` when a goal has none. Deposit writes an allocation. Limit and past-due grace copy comes from the sync engine.
+- Settings sits behind the avatar: sync switch, email sign-in, and the uninstall warning. Sign-out clears local financial rows. The intro flag, last categories, and phone-only pay-period amounts are written back. If any rows have not synced, sign-out is blocked and the screen shows the count. The way through is the red "Delete unsynced entries" button, after a confirmation.
+
+The budget ring uses the payday helper. When category budgets are already on the phone, it prorates that monthly total by the period's share of days in the month. Otherwise it uses one amount for the current pay period, stored only on the phone. Tap the ring to set it. That amount is not pushed.
 
 ## Run locally
 
@@ -15,7 +28,16 @@ npm test
 npx expo start
 ```
 
-`npm test` runs the sync, repository, and payday tests. It does not need a device or a Supabase project.
+Phone-width web, including the local SQLite worker. The dev server sends `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` so `SharedArrayBuffer` is available. Open the app at a 390×844 viewport.
+
+```bash
+cd mobile
+npx expo start --web
+```
+
+`npm test` runs the sync, repository, payday, and screen tests. It does not need a device or a Supabase project. `npm run lint` runs `expo lint`. Use Node 22 (`.nvmrc` at the repo root and in this folder); Node 20 crashes `better-sqlite3` while the tests run.
+
+`npm run perf:quick-add` seeds 1,000 expenses and prints the median and max of 10 quick adds. That run uses the in-memory test database. `node scripts/time-quick-add-web.mjs` times the same save through the Expo web UI, with the dev server already on port 8081.
 
 To open the placeholder on an Android emulator or a device with Expo Go:
 
@@ -84,6 +106,6 @@ Signed-in budget creates, replacements, and override saves follow the web routes
 
 `activateAccount` keeps local-only data on the first sign-in. Signing in as a different user wipes the previous account's rows and token. `signOut` always clears both.
 
-## Not in this foundation
+## Not in this version
 
-Pro checkout, reports, exports, and any designed screens. Payday periods (`src/domain/payPeriod.ts`) use Asia/Manila and match the payday email window. Period A is the previous month's last day through the 14th. Period B is the 15th through the day before the month's last day. The last day of a month starts the next month's period A.
+Pro checkout, reports, exports, category budget editing, and Google or magic-link sign-in. The phone can set one pay-period amount locally. It does not edit per-category budgets. Payday periods (`src/domain/payPeriod.ts`) use Asia/Manila and match the payday email window. Period A is the previous month's last day through the 14th. Period B is the 15th through the day before the month's last day. The last day of a month starts the next month's period A.

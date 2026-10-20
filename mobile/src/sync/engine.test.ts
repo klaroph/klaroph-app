@@ -28,7 +28,7 @@ type Stored = {
 }
 
 class FakeRemote implements RemoteSync {
-  readonly payloads: Array<{ table: SyncedTable; payload: Record<string, unknown> }> = []
+  readonly payloads: { table: SyncedTable; payload: Record<string, unknown> }[] = []
   clearedDeletedAt = 0
   savedAmountSends = 0
   updatedAtSends = 0
@@ -43,7 +43,7 @@ class FakeRemote implements RemoteSync {
     accountCreatedAt: new Date().toISOString(),
     simulateBudgetExpired: false,
   }
-  readonly modes: Array<{ table: SyncedTable; mode: PushMode; id: string }> = []
+  readonly modes: { table: SyncedTable; mode: PushMode; id: string }[] = []
   readonly limits: number[] = []
   /** Runs after the server accepts the payload and before the stamp is returned. */
   onAccepted?: (table: SyncedTable, payload: Record<string, unknown>) => void
@@ -675,7 +675,7 @@ describe('sync engine', () => {
     const { repo, remote, engine } = harness()
     remote.goalCap = 2
     const first = repo.createGoal({ userId: USER_A, name: 'Emergency', targetAmount: 100 })
-    const second = repo.createGoal({ userId: USER_A, name: 'Tuition', targetAmount: 200 })
+    repo.createGoal({ userId: USER_A, name: 'Tuition', targetAmount: 200 })
     await engine.sync(USER_A)
 
     repo.softDeleteGoal(first.id)

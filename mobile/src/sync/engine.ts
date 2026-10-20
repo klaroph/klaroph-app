@@ -9,6 +9,7 @@ import {
   type ResolvedPlanCap,
 } from '../domain/planLimits'
 import { freeHistoryCutoffDate, HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE, isOlderThanFreeHistory } from '../domain/historyLock'
+import { runPull, yieldToUi } from './activity'
 import { clampPageSize, DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
 import type { LocalStore } from './localStore'
 import {
@@ -61,6 +62,9 @@ const PUSH_PHASES: readonly Phase[] = [
   { tables: PARENT_TABLES, tombstones: true },
 ]
 
+/** One SQLite transaction per chunk. Stays inside the 100–200 row band. */
+const PULL_WRITE_BATCH = 150
+
 function isNonBlockingSyncError(error: SyncError): boolean {
   if (error.code === BUDGET_LOCKED || error.code === GOAL_CREATION_GRACE || error.code === HISTORY_LOCKED) return true
   return error.message.includes('Invalid goal in allocations')
@@ -103,6 +107,8 @@ function errorCode(error: unknown): string | undefined {
 export class SyncEngine {
   private readonly overlapMs: number
   private readonly pageSize: number
+  /** A second sync waits until the one already running on this engine finishes. */
+  private syncTail: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly local: LocalStore,
@@ -136,15 +142,21 @@ export class SyncEngine {
    * Assign the signed-in user to local-only rows. Refuses when the combined
    * goals would exceed the plan, and does not assign any rows in that case.
    */
-  async adopt(userId: string, plan?: ResolvedPlanCap): Promise<void> {
+  async adopt(userId: string, plan?: ResolvedPlanCap): Promise<{ entries: number; goals: number }> {
     const resolved = await this.prepareAccount(userId, plan)
     const serverGoals = await this.remote.countLive('goals', userId)
     const message = this.goalLimitMessage(userId, serverGoals, resolved)
     if (message) throw new DomainError(this.goalBlockCode(resolved), message)
-    this.local.adoptUnassigned(userId)
+    return this.local.adoptUnassigned(userId)
   }
 
   async sync(userId: string, plan?: ResolvedPlanCap): Promise<SyncReport> {
+    const run = this.syncTail.then(() => runPull(() => this.syncNow(userId, plan)))
+    this.syncTail = run.then(() => undefined, () => undefined)
+    return run
+  }
+
+  private async syncNow(userId: string, plan?: ResolvedPlanCap): Promise<SyncReport> {
     const report: SyncReport = { pulled: 0, pushed: 0, errors: [], summary: [] }
     const budgetsKept = { n: 0 }
     let resolved = plan ?? this.local.knownPlan() ?? FREE_PLAN_CAP
@@ -270,7 +282,33 @@ export class SyncEngine {
       }
       previousMarker = marker
 
-      for (const raw of page) {
+      const chunk: ReturnType<typeof normalizeServerRow>[] = []
+      const flushChunk = async () => {
+        if (chunk.length === 0) return
+        const rows = chunk.splice(0, chunk.length)
+        const applied = this.local.applyServerRows(table, rows)
+        budgetsKept.n += applied.budgetsKeptFromAccount
+        report.pulled += applied.appliedUpdatedAt.length
+        for (const stamp of applied.appliedUpdatedAt) {
+          if (maxSeen == null || Date.parse(stamp) > Date.parse(maxSeen)) maxSeen = stamp
+        }
+        for (const failure of applied.failures) {
+          rowErrors += 1
+          report.errors.push({
+            table,
+            id: failure.id,
+            message: errorMessage(failure.error),
+            code: errorCode(failure.error),
+          })
+        }
+        rows.length = 0
+        await yieldToUi()
+      }
+
+      for (let index = 0; index < page.length; index += 1) {
+        const raw = page[index]
+        page[index] = undefined as unknown as Record<string, unknown>
+        if (!raw) continue
         let rowId: string | undefined
         try {
           const remoteRow = normalizeServerRow(table, raw)
@@ -278,12 +316,7 @@ export class SyncEngine {
           if (remoteRow.user_id !== userId) {
             throw new Error('Pulled a row for a different user.')
           }
-          const applied = this.local.applyServerRow(table, remoteRow)
-          budgetsKept.n += applied.budgetsKeptFromAccount
-          report.pulled += 1
-          if (maxSeen == null || Date.parse(remoteRow.updated_at) > Date.parse(maxSeen)) {
-            maxSeen = remoteRow.updated_at
-          }
+          chunk.push(remoteRow)
         } catch (error) {
           rowErrors += 1
           report.errors.push({
@@ -293,7 +326,9 @@ export class SyncEngine {
             code: errorCode(error),
           })
         }
+        if (chunk.length >= PULL_WRITE_BATCH) await flushChunk()
       }
+      await flushChunk()
 
       after = { updatedAt: lastUpdated, id: lastId }
       if (page.length < limit) break

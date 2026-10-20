@@ -5,11 +5,11 @@ import { DomainError } from '../domain/errors'
 import { goalProgressAmount } from '../domain/goalTotal'
 import { createId } from '../domain/ids'
 import { assertNonNegativeMoney, assertPositiveMoney, moneyToText } from '../domain/money'
-import { FREE_PLAN_MAX_GOALS, GOAL_CREATION_GRACE, GOAL_GRACE_BLOCK_MESSAGE, GOAL_LIMIT_REACHED, type ResolvedPlanCap } from '../domain/planLimits'
 import { HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE } from '../domain/historyLock'
+import { FREE_PLAN_MAX_GOALS, GOAL_CREATION_GRACE, GOAL_GRACE_BLOCK_MESSAGE, GOAL_LIMIT_REACHED, goalCapMessage, type ResolvedPlanCap } from '../domain/planLimits'
 import { canonicalTimestamp, optionalNote, optionalText, requireIsoDate, requireText } from '../domain/time'
 import { assertNever } from '../sync/assertNever'
-import type { ApplyServerResult, LocalStore } from '../sync/localStore'
+import type { ApplyServerBatchResult, ApplyServerResult, LocalStore } from '../sync/localStore'
 import { decidePull } from '../sync/merge'
 import type { ServerRow, ServerStamp, SyncRow, SyncedTable, TableCounts } from '../sync/model'
 import { emptyCounts, SYNCED_TABLES } from '../sync/model'
@@ -28,6 +28,24 @@ import {
 
 type RunResult = { changes: number }
 export type KlaroDb = BaseSQLiteDatabase<'sync', RunResult, typeof schema>
+
+export type EntryPageRow = {
+  id: string
+  kind: string
+  date: string
+  createdAt: string
+  amount: string
+  category: string
+  description: string
+  detail: string
+}
+
+export type PeriodStats = {
+  spent: number
+  income: number
+  categories: { name: string; amount: number }[]
+  dates: { date: string; count: number }[]
+}
 
 const SESSION_USER_KEY = 'session_user_id'
 const BUDGET_ACCESS_KEY = 'budget_access'
@@ -414,7 +432,9 @@ export class KlaroRepository implements LocalStore {
     })
   }
 
-  adoptUnassigned(userId: string): void {
+  adoptUnassigned(userId: string): { entries: number; goals: number } {
+    const entries = this.countUnassignedLive('expenses') + this.countUnassignedLive('income_records')
+    const goalsMoved = this.countUnassignedLive('goals')
     const patch = { userId, dirty: true, revision: nextRevision }
     this.withTx((tx) => {
       tx.update(expenses).set(patch).where(isNull(expenses.userId)).run()
@@ -425,6 +445,7 @@ export class KlaroRepository implements LocalStore {
       tx.update(financialAccounts).set(patch).where(isNull(financialAccounts.userId)).run()
       tx.update(incomeAllocations).set(patch).where(isNull(incomeAllocations.userId)).run()
     })
+    return { entries, goals: goalsMoved }
   }
 
   countLive(userId: string): TableCounts {
@@ -456,6 +477,60 @@ export class KlaroRepository implements LocalStore {
     return Number(row?.n ?? 0)
   }
 
+  /**
+   * Dirty rows for the signed-in user, including tombstones and rows still
+   * waiting for a user id. Zero when nobody is signed in.
+   */
+  countUnsyncedRows(): number {
+    const userId = this.sessionUserId()
+    if (!userId) return 0
+    let total = 0
+    for (const table of SYNCED_TABLES) total += this.countDirty(table, userId)
+    return total
+  }
+
+  /** Removes those dirty rows from this phone. Does not push or change sync rules. */
+  discardUnsyncedRows(): number {
+    const userId = this.sessionUserId()
+    if (!userId) return 0
+    const removed = this.countUnsyncedRows()
+    if (removed === 0) return 0
+    this.withTx((tx) => {
+      for (const table of SYNCED_TABLES) {
+        tx.run(sql`
+          delete from ${sql.identifier(table)}
+          where dirty = 1
+            and (user_id = ${userId} or user_id is null)
+        `)
+      }
+    })
+    return removed
+  }
+
+  private countDirty(table: SyncedTable, userId: string): number {
+    const row = this.db.get<{ n: number }>(sql`
+      select count(*) as n
+      from ${sql.identifier(table)}
+      where dirty = 1
+        and (user_id = ${userId} or user_id is null)
+    `)
+    return Number(row?.n ?? 0)
+  }
+
+  private countUnassignedLive(table: 'expenses' | 'income_records' | 'goals'): number {
+    const row = this.db.get<{ n: number }>(sql`
+      select count(*) as n from ${sql.identifier(table)}
+      where user_id is null and deleted_at is null
+    `)
+    return Number(row?.n ?? 0)
+  }
+
+  private ownerSql() {
+    const userId = this.sessionUserId()
+    if (!userId) return sql`user_id is null`
+    return sql`(user_id = ${userId} or user_id is null)`
+  }
+
   private countVisible(table: SyncedTable, userId: string): number {
     const row = this.db.get<{ n: number }>(sql`
       select count(*) as n
@@ -471,7 +546,169 @@ export class KlaroRepository implements LocalStore {
   }
 
   listDirty(table: SyncedTable, userId: string): SyncRow[] {
-    return this.rowsForOwner(table, userId).filter((row) => row.dirty)
+    return this.rowsForOwner(table, userId, true)
+  }
+
+  /**
+   * One page of live expenses and income, newest first. Does not load the rest of the table.
+   * `before` is the oldest row already shown; the next page is strictly older.
+   */
+  pageEntries(input: {
+    minDate: string | null
+    limit: number
+    before: { date: string; createdAt: string; id: string } | null
+  }): EntryPageRow[] {
+    const limit = Math.max(1, Math.min(100, Math.floor(input.limit)))
+    const minDate = input.minDate
+    const beforeDate = input.before?.date ?? null
+    const beforeCreated = input.before?.createdAt ?? null
+    const beforeId = input.before?.id ?? null
+    const rows = this.db.all<EntryPageRow>(sql`
+      select id, kind, date, created_at as createdAt, amount, category, description, detail from (
+        select
+          id,
+          'expense' as kind,
+          date,
+          created_at,
+          amount,
+          category,
+          coalesce(description, '') as description,
+          type as detail
+        from expenses
+        where deleted_at is null
+          and ${this.ownerSql()}
+          and (${minDate} is null or date >= ${minDate})
+        union all
+        select
+          id,
+          'income' as kind,
+          date,
+          created_at,
+          total_amount as amount,
+          coalesce(income_source, '') as category,
+          '' as description,
+          'Income' as detail
+        from income_records
+        where deleted_at is null
+          and ${this.ownerSql()}
+          and (${minDate} is null or date >= ${minDate})
+      ) as entries
+      where (
+        ${beforeDate} is null
+        or date < ${beforeDate}
+        or (date = ${beforeDate} and created_at < ${beforeCreated})
+        or (date = ${beforeDate} and created_at = ${beforeCreated} and id < ${beforeId})
+      )
+      order by date desc, created_at desc, id desc
+      limit ${limit}
+    `)
+    return rows
+  }
+
+  /** Sums for the pay-period card. Reads aggregates, not every expense row. */
+  periodStats(start: string, end: string, minDate: string | null): PeriodStats {
+    const spent = this.db.get<{ total: number | null }>(sql`
+      select coalesce(sum(cast(amount as real)), 0) as total
+      from expenses
+      where deleted_at is null
+        and ${this.ownerSql()}
+        and date >= ${start} and date <= ${end}
+        and (${minDate} is null or date >= ${minDate})
+    `)
+    const income = this.db.get<{ total: number | null }>(sql`
+      select coalesce(sum(cast(total_amount as real)), 0) as total
+      from income_records
+      where deleted_at is null
+        and ${this.ownerSql()}
+        and date >= ${start} and date <= ${end}
+        and (${minDate} is null or date >= ${minDate})
+    `)
+    const categories = this.db.all<{ name: string; amount: number }>(sql`
+      select category as name, sum(cast(amount as real)) as amount
+      from expenses
+      where deleted_at is null
+        and ${this.ownerSql()}
+        and date >= ${start} and date <= ${end}
+        and (${minDate} is null or date >= ${minDate})
+      group by category
+    `)
+    const dates = this.db.all<{ date: string; count: number }>(sql`
+      select date, count(*) as count from (
+        select date from expenses
+        where deleted_at is null
+          and ${this.ownerSql()}
+          and date >= ${start} and date <= ${end}
+          and (${minDate} is null or date >= ${minDate})
+        union all
+        select date from income_records
+        where deleted_at is null
+          and ${this.ownerSql()}
+          and date >= ${start} and date <= ${end}
+          and (${minDate} is null or date >= ${minDate})
+      ) as days
+      group by date
+    `)
+    return {
+      spent: Number(spent?.total ?? 0),
+      income: Number(income?.total ?? 0),
+      categories: categories.map((row) => ({ name: row.name, amount: Number(row.amount) })),
+      dates: dates.map((row) => ({ date: row.date, count: Number(row.count) })),
+    }
+  }
+
+  hasVisibleBefore(date: string): boolean {
+    const expense = this.db.get<{ id: string }>(sql`
+      select id from expenses
+      where deleted_at is null and ${this.ownerSql()} and date < ${date}
+      limit 1
+    `)
+    if (expense) return true
+    const income = this.db.get<{ id: string }>(sql`
+      select id from income_records
+      where deleted_at is null and ${this.ownerSql()} and date < ${date}
+      limit 1
+    `)
+    return income != null
+  }
+
+  countVisibleEntries(): number {
+    const row = this.db.get<{ n: number }>(sql`
+      select
+        (select count(*) from expenses where deleted_at is null and ${this.ownerSql()})
+        + (select count(*) from income_records where deleted_at is null and ${this.ownerSql()})
+        as n
+    `)
+    return Number(row?.n ?? 0)
+  }
+
+  /**
+   * Inserts many local expenses in one statement so a seed does not hold a row array
+   * or issue one statement per row. Dev and perf only.
+   */
+  seedExpenses(count: number, date: string): number {
+    const safeCount = Math.max(0, Math.floor(count))
+    if (safeCount === 0) return 0
+    const day = requireIsoDate(date)
+    const userId = this.sessionUserId()
+    const now = this.now()
+    const owner = userId == null ? 'null' : `'${userId.replace(/'/g, '')}'`
+    const stamp = now.replace(/'/g, '')
+    const batchSize = 20
+    let inserted = 0
+    while (inserted < safeCount) {
+      const size = Math.min(batchSize, safeCount - inserted)
+      const values: string[] = []
+      for (let index = 0; index < size; index += 1) {
+        values.push(
+          `('${this.nextId()}', ${owner}, 'Groceries', 'needs', '10.00', '${day}', null, '${stamp}', '${stamp}', null, 1, null, 1)`,
+        )
+      }
+      this.db.run(sql.raw(
+        `insert into expenses (id, user_id, category, type, amount, date, description, created_at, updated_at, deleted_at, dirty, base_updated_at, revision) values ${values.join(',')}`,
+      ))
+      inserted += size
+    }
+    return inserted
   }
 
   getRow(table: SyncedTable, id: string): SyncRow | null {
@@ -499,23 +736,44 @@ export class KlaroRepository implements LocalStore {
     return row ? map(row) : null
   }
 
-  private rowsForOwner(table: SyncedTable, userId: string | null): SyncRow[] {
+  private rowsForOwner(table: SyncedTable, userId: string | null, dirtyOnly = false): SyncRow[] {
     const owner = userId == null
     switch (table) {
       case 'expenses':
-        return this.db.select().from(expenses).where(owner ? isNull(expenses.userId) : eq(expenses.userId, userId)).all().map(mapExpense)
+        return this.db.select().from(expenses).where(and(
+          owner ? isNull(expenses.userId) : eq(expenses.userId, userId),
+          dirtyOnly ? eq(expenses.dirty, true) : undefined,
+        )).all().map(mapExpense)
       case 'income_records':
-        return this.db.select().from(incomeRecords).where(owner ? isNull(incomeRecords.userId) : eq(incomeRecords.userId, userId)).all().map(mapIncome)
+        return this.db.select().from(incomeRecords).where(and(
+          owner ? isNull(incomeRecords.userId) : eq(incomeRecords.userId, userId),
+          dirtyOnly ? eq(incomeRecords.dirty, true) : undefined,
+        )).all().map(mapIncome)
       case 'goals':
-        return this.db.select().from(goals).where(owner ? isNull(goals.userId) : eq(goals.userId, userId)).all().map(mapGoal)
+        return this.db.select().from(goals).where(and(
+          owner ? isNull(goals.userId) : eq(goals.userId, userId),
+          dirtyOnly ? eq(goals.dirty, true) : undefined,
+        )).all().map(mapGoal)
       case 'budget_plans':
-        return this.db.select().from(budgetPlans).where(owner ? isNull(budgetPlans.userId) : eq(budgetPlans.userId, userId)).all().map(mapPlan)
+        return this.db.select().from(budgetPlans).where(and(
+          owner ? isNull(budgetPlans.userId) : eq(budgetPlans.userId, userId),
+          dirtyOnly ? eq(budgetPlans.dirty, true) : undefined,
+        )).all().map(mapPlan)
       case 'budget_overrides':
-        return this.db.select().from(budgetOverrides).where(owner ? isNull(budgetOverrides.userId) : eq(budgetOverrides.userId, userId)).all().map(mapOverride)
+        return this.db.select().from(budgetOverrides).where(and(
+          owner ? isNull(budgetOverrides.userId) : eq(budgetOverrides.userId, userId),
+          dirtyOnly ? eq(budgetOverrides.dirty, true) : undefined,
+        )).all().map(mapOverride)
       case 'financial_accounts':
-        return this.db.select().from(financialAccounts).where(owner ? isNull(financialAccounts.userId) : eq(financialAccounts.userId, userId)).all().map(mapAccount)
+        return this.db.select().from(financialAccounts).where(and(
+          owner ? isNull(financialAccounts.userId) : eq(financialAccounts.userId, userId),
+          dirtyOnly ? eq(financialAccounts.dirty, true) : undefined,
+        )).all().map(mapAccount)
       case 'income_allocations':
-        return this.db.select().from(incomeAllocations).where(owner ? isNull(incomeAllocations.userId) : eq(incomeAllocations.userId, userId)).all().map(mapAllocation)
+        return this.db.select().from(incomeAllocations).where(and(
+          owner ? isNull(incomeAllocations.userId) : eq(incomeAllocations.userId, userId),
+          dirtyOnly ? eq(incomeAllocations.dirty, true) : undefined,
+        )).all().map(mapAllocation)
       default:
         return assertNever(table, 'table')
     }
@@ -653,7 +911,9 @@ export class KlaroRepository implements LocalStore {
     }
     const maxGoals = input.userId == null ? FREE_PLAN_MAX_GOALS : input.maxGoals ?? FREE_PLAN_MAX_GOALS
     if (this.countGoalsTowardLimit(input.userId) >= maxGoals) {
-      throw new DomainError(GOAL_LIMIT_REACHED, 'Goal count is already at the plan max_goals.')
+      const known = input.userId == null ? null : this.knownPlan()
+      const plan = known ?? (maxGoals > FREE_PLAN_MAX_GOALS ? { name: 'Pro' } : null)
+      throw new DomainError(GOAL_LIMIT_REACHED, goalCapMessage(plan))
     }
     const now = this.now()
     const id = this.nextId()
@@ -811,7 +1071,7 @@ export class KlaroRepository implements LocalStore {
     return this.requireRow('budget_plans', id)
   }
 
-  replaceBudgetPlans(userId: string | null, items: ReadonlyArray<{ category: string; amount: number; note?: string | null }>): void {
+  replaceBudgetPlans(userId: string | null, items: readonly { category: string; amount: number; note?: string | null }[]): void {
     this.assertBudgetWritable(userId)
     if (items.length === 0) {
       throw new DomainError('INVALID', 'Send at least one category with an amount greater than 0.')
@@ -937,32 +1197,56 @@ export class KlaroRepository implements LocalStore {
   }
 
   applyServerRow(table: SyncedTable, row: ServerRow): ApplyServerResult {
-    const local = this.getRow(table, row.id)
-    const decision = decidePull(
-      local && {
-        dirty: local.dirty,
-        deleted_at: local.deleted_at,
-        base_updated_at: local.base_updated_at,
-      },
-      row,
-    )
-    if (decision === 'keep-local') return { budgetsKeptFromAccount: 0 }
-    const deletedAt = row.deleted_at ?? local?.deleted_at ?? null
+    const applied = this.applyServerRows(table, [row])
+    const failure = applied.failures[0]
+    if (failure) throw failure.error
+    return { budgetsKeptFromAccount: applied.budgetsKeptFromAccount }
+  }
+
+  /**
+   * One transaction for the batch. Each row gets a savepoint, so a bad row
+   * rolls back only itself. Callers should keep a batch around 100–200 rows.
+   */
+  applyServerRows(table: SyncedTable, rows: readonly ServerRow[]): ApplyServerBatchResult {
+    const failures: ApplyServerBatchResult['failures'] = []
+    const appliedUpdatedAt: string[] = []
     let budgetsKeptFromAccount = 0
-    try {
-      this.db.transaction((tx) => {
-        const database = tx as unknown as KlaroDb
-        budgetsKeptFromAccount = this.retireClashingBudget(database, table, row)
-        this.upsertServer(table, row, deletedAt, database)
-      })
-      this.writeHistorySnapshotFromServer(table, row, deletedAt)
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new DomainError('UNIQUE_CONFLICT', `Unique constraint on ${table}.`)
+    if (rows.length === 0) return { budgetsKeptFromAccount, appliedUpdatedAt, failures }
+    this.db.transaction((tx) => {
+      for (const row of rows) {
+        const local = this.getRow(table, row.id)
+        const decision = decidePull(
+          local && {
+            dirty: local.dirty,
+            deleted_at: local.deleted_at,
+            base_updated_at: local.base_updated_at,
+          },
+          row,
+        )
+        if (decision === 'keep-local') {
+          appliedUpdatedAt.push(row.updated_at)
+          continue
+        }
+        const deletedAt = row.deleted_at ?? local?.deleted_at ?? null
+        try {
+          let kept = 0
+          tx.transaction((inner) => {
+            const database = inner as unknown as KlaroDb
+            kept = this.retireClashingBudget(database, table, row)
+            this.upsertServer(table, row, deletedAt, database)
+            this.writeHistorySnapshotFromServer(table, row, deletedAt)
+          })
+          budgetsKeptFromAccount += kept
+          appliedUpdatedAt.push(row.updated_at)
+        } catch (error) {
+          failures.push({
+            id: row.id,
+            error: isUniqueViolation(error) ? new DomainError('UNIQUE_CONFLICT', `Unique constraint on ${table}.`) : error,
+          })
+        }
       }
-      throw error
-    }
-    return { budgetsKeptFromAccount }
+    })
+    return { budgetsKeptFromAccount, appliedUpdatedAt, failures }
   }
 
   markSynced(table: SyncedTable, id: string, stamp: ServerStamp, revision: number): void {

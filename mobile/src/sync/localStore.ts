@@ -7,10 +7,27 @@ export type ApplyServerResult = {
   budgetsKeptFromAccount: number
 }
 
+export type ApplyServerFailure = {
+  id?: string
+  error: unknown
+}
+
+export type ApplyServerBatchResult = {
+  budgetsKeptFromAccount: number
+  /** `updated_at` of rows that applied or were kept locally. Failures are omitted. */
+  appliedUpdatedAt: string[]
+  failures: ApplyServerFailure[]
+}
+
 export interface LocalStore {
   listDirty(table: SyncedTable, userId: string): SyncRow[]
   getRow(table: SyncedTable, id: string): SyncRow | null
   applyServerRow(table: SyncedTable, row: ServerRow): ApplyServerResult
+  /**
+   * Applies many pulled rows in one transaction, with a savepoint per row.
+   * A bad row is reported and does not roll back the rest of the batch.
+   */
+  applyServerRows(table: SyncedTable, rows: readonly ServerRow[]): ApplyServerBatchResult
   /**
    * Records the server stamp. Leaves the row dirty when `revision` is no longer
    * the revision that was pushed, and still advances `base_updated_at` so the
@@ -31,7 +48,8 @@ export interface LocalStore {
   /** Synced goals this device has tombstoned and not yet pushed. */
   countPendingGoalDeletes(userId: string): number
   clearAll(): void
-  adoptUnassigned(userId: string): void
+  /** Assigns phone-only rows to the account. Counts live expenses, income, and goals. */
+  adoptUnassigned(userId: string): { entries: number; goals: number }
   sessionUserId(): string | null
   setSessionUserId(userId: string | null): void
   /** Remembers the signed-in budget clock. `null` forgets it (sign-out clears this with the other meta). */

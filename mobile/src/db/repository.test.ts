@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BUDGET_LOCK_UPGRADE_MESSAGE } from '../domain/budgetLock'
-import { GOAL_GRACE_BLOCK_MESSAGE } from '../domain/planLimits'
+import { FREE_PLAN_MAX_GOALS, GOAL_GRACE_BLOCK_MESSAGE, GOAL_LIMIT_REACHED } from '../domain/planLimits'
 import { isUuid } from '../domain/ids'
-import { FREE_PLAN_MAX_GOALS, GOAL_LIMIT_REACHED } from '../domain/planLimits'
 import { openTestRepository } from './testDb'
 
 const USER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -149,6 +148,38 @@ describe('local repository', () => {
     expect(updated.id).toBe(created.id)
     expect(updated.values.month).toBe('2026-01-01')
     expect(updated.values.amount).toBe('12000.00')
+  })
+
+  it('keeps the other rows when one row in a pull batch is invalid', () => {
+    const { repo } = openTestRepository()
+    const row = (id: string, category: string | null) => ({
+      table: 'expenses' as const,
+      id,
+      user_id: USER,
+      created_at: '2026-10-16T00:00:00.000Z',
+      updated_at: '2026-10-16T00:00:00.000Z',
+      deleted_at: null,
+      values: {
+        category,
+        type: 'needs',
+        amount: '10.00',
+        date: '2026-10-16',
+        description: null,
+      },
+    })
+    const first = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const bad = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const third = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const applied = repo.applyServerRows('expenses', [
+      row(first, 'Fare'),
+      row(bad, null),
+      row(third, 'Groceries'),
+    ])
+    expect(applied.failures.map((failure) => failure.id)).toEqual([bad])
+    expect(applied.appliedUpdatedAt).toHaveLength(2)
+    expect(repo.getRow('expenses', first)?.values.category).toBe('Fare')
+    expect(repo.getRow('expenses', third)?.values.category).toBe('Groceries')
+    expect(repo.getRow('expenses', bad)).toBeNull()
   })
 
   it('soft-deletes a local budget when the account already has that category', () => {
