@@ -1,3 +1,4 @@
+import { runPull } from '../sync/activity'
 import type { SignInPreview, SyncReport } from '../sync/engine'
 import type { LocalStore } from '../sync/localStore'
 import { activateAccount, signOut } from '../sync/session'
@@ -43,7 +44,7 @@ export async function signInAndAdopt(input: {
   const adopted = preview.goalLimitMessage == null
     ? await input.engine.adopt(input.userId)
     : { entries: 0, goals: 0 }
-  const report = input.syncEnabled ? await input.engine.sync(input.userId) : null
+  const report = input.syncEnabled ? await runPull(() => input.engine.sync(input.userId)) : null
   const moved = movedToAccountLine(adopted.entries, adopted.goals)
   const summary = moved ? [moved, ...(report?.summary ?? [])] : [...(report?.summary ?? [])]
   const nextReport = summary.length === 0

@@ -1,4 +1,6 @@
 type SyncResult = {
+  changes?: number
+  lastInsertRowId?: number
   getAllSync?: (...args: unknown[]) => unknown
   getFirstSync?: (...args: unknown[]) => unknown
 }
@@ -13,9 +15,9 @@ type PrepareSync = (source: string) => SyncStatement
 
 /**
  * Drizzle's expo-sqlite session prepares a statement per query and never
- * finalizes it. On web each of those statements stays alive in the worker.
- * Finalize after the caller has read the rows, including the write path that
- * only reads `changes`.
+ * finalizes it. A deferred finalize keeps every write statement alive until
+ * the turn ends, so a burst of adds retains them all. Finalize as soon as the
+ * caller reads the result.
  */
 export function releasePreparedStatements<T extends { prepareSync: (source: string) => object }>(sqlite: T): T {
   const prepare = sqlite.prepareSync.bind(sqlite) as PrepareSync
@@ -47,6 +49,29 @@ function armStatement(statement: SyncStatement): SyncStatement {
             } finally {
               finalize()
             }
+          },
+        })
+      }
+      if ('changes' in record || 'lastInsertRowId' in record) {
+        const changes = record.changes
+        const lastInsertRowId = record.lastInsertRowId
+        const releaseOnRead = () => {
+          finalize()
+        }
+        Object.defineProperty(result, 'changes', {
+          configurable: true,
+          enumerable: true,
+          get() {
+            releaseOnRead()
+            return changes
+          },
+        })
+        Object.defineProperty(result, 'lastInsertRowId', {
+          configurable: true,
+          enumerable: true,
+          get() {
+            releaseOnRead()
+            return lastInsertRowId
           },
         })
       }

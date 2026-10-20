@@ -24,6 +24,7 @@ import {
   type LedgerSnapshot,
 } from '../ui/ledger'
 import { newEntryDraft, type EntryDraft } from '../ui/quickAdd'
+import { subscribeSyncActivity } from '../sync/activity'
 import { budgetsKeptFromAccountLine, movedToAccountLine } from '../sync/summary'
 import { reportLooksOffline, syncNotices, syncPill, uniqueLines } from '../ui/syncStatus'
 import { BudgetSheet } from './BudgetSheet'
@@ -133,6 +134,10 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
     setHistoryRows((current) => applyHistoryChange(current, change, historyHasMoreRef.current))
   }
 
+  useEffect(() => subscribeSyncActivity((next) => {
+    setSyncing(next === 'syncing')
+  }), [])
+
   const runSync = useCallback(async () => {
     if (!repo.sessionUserId() || !prefs.syncEnabled()) return
     if (syncingRef.current) {
@@ -140,7 +145,6 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       return
     }
     syncingRef.current = true
-    setSyncing(true)
     try {
       const report = await runtime.sync()
       if (!report) {
@@ -156,7 +160,6 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       setNotices([scrubGoalCopy(errorText(error), repo.knownPlan())])
     } finally {
       syncingRef.current = false
-      setSyncing(false)
       replaceHome()
       noteHistoryStale()
       if (syncAgain.current) {
@@ -515,13 +518,8 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
               if (enabled && repo.sessionUserId()) void syncRef.current()
             },
             onSignIn: async (email, password) => {
-              setSyncing(true)
-              try {
-                const outcome = await runtime.signIn(email, password)
-                applySignIn(outcome)
-              } finally {
-                setSyncing(false)
-              }
+              const outcome = await runtime.signIn(email, password)
+              applySignIn(outcome)
             },
             onSignOut: confirmSignOut,
             unsyncedCount,

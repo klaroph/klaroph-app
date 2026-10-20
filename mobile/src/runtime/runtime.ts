@@ -1,4 +1,5 @@
 import { KlaroRepository, type KlaroDb } from '../db/repository'
+import { runPull } from '../sync/activity'
 import { SyncEngine, type SyncReport } from '../sync/engine'
 import { createSecureTokenStore } from '../sync/secureTokenStore'
 import { createKlaroSupabase, createSupabaseRemote, tokenStoreStorage } from '../sync/supabaseRemote'
@@ -21,7 +22,10 @@ export function createAppRuntime(db: KlaroDb): AppRuntime {
   const repo = new KlaroRepository({ db })
   const prefs = new ScreenPrefs(db)
   const tokens = createSecureTokenStore()
-  const config = readPublicSupabaseConfig(process.env as Record<string, string | undefined>)
+  const config = readPublicSupabaseConfig({
+    EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+    EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  })
   const client = config ? createKlaroSupabase(config.url, config.anonKey, tokenStoreStorage(tokens)) : null
   const engine = client ? new SyncEngine(repo, createSupabaseRemote(client)) : null
 
@@ -61,7 +65,7 @@ export function createAppRuntime(db: KlaroDb): AppRuntime {
     sync() {
       const userId = repo.sessionUserId()
       if (!userId || !engine) return Promise.resolve(null)
-      return engine.sync(userId)
+      return runPull(() => engine.sync(userId))
     },
   }
 }

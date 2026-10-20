@@ -7,8 +7,9 @@ import type { KlaroDb } from '../db/repository'
 import { schema } from '../db/schema'
 import { manilaCivilDate } from '../domain/payPeriod'
 import { FREE_GOAL_CAP_MESSAGE, GOAL_GRACE_BLOCK_MESSAGE, PRO_GOAL_CAP_MESSAGE, goalCapMessage } from '../domain/planLimits'
-import { MemoryTokenStore } from '../sync/tokenStore'
+import { syncActivity } from '../sync/activity'
 import { emptyCounts } from '../sync/model'
+import { MemoryTokenStore } from '../sync/tokenStore'
 import { signInAndAdopt, signOutKeepingIntro } from './accountFlow'
 import { commitDeleteEntry, commitDeposit, commitEntry, commitGoal, commitPeriodBudget } from './actions'
 import { monthlyBudget, prorateToPeriod, ringProgress } from './budgetMath'
@@ -196,6 +197,10 @@ describe('quick add and sync pill', () => {
     expect(syncPill({ signedIn: true, syncEnabled: false, syncing: false, offline: false, pending: true })).toEqual({ tone: 'off', label: 'Sync off' })
     expect(syncPill({ signedIn: true, syncEnabled: true, syncing: false, offline: true, pending: true })).toEqual({ tone: 'offline', label: 'Offline' })
     expect(syncPill({ signedIn: true, syncEnabled: true, syncing: false, offline: false, pending: false })).toEqual({ tone: 'synced', label: 'Synced' })
+    expect(syncPill({ signedIn: false, syncEnabled: true, syncing: true, offline: false, pending: false })).toEqual({
+      tone: 'syncing',
+      label: 'Syncing your entries…',
+    })
     expect(syncPill({ signedIn: true, syncEnabled: true, syncing: true, offline: true, pending: true })).toEqual({
       tone: 'syncing',
       label: 'Syncing your entries…',
@@ -266,6 +271,31 @@ describe('account flow for the settings sheet', () => {
     expect(sync).not.toHaveBeenCalled()
     expect(repo.sessionUserId()).toBe(USER)
     expect(repo.listLive('goals', null)).toHaveLength(1)
+  })
+
+  it('is syncing during a sign-in pull started from Settings', async () => {
+    const { repo } = openTestRepository({ now: () => NOW })
+    const tokens = new MemoryTokenStore()
+    let during: ReturnType<typeof syncActivity> = 'idle'
+    expect(syncActivity()).toBe('idle')
+    await signInAndAdopt({
+      local: repo,
+      tokens,
+      userId: USER,
+      tokenKey: 'sb-test-auth-token',
+      tokenValue: 'token',
+      syncEnabled: true,
+      engine: {
+        preview: async () => ({ local: emptyCounts(), server: emptyCounts(), goalLimitMessage: null }),
+        adopt: async () => ({ entries: 0, goals: 0 }),
+        sync: async () => {
+          during = syncActivity()
+          return { pulled: 2, pushed: 0, errors: [], summary: [] }
+        },
+      },
+    })
+    expect(during).toBe('syncing')
+    expect(syncActivity()).toBe('idle')
   })
 
   it('adopts and syncs when the plan allows it', async () => {

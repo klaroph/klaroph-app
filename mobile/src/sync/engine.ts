@@ -9,6 +9,7 @@ import {
   type ResolvedPlanCap,
 } from '../domain/planLimits'
 import { freeHistoryCutoffDate, HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE, isOlderThanFreeHistory } from '../domain/historyLock'
+import { runPull, yieldToUi } from './activity'
 import { clampPageSize, DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
 import type { LocalStore } from './localStore'
 import {
@@ -96,12 +97,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Sync failed.'
 }
 
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, 0)
-  })
-}
-
 function errorCode(error: unknown): string | undefined {
   if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
     return error.code
@@ -156,7 +151,7 @@ export class SyncEngine {
   }
 
   async sync(userId: string, plan?: ResolvedPlanCap): Promise<SyncReport> {
-    const run = this.syncTail.then(() => this.syncNow(userId, plan))
+    const run = this.syncTail.then(() => runPull(() => this.syncNow(userId, plan)))
     this.syncTail = run.then(() => undefined, () => undefined)
     return run
   }
@@ -307,7 +302,7 @@ export class SyncEngine {
           })
         }
         rows.length = 0
-        await yieldToEventLoop()
+        await yieldToUi()
       }
 
       for (let index = 0; index < page.length; index += 1) {
