@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Pressable, StyleSheet, Switch, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { StyleSheet, Switch, View } from 'react-native'
 import { Sheet } from '../components/Sheet'
 import { useTheme } from '../components/ThemeProvider'
 import { Card, DangerButton, Field, GhostButton, Pill, PrimaryButton, T } from '../components/ui'
@@ -38,6 +38,10 @@ export function SettingsSheet({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const mounted = useRef(true)
+  useEffect(() => () => {
+    mounted.current = false
+  }, [])
 
   async function signIn() {
     setBusy(true)
@@ -45,9 +49,9 @@ export function SettingsSheet({
     try {
       await onSignIn(email, password)
     } catch (caught) {
-      setError(errorText(caught))
+      if (mounted.current) setError(errorText(caught))
     } finally {
-      setBusy(false)
+      if (mounted.current) setBusy(false)
     }
   }
 
@@ -58,21 +62,18 @@ export function SettingsSheet({
           <T weight="bold">Sync</T>
           <T size={13} color={colors.muted}>Uploads and downloads changes for the signed-in account.</T>
         </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityLabel="Sync"
-          accessibilityState={{ checked: syncEnabled }}
-          onPress={() => onToggleSync(!syncEnabled)}
-          style={styles.switchHit}
-        >
+        <View style={styles.switchHit}>
           <Switch
-            pointerEvents="none"
+            accessibilityLabel="Sync"
+            accessibilityState={{ checked: syncEnabled }}
+            testID="sync-switch"
             value={syncEnabled}
             onValueChange={onToggleSync}
             trackColor={{ false: colors.border, true: colors.blue }}
             thumbColor={colors.card}
+            style={styles.switchControl}
           />
-        </Pressable>
+        </View>
       </View>
       <Pill label={pill.label} tone={pill.tone} />
       {notices.map((notice) => (
@@ -138,5 +139,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  switchControl: {
+    height: 48,
   },
 })

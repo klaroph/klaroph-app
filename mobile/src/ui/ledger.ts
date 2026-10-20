@@ -10,10 +10,17 @@ import { historyCutoff, manilaToday, showsFreeHistory } from './historyWindow'
 
 export const HISTORY_PAGE_SIZE = 40
 
+export type HistoryCursor = {
+  date: string
+  createdAt: string
+  id: string
+}
+
 export type HistoryRow = {
   id: string
   kind: EntryKind
   date: string
+  createdAt: string
   amount: number
   title: string
   category: string
@@ -65,7 +72,7 @@ export type LedgerSnapshot = {
 
 export type HistoryPage = {
   rows: HistoryRow[]
-  cursor: { date: string; id: string } | null
+  cursor: HistoryCursor | null
   hasMore: boolean
 }
 
@@ -115,6 +122,7 @@ export function historyRowFromSync(kind: EntryKind, row: SyncRow): HistoryRow {
       id: row.id,
       kind,
       date: text(row, 'date'),
+      createdAt: row.created_at,
       amount: money(row, 'amount'),
       title: category,
       category,
@@ -131,6 +139,7 @@ export function historyRowFromSync(kind: EntryKind, row: SyncRow): HistoryRow {
     id: row.id,
     kind,
     date: text(row, 'date'),
+    createdAt: row.created_at,
     amount,
     title: source || 'Income',
     category: source,
@@ -146,6 +155,7 @@ function historyRowFromPage(row: {
   id: string
   kind: string
   date: string
+  createdAt: string
   amount: string
   category: string
   description: string
@@ -158,6 +168,7 @@ function historyRowFromPage(row: {
       id: row.id,
       kind: 'income',
       date: row.date,
+      createdAt: row.createdAt,
       amount,
       title: source || 'Income',
       category: source,
@@ -173,6 +184,7 @@ function historyRowFromPage(row: {
     id: row.id,
     kind: 'expense',
     date: row.date,
+    createdAt: row.createdAt,
     amount,
     title: row.category,
     category: row.category,
@@ -186,6 +198,7 @@ function historyRowFromPage(row: {
 
 export function byRecent(a: HistoryRow, b: HistoryRow): number {
   if (a.date !== b.date) return a.date < b.date ? 1 : -1
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1
   return a.id < b.id ? 1 : -1
 }
 
@@ -222,7 +235,7 @@ export function hasUnsyncedChanges(repo: KlaroRepository): boolean {
 export function pageHistory(
   repo: KlaroRepository,
   now: Date,
-  before: { date: string; id: string } | null,
+  before: HistoryCursor | null,
   limit = HISTORY_PAGE_SIZE,
 ): HistoryPage {
   const { minDate } = windowFor(repo, now)
@@ -230,7 +243,7 @@ export function pageHistory(
   const last = rows[rows.length - 1]
   return {
     rows,
-    cursor: last ? { date: last.date, id: last.id } : before,
+    cursor: last ? { date: last.date, createdAt: last.createdAt, id: last.id } : before,
     hasMore: rows.length === limit,
   }
 }

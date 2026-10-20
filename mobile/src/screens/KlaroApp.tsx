@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { AppRuntime } from '../runtime/runtime'
@@ -19,6 +19,7 @@ import {
   patchHome,
   type EntryChange,
   type GoalCard,
+  type HistoryCursor,
   type HistoryRow,
   type LedgerSnapshot,
 } from '../ui/ledger'
@@ -70,11 +71,11 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   const [engineMessage, setEngineMessage] = useState<string | null>(null)
   const [home, setHome] = useState<LedgerSnapshot>(() => readHome(repo, prefs))
   const [historyRows, setHistoryRows] = useState<HistoryRow[]>([])
-  const [historyCursor, setHistoryCursor] = useState<{ date: string; id: string } | null>(null)
+  const [, setHistoryCursor] = useState<HistoryCursor | null>(null)
   const [historyHasMore, setHistoryHasMore] = useState(false)
   const refreshMeta = () => setRevision((value) => value + 1)
-  const pending = useMemo(() => hasUnsyncedChanges(repo), [repo, revision])
-  const unsyncedCount = useMemo(() => repo.countUnsyncedRows(), [repo, revision])
+  const pending = hasUnsyncedChanges(repo)
+  const unsyncedCount = repo.countUnsyncedRows()
   const signedIn = repo.sessionUserId() != null
   const plan = signedIn ? repo.knownPlan() : null
   const syncEnabled = prefs.syncEnabled()
@@ -93,18 +94,17 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const historyReady = useRef(false)
   const historyHasMoreRef = useRef(false)
-  const historyCursorRef = useRef<{ date: string; id: string } | null>(null)
+  const historyCursorRef = useRef<HistoryCursor | null>(null)
   const tabRef = useRef(tab)
   const loadingMore = useRef(false)
-  tabRef.current = tab
-  historyHasMoreRef.current = historyHasMore
+  const showHistoryPageRef = useRef<(before: HistoryCursor | null, append: boolean) => void>(() => undefined)
 
-  function replaceHome() {
+  const replaceHome = useCallback(() => {
     setHome(readHome(repo, prefs))
-    refreshMeta()
-  }
+    setRevision((value) => value + 1)
+  }, [repo, prefs])
 
-  function showHistoryPage(before: { date: string; id: string } | null, append: boolean) {
+  const showHistoryPage = useCallback((before: HistoryCursor | null, append: boolean) => {
     const page = pageHistory(repo, new Date(), before, HISTORY_PAGE_SIZE)
     historyReady.current = true
     setHistoryRows((current) => (append ? [...current, ...page.rows] : page.rows))
@@ -112,9 +112,9 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
     historyCursorRef.current = page.cursor
     setHistoryHasMore(page.hasMore)
     historyHasMoreRef.current = page.hasMore
-  }
+  }, [repo])
 
-  function noteHistoryStale() {
+  const noteHistoryStale = useCallback(() => {
     historyReady.current = false
     if (tabRef.current === 'history') showHistoryPage(null, false)
     else {
@@ -124,7 +124,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       setHistoryHasMore(false)
       historyHasMoreRef.current = false
     }
-  }
+  }, [showHistoryPage])
 
   function applyEntry(change: EntryChange) {
     const refill = change.type === 'delete' ? pageHistory(repo, new Date(), null, 5).rows : undefined
@@ -133,7 +133,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
     setHistoryRows((current) => applyHistoryChange(current, change, historyHasMoreRef.current))
   }
 
-  const runSync = async () => {
+  const runSync = useCallback(async () => {
     if (!repo.sessionUserId() || !prefs.syncEnabled()) return
     if (syncingRef.current) {
       syncAgain.current = true
@@ -164,9 +164,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
         void syncRef.current()
       }
     }
-  }
-
-  syncRef.current = runSync
+  }, [noteHistoryStale, prefs, replaceHome, repo, runtime])
 
   function scheduleSync() {
     if (!repo.sessionUserId() || !prefs.syncEnabled()) return
@@ -176,6 +174,13 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       void syncRef.current()
     }, SYNC_DEBOUNCE_MS)
   }
+
+  useEffect(() => {
+    tabRef.current = tab
+    historyHasMoreRef.current = historyHasMore
+    syncRef.current = runSync
+    showHistoryPageRef.current = showHistoryPage
+  }, [tab, historyHasMore, runSync, showHistoryPage])
 
   useEffect(() => () => {
     if (syncTimer.current) clearTimeout(syncTimer.current)
@@ -190,7 +195,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
 
   useEffect(() => {
     if (tab !== 'history' || historyReady.current) return
-    showHistoryPage(null, false)
+    showHistoryPageRef.current(null, false)
   }, [tab])
 
   useEffect(() => {
@@ -246,63 +251,70 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
     if (typeof location === 'undefined') return
     const shot = new URLSearchParams(location.search).get('shot')
     if (!shot) return
-    if (!prefs.firstRunDone()) prefs.setFirstRunDone(true)
-    repo.setSessionUserId(null)
-    refreshMeta()
-    const today = readHome(repo, prefs).today
-    if (shot === 'cap') {
-      const userId = repo.sessionUserId()
-      const have = (userId ? repo.listLive('goals', userId).length : 0) + repo.listLive('goals', null).length
-      for (let index = have; index < 2; index += 1) {
-        repo.createGoal({ userId, name: index === 0 ? 'Emergency fund' : 'Tuition', targetAmount: 10000 })
-      }
-      replaceHome()
-      setTab('goals')
-    } else if (shot === 'total') {
-      repo.createExpense({
-        userId: repo.sessionUserId(),
-        category: 'Rent',
-        type: 'needs',
-        amount: 1234567.89,
-        date: today,
-      })
-      replaceHome()
-    } else if (shot === 'history') {
-      const seed = !historySeedStarted
-      historySeedStarted = true
-      void (async () => {
-        try {
-          if (seed) {
-            await new Promise((resolve) => { setTimeout(resolve, 300) })
-            const userId = repo.sessionUserId()
-            while (repo.countVisibleEntries() < 1000) {
-              repo.createExpense({
-                userId,
-                category: 'Groceries',
-                type: 'needs',
-                amount: 10,
-                date: today,
-              })
-              await new Promise((resolve) => { setTimeout(resolve, 0) })
-            }
-          } else {
-            while (repo.countVisibleEntries() < 1000) {
-              await new Promise((resolve) => { setTimeout(resolve, 50) })
-            }
-          }
-          historyReady.current = false
-          setTab('history')
-        } catch (error) {
-          setNotices([errorText(error)])
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      if (!prefs.firstRunDone()) prefs.setFirstRunDone(true)
+      repo.setSessionUserId(null)
+      refreshMeta()
+      const today = readHome(repo, prefs).today
+      if (shot === 'cap') {
+        const userId = repo.sessionUserId()
+        const have = (userId ? repo.listLive('goals', userId).length : 0) + repo.listLive('goals', null).length
+        for (let index = have; index < 2; index += 1) {
+          repo.createGoal({ userId, name: index === 0 ? 'Emergency fund' : 'Tuition', targetAmount: 10000 })
         }
-      })()
-    } else if (shot === 'merge') {
-      const moved = movedToAccountLine(12, 2)
-      const kept = budgetsKeptFromAccountLine(1)
-      setNotices([moved, kept].filter((line): line is string => line != null))
-      setOverlay({ type: 'settings' })
+        replaceHome()
+        setTab('goals')
+      } else if (shot === 'total') {
+        repo.createExpense({
+          userId: repo.sessionUserId(),
+          category: 'Rent',
+          type: 'needs',
+          amount: 1234567.89,
+          date: today,
+        })
+        replaceHome()
+      } else if (shot === 'history') {
+        const seed = !historySeedStarted
+        historySeedStarted = true
+        void (async () => {
+          try {
+            if (seed) {
+              await new Promise((resolve) => { setTimeout(resolve, 300) })
+              const userId = repo.sessionUserId()
+              while (repo.countVisibleEntries() < 1000) {
+                repo.createExpense({
+                  userId,
+                  category: 'Groceries',
+                  type: 'needs',
+                  amount: 10,
+                  date: today,
+                })
+                await new Promise((resolve) => { setTimeout(resolve, 0) })
+              }
+            } else {
+              while (repo.countVisibleEntries() < 1000) {
+                await new Promise((resolve) => { setTimeout(resolve, 50) })
+              }
+            }
+            historyReady.current = false
+            setTab('history')
+          } catch (error) {
+            setNotices([errorText(error)])
+          }
+        })()
+      } else if (shot === 'merge') {
+        const moved = movedToAccountLine(12, 2)
+        const kept = budgetsKeptFromAccountLine(1)
+        setNotices([moved, kept].filter((line): line is string => line != null))
+        setOverlay({ type: 'settings' })
+      }
+    })
+    return () => {
+      cancelled = true
     }
-  }, [])
+  }, [noteHistoryStale, prefs, replaceHome, repo])
 
   function finishLocal() {
     setOverlay(null)
@@ -503,8 +515,13 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
               if (enabled && repo.sessionUserId()) void syncRef.current()
             },
             onSignIn: async (email, password) => {
-              const outcome = await runtime.signIn(email, password)
-              applySignIn(outcome)
+              setSyncing(true)
+              try {
+                const outcome = await runtime.signIn(email, password)
+                applySignIn(outcome)
+              } finally {
+                setSyncing(false)
+              }
             },
             onSignOut: confirmSignOut,
             unsyncedCount,

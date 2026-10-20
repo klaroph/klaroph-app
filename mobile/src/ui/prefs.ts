@@ -11,7 +11,7 @@ const PERIOD_BUDGET_PREFIX = 'ui.period_budget:'
 export type KeptDevicePrefs = {
   lastExpense: string | null
   lastIncome: string | null
-  periodBudgets: ReadonlyArray<{ start: string; amount: string }>
+  periodBudgets: readonly { start: string; amount: string }[]
 }
 
 /**

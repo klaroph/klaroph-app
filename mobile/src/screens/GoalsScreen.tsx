@@ -31,7 +31,7 @@ export function GoalsScreen({
       {canAdd ? <PrimaryButton label="Add goal" onPress={onAdd} /> : null}
       {goals.length === 0 ? (
         <Card>
-          <T color={colors.muted}>No goals yet. Add one to track what you're saving for.</T>
+          <T color={colors.muted}>{"No goals yet. Add one to track what you're saving for."}</T>
         </Card>
       ) : (
         goals.map((goal) => (

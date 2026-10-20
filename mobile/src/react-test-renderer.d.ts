@@ -4,7 +4,7 @@ declare module 'react-test-renderer' {
   export type ReactTestRendererJSON = {
     type: string
     props: Record<string, unknown>
-    children: null | Array<ReactTestRendererJSON | string>
+    children: null | (ReactTestRendererJSON | string)[]
   }
 
   export type ReactTestInstance = {

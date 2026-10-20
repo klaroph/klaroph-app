@@ -9,7 +9,7 @@ import { HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE } from '../domain/historyLock'
 import { FREE_PLAN_MAX_GOALS, GOAL_CREATION_GRACE, GOAL_GRACE_BLOCK_MESSAGE, GOAL_LIMIT_REACHED, goalCapMessage, type ResolvedPlanCap } from '../domain/planLimits'
 import { canonicalTimestamp, optionalNote, optionalText, requireIsoDate, requireText } from '../domain/time'
 import { assertNever } from '../sync/assertNever'
-import type { ApplyServerResult, LocalStore } from '../sync/localStore'
+import type { ApplyServerBatchResult, ApplyServerResult, LocalStore } from '../sync/localStore'
 import { decidePull } from '../sync/merge'
 import type { ServerRow, ServerStamp, SyncRow, SyncedTable, TableCounts } from '../sync/model'
 import { emptyCounts, SYNCED_TABLES } from '../sync/model'
@@ -33,6 +33,7 @@ export type EntryPageRow = {
   id: string
   kind: string
   date: string
+  createdAt: string
   amount: string
   category: string
   description: string
@@ -555,18 +556,20 @@ export class KlaroRepository implements LocalStore {
   pageEntries(input: {
     minDate: string | null
     limit: number
-    before: { date: string; id: string } | null
+    before: { date: string; createdAt: string; id: string } | null
   }): EntryPageRow[] {
     const limit = Math.max(1, Math.min(100, Math.floor(input.limit)))
     const minDate = input.minDate
     const beforeDate = input.before?.date ?? null
+    const beforeCreated = input.before?.createdAt ?? null
     const beforeId = input.before?.id ?? null
     const rows = this.db.all<EntryPageRow>(sql`
-      select id, kind, date, amount, category, description, detail from (
+      select id, kind, date, created_at as createdAt, amount, category, description, detail from (
         select
           id,
           'expense' as kind,
           date,
+          created_at,
           amount,
           category,
           coalesce(description, '') as description,
@@ -580,6 +583,7 @@ export class KlaroRepository implements LocalStore {
           id,
           'income' as kind,
           date,
+          created_at,
           total_amount as amount,
           coalesce(income_source, '') as category,
           '' as description,
@@ -589,8 +593,13 @@ export class KlaroRepository implements LocalStore {
           and ${this.ownerSql()}
           and (${minDate} is null or date >= ${minDate})
       ) as entries
-      where (${beforeDate} is null or date < ${beforeDate} or (date = ${beforeDate} and id < ${beforeId}))
-      order by date desc, id desc
+      where (
+        ${beforeDate} is null
+        or date < ${beforeDate}
+        or (date = ${beforeDate} and created_at < ${beforeCreated})
+        or (date = ${beforeDate} and created_at = ${beforeCreated} and id < ${beforeId})
+      )
+      order by date desc, created_at desc, id desc
       limit ${limit}
     `)
     return rows
@@ -1062,7 +1071,7 @@ export class KlaroRepository implements LocalStore {
     return this.requireRow('budget_plans', id)
   }
 
-  replaceBudgetPlans(userId: string | null, items: ReadonlyArray<{ category: string; amount: number; note?: string | null }>): void {
+  replaceBudgetPlans(userId: string | null, items: readonly { category: string; amount: number; note?: string | null }[]): void {
     this.assertBudgetWritable(userId)
     if (items.length === 0) {
       throw new DomainError('INVALID', 'Send at least one category with an amount greater than 0.')
@@ -1188,32 +1197,56 @@ export class KlaroRepository implements LocalStore {
   }
 
   applyServerRow(table: SyncedTable, row: ServerRow): ApplyServerResult {
-    const local = this.getRow(table, row.id)
-    const decision = decidePull(
-      local && {
-        dirty: local.dirty,
-        deleted_at: local.deleted_at,
-        base_updated_at: local.base_updated_at,
-      },
-      row,
-    )
-    if (decision === 'keep-local') return { budgetsKeptFromAccount: 0 }
-    const deletedAt = row.deleted_at ?? local?.deleted_at ?? null
+    const applied = this.applyServerRows(table, [row])
+    const failure = applied.failures[0]
+    if (failure) throw failure.error
+    return { budgetsKeptFromAccount: applied.budgetsKeptFromAccount }
+  }
+
+  /**
+   * One transaction for the batch. Each row gets a savepoint, so a bad row
+   * rolls back only itself. Callers should keep a batch around 100–200 rows.
+   */
+  applyServerRows(table: SyncedTable, rows: readonly ServerRow[]): ApplyServerBatchResult {
+    const failures: ApplyServerBatchResult['failures'] = []
+    const appliedUpdatedAt: string[] = []
     let budgetsKeptFromAccount = 0
-    try {
-      this.db.transaction((tx) => {
-        const database = tx as unknown as KlaroDb
-        budgetsKeptFromAccount = this.retireClashingBudget(database, table, row)
-        this.upsertServer(table, row, deletedAt, database)
-      })
-      this.writeHistorySnapshotFromServer(table, row, deletedAt)
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new DomainError('UNIQUE_CONFLICT', `Unique constraint on ${table}.`)
+    if (rows.length === 0) return { budgetsKeptFromAccount, appliedUpdatedAt, failures }
+    this.db.transaction((tx) => {
+      for (const row of rows) {
+        const local = this.getRow(table, row.id)
+        const decision = decidePull(
+          local && {
+            dirty: local.dirty,
+            deleted_at: local.deleted_at,
+            base_updated_at: local.base_updated_at,
+          },
+          row,
+        )
+        if (decision === 'keep-local') {
+          appliedUpdatedAt.push(row.updated_at)
+          continue
+        }
+        const deletedAt = row.deleted_at ?? local?.deleted_at ?? null
+        try {
+          let kept = 0
+          tx.transaction((inner) => {
+            const database = inner as unknown as KlaroDb
+            kept = this.retireClashingBudget(database, table, row)
+            this.upsertServer(table, row, deletedAt, database)
+            this.writeHistorySnapshotFromServer(table, row, deletedAt)
+          })
+          budgetsKeptFromAccount += kept
+          appliedUpdatedAt.push(row.updated_at)
+        } catch (error) {
+          failures.push({
+            id: row.id,
+            error: isUniqueViolation(error) ? new DomainError('UNIQUE_CONFLICT', `Unique constraint on ${table}.`) : error,
+          })
+        }
       }
-      throw error
-    }
-    return { budgetsKeptFromAccount }
+    })
+    return { budgetsKeptFromAccount, appliedUpdatedAt, failures }
   }
 
   markSynced(table: SyncedTable, id: string, stamp: ServerStamp, revision: number): void {

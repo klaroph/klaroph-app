@@ -14,7 +14,7 @@ export function syncPill(input: {
 }): SyncPill {
   if (!input.signedIn) return { tone: 'local', label: 'On this phone' }
   if (!input.syncEnabled) return { tone: 'off', label: 'Sync off' }
-  if (input.syncing) return { tone: 'syncing', label: 'Syncing' }
+  if (input.syncing) return { tone: 'syncing', label: 'Syncing your entries…' }
   if (input.offline) return { tone: 'offline', label: 'Offline' }
   if (input.pending) return { tone: 'pending', label: 'Not synced' }
   return { tone: 'synced', label: 'Synced' }

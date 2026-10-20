@@ -35,9 +35,9 @@ cd mobile
 npx expo start --web
 ```
 
-`npm test` runs the sync, repository, payday, and screen tests. It does not need a device or a Supabase project.
+`npm test` runs the sync, repository, payday, and screen tests. It does not need a device or a Supabase project. `npm run lint` runs `expo lint`. Use Node 22 (`.nvmrc` at the repo root and in this folder); Node 20 crashes `better-sqlite3` while the tests run.
 
-`npm run perf:quick-add` seeds 1,000 expenses and prints the median and max of 10 quick adds. The same helpers live in `scripts/seed-thousand.ts`.
+`npm run perf:quick-add` seeds 1,000 expenses and prints the median and max of 10 quick adds. That run uses the in-memory test database. `node scripts/time-quick-add-web.mjs` times the same save through the Expo web UI, with the dev server already on port 8081.
 
 To open the placeholder on an Android emulator or a device with Expo Go:
 

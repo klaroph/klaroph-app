@@ -31,4 +31,14 @@ describe('large history', () => {
     expect(sample.median).toBeLessThan(3000)
     console.log(`quick-add 1000 rows median=${sample.median.toFixed(2)}ms max=${sample.max.toFixed(2)}ms times=${sample.times.map((time) => time.toFixed(2)).join(',')}`)
   })
+
+  it('adds 300 rows in a row after a 1,000-row seed', () => {
+    const { repo } = openTestRepository({ now: () => NOW })
+    expect(seedExpenses(repo, 1000, '2026-10-20')).toBe(1000)
+    const started = repo.countVisibleEntries()
+    for (let index = 0; index < 300; index += 1) {
+      commitEntry(repo, { ...emptyDraft('2026-10-20'), amount: '4.00' }, NOW)
+    }
+    expect(repo.countVisibleEntries()).toBe(started + 300)
+  })
 })

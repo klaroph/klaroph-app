@@ -1,4 +1,4 @@
-import { act } from 'react'
+import React, { act, type ReactNode } from 'react'
 import { create, type ReactTestRendererJSON } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { BudgetRing } from '../components/BudgetRing'
@@ -11,9 +11,19 @@ import { SettingsSheet } from './SettingsSheet'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
+function host(type: string) {
+  function Host(props: { children?: ReactNode }) {
+    return React.createElement(type, props, props.children)
+  }
+  Host.displayName = type
+  return Host
+}
+
+vi.mock('expo-system-ui', () => ({
+  setBackgroundColorAsync: () => Promise.resolve(),
+}))
+
 vi.mock('react-native', () => {
-  const React = require('react') as typeof import('react')
-  const host = (type: string) => (props: { children?: React.ReactNode }) => React.createElement(type, props, props.children)
   return {
     View: host('View'),
     Text: host('Text'),
@@ -22,7 +32,7 @@ vi.mock('react-native', () => {
     TextInput: host('TextInput'),
     Modal: host('Modal'),
     Switch: host('Switch'),
-    FlatList: ({
+    FlatList: function FlatList({
       data,
       renderItem,
       ListHeaderComponent,
@@ -32,14 +42,16 @@ vi.mock('react-native', () => {
       renderItem?: (info: { item: { id: string }; index: number }) => React.ReactNode
       ListHeaderComponent?: React.ReactNode
       ListEmptyComponent?: React.ReactNode
-    }) => React.createElement(
-      'FlatList',
-      null,
-      ListHeaderComponent,
-      data && data.length > 0 && renderItem
-        ? data.map((item, index) => renderItem({ item, index }))
-        : ListEmptyComponent,
-    ),
+    }) {
+      return React.createElement(
+        'FlatList',
+        null,
+        ListHeaderComponent,
+        data && data.length > 0 && renderItem
+          ? data.map((item, index) => renderItem({ item, index }))
+          : ListEmptyComponent,
+      )
+    },
     ActivityIndicator: host('ActivityIndicator'),
     KeyboardAvoidingView: host('KeyboardAvoidingView'),
     StyleSheet: {
@@ -53,21 +65,23 @@ vi.mock('react-native', () => {
 })
 
 vi.mock('react-native-svg', () => {
-  const React = require('react') as typeof import('react')
-  const host = (type: string) => (props: { children?: React.ReactNode }) => React.createElement(type, props, props.children)
   return { default: host('Svg'), Circle: host('Circle') }
 })
 
 vi.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
-  const React = require('react') as typeof import('react')
-  return { default: (props: { children?: React.ReactNode }) => React.createElement('Icon', props, props.children) }
+  function Icon(props: { children?: ReactNode }) {
+    return React.createElement('Icon', props, props.children)
+  }
+  Icon.displayName = 'Icon'
+  return { default: Icon }
 })
 
 vi.mock('react-native-safe-area-context', () => {
-  const React = require('react') as typeof import('react')
   return {
     useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => React.createElement('SafeAreaProvider', null, children),
+    SafeAreaProvider: function SafeAreaProvider({ children }: { children: React.ReactNode }) {
+      return React.createElement('SafeAreaProvider', null, children)
+    },
   }
 })
 
@@ -112,6 +126,7 @@ describe('screen components', () => {
             id: '1',
             kind: 'expense',
             date: '2026-10-20',
+            createdAt: '2026-10-20T00:00:00.000Z',
             amount: 80,
             title: 'Groceries',
             category: 'Groceries',

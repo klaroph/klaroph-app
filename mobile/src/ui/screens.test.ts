@@ -14,7 +14,7 @@ import { commitDeleteEntry, commitDeposit, commitEntry, commitGoal, commitPeriod
 import { monthlyBudget, prorateToPeriod, ringProgress } from './budgetMath'
 import { FIRST_RUN_PAGES, FUTURE_DATE_MESSAGE, OLDER_ENTRIES_LINE, PERIOD_BUDGET_LINE, UNINSTALL_WARNING, unsyncedSignOutLine } from './copy'
 import { canShiftEntryDate, historyCutoff, manilaToday } from './historyWindow'
-import { hasUnsyncedChanges, loadLedger, pageHistory, patchHome } from './ledger'
+import { hasUnsyncedChanges, loadLedger, pageHistory } from './ledger'
 import { ScreenPrefs } from './prefs'
 import { readPublicSupabaseConfig } from './publicConfig'
 import { canSaveQuickAdd, categoryForNewEntry, emptyDraft, newEntryDraft, parseQuickAmount, sanitizeAmountInput } from './quickAdd'
@@ -60,6 +60,36 @@ describe('free history window', () => {
     expect(() => commitDeleteEntry(repo, 'expense', repo.listLive('expenses', null).find((row) => row.values.date === '2026-07-21')!.id, NOW)).toThrow(OLDER_ENTRIES_LINE)
     expect(repo.listLive('expenses', null)).toHaveLength(2)
     expect(() => commitEntry(repo, { ...emptyDraft('2026-07-21'), amount: '10', date: '2026-07-21' }, NOW)).toThrow(OLDER_ENTRIES_LINE)
+  })
+
+  it('orders the same day by created_at, newest first', () => {
+    const { repo } = openTestRepository({ now: () => NOW })
+    repo.setSessionUserId(USER)
+    const row = (id: string, createdAt: string) => ({
+      table: 'expenses' as const,
+      id,
+      user_id: USER,
+      created_at: createdAt,
+      updated_at: createdAt,
+      deleted_at: null,
+      values: {
+        category: 'Groceries',
+        type: 'needs',
+        amount: '10.00',
+        date: '2026-10-16',
+        description: null,
+      },
+    })
+    const earlierId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const laterId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    repo.applyServerRows('expenses', [
+      row(earlierId, '2026-10-16T01:00:00.000Z'),
+      row(laterId, '2026-10-16T09:00:00.000Z'),
+    ])
+    expect(pageHistory(repo, NOW, null).rows.map((entry) => entry.id)).toEqual([laterId, earlierId])
+    const first = pageHistory(repo, NOW, null, 1)
+    expect(first.rows.map((entry) => entry.id)).toEqual([laterId])
+    expect(pageHistory(repo, NOW, first.cursor, 1).rows.map((entry) => entry.id)).toEqual([earlierId])
   })
 
   it('lets a dated-on-the-cutoff expense through and shows every row on Pro', () => {
@@ -166,6 +196,10 @@ describe('quick add and sync pill', () => {
     expect(syncPill({ signedIn: true, syncEnabled: false, syncing: false, offline: false, pending: true })).toEqual({ tone: 'off', label: 'Sync off' })
     expect(syncPill({ signedIn: true, syncEnabled: true, syncing: false, offline: true, pending: true })).toEqual({ tone: 'offline', label: 'Offline' })
     expect(syncPill({ signedIn: true, syncEnabled: true, syncing: false, offline: false, pending: false })).toEqual({ tone: 'synced', label: 'Synced' })
+    expect(syncPill({ signedIn: true, syncEnabled: true, syncing: true, offline: true, pending: true })).toEqual({
+      tone: 'syncing',
+      label: 'Syncing your entries…',
+    })
     expect(reportLooksOffline({ errors: [{ message: 'Network request failed' }] })).toBe(true)
   })
 

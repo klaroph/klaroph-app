@@ -1,6 +1,7 @@
 import { configureWeb, openDatabaseAsync } from 'expo-sqlite'
 import { drizzle } from 'drizzle-orm/expo-sqlite'
 import wasmAsset from '../../node_modules/expo-sqlite/web/wa-sqlite/wa-sqlite.wasm'
+import { releasePreparedStatements } from './releaseStatements'
 import type { KlaroDb } from './repository'
 import { schema } from './schema'
 
@@ -29,7 +30,7 @@ async function openWebDatabase(): Promise<KlaroDb> {
   const origin = typeof location === 'undefined' ? '' : location.origin
   const wasmURL = wasmAsset.startsWith('/') && origin ? new URL(wasmAsset, origin).href : wasmAsset
   configureWeb({ wasmURL })
-  const sqlite = await openDatabaseAsync(DATABASE_NAME)
+  const sqlite = releasePreparedStatements(await openDatabaseAsync(DATABASE_NAME))
   sqlite.execSync('PRAGMA foreign_keys = ON')
   return drizzle(sqlite, { schema }) as unknown as KlaroDb
 }
