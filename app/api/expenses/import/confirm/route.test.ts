@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   quotaError: null as { message: string; code?: string } | null,
   insertError: null as { message: string } | null,
   refundError: null as { message: string } | null,
+  inserted: [] as unknown[],
 }))
 
 vi.mock('@/lib/supabaseServer', () => ({
@@ -31,8 +32,9 @@ vi.mock('@/lib/supabaseServer', () => ({
       }
       if (table === 'expenses') {
         return {
-          insert: async () => {
+          insert: async (rows: unknown) => {
             state.calls.push('user:insert')
+            state.inserted = Array.isArray(rows) ? rows : [rows]
             return { error: state.insertError }
           },
         }
@@ -86,6 +88,7 @@ beforeEach(() => {
   state.quotaError = null
   state.insertError = null
   state.refundError = null
+  state.inserted = []
 })
 
 describe('POST /api/expenses/import/confirm', () => {
@@ -161,6 +164,88 @@ describe('POST /api/expenses/import/confirm', () => {
     expect(await res.json()).toEqual({ error: plainDbErrorText.save })
     expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert', 'admin:refund_import_quota'])
     expect(state.refundArgs).toEqual({ p_user_id: 'user-1' })
+  })
+
+  it('skips rows older than 90 days, imports the rest, and does not fail the batch', async () => {
+    const res = await POST(
+      new Request('http://localhost/api/expenses/import/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { date: '2020-01-01', amount: 40, category: 'Groceries', description: 'old' },
+            row,
+            { date: '2020-06-01', amount: 15, category: 'Transportation', description: null },
+          ],
+        }),
+      })
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({
+      imported: 1,
+      skippedHistory: 2,
+      message: '2 entries older than 90 days were skipped. Upgrade to Pro to import them.',
+    })
+    expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert'])
+    expect(state.inserted).toEqual([
+      {
+        user_id: 'user-1',
+        category: 'Groceries',
+        type: 'needs',
+        amount: 120,
+        date: '2026-10-01',
+        description: null,
+      },
+    ])
+  })
+
+  it('returns the skip message and does not consume quota when every row is older than 90 days', async () => {
+    const res = await POST(
+      new Request('http://localhost/api/expenses/import/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: [{ date: '2020-01-01', amount: 40, category: 'Groceries', description: null }],
+        }),
+      })
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({
+      imported: 0,
+      skippedHistory: 1,
+      message: '1 entries older than 90 days were skipped. Upgrade to Pro to import them.',
+    })
+    expect(state.calls).toEqual([])
+  })
+
+  it('imports old and recent rows for Pro', async () => {
+    state.planName = 'pro'
+    const res = await POST(
+      new Request('http://localhost/api/expenses/import/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { date: '2020-01-01', amount: 40, category: 'Groceries', description: null },
+            row,
+          ],
+        }),
+      })
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ imported: 2 })
+    expect(state.inserted).toHaveLength(2)
+  })
+
+  it('refunds quota when the history-lock trigger rejects the insert', async () => {
+    state.insertError = { message: 'HISTORY_LOCKED: entries older than 90 days are read-only on the Free plan' }
+    const res = await post()
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({
+      error: 'Entries older than 90 days are read-only on the Free plan.',
+      code: 'HISTORY_LOCKED',
+    })
+    expect(state.calls).toEqual(['user:consume_import_quota', 'user:insert', 'admin:refund_import_quota'])
   })
 
   it('still returns the insert 500 when the refund call fails', async () => {

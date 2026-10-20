@@ -61,4 +61,15 @@ export interface LocalStore {
   holdAllocationsForUnsyncedGoals(userId: string): void
   /** Puts a held goal's allocations back on the push queue after the goal uploads. */
   releaseAllocationsForGoal(goalId: string): void
+  /** True when a Free history lock stopped retries for this expense or income row. */
+  isHistoryLocked(table: SyncedTable, id: string): boolean
+  /**
+   * Keeps the row on the device, clears dirty, and stops further pushes.
+   * Does not set deleted_at.
+   */
+  lockHistory(table: SyncedTable, id: string): void
+  /** Undoes a local tombstone that the server refused because the row is history-locked. */
+  restoreHistoryRow(table: SyncedTable, id: string): void
+  /** Pro, grace, and lifetime can edit and upload rows that Free had locked. */
+  releaseHistoryLocks(): void
 }

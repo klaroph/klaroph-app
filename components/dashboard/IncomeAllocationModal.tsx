@@ -8,6 +8,7 @@ import Modal from '../ui/Modal'
 import SuggestionChips from './SuggestionChips'
 import { INCOME_SOURCES, type IncomeSource } from '../../lib/incomeSources'
 import { classifyTransactionDescription } from '@/lib/transactionSuggestion'
+import { useSubscription } from '@/contexts/SubscriptionContext'
 
 type Goal = { id: string; name: string; target_amount: number }
 
@@ -44,6 +45,8 @@ export default function IncomeAllocationModal({
   initialRecord = null,
   suggestedAllocateAmount = null,
 }: IncomeAllocationModalProps) {
+  const { isPro, features } = useSubscription()
+  const historyMin = !isPro ? features?.analyticsCutoffDate ?? undefined : undefined
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(() => toLocalDateString(new Date()))
   const [incomeSource, setIncomeSource] = useState<string>(INCOME_SOURCES[0])
@@ -329,6 +332,7 @@ export default function IncomeAllocationModal({
           <input
             type="date"
             value={date}
+            min={historyMin}
             onChange={(e) => setDate(e.target.value)}
             style={inputStyle}
           />

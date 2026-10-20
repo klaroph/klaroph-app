@@ -9,6 +9,7 @@ import {
   getTypeForCategory,
 } from '../../lib/expenseCategories'
 import { toLocalDateString } from '@/lib/format'
+import { useSubscription } from '@/contexts/SubscriptionContext'
 import { classifyTransactionDescription } from '@/lib/transactionSuggestion'
 
 type AddExpenseModalProps = {
@@ -18,6 +19,8 @@ type AddExpenseModalProps = {
 }
 
 export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpenseModalProps) {
+  const { isPro, features } = useSubscription()
+  const historyMin = !isPro ? features?.analyticsCutoffDate ?? undefined : undefined
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('')
@@ -191,6 +194,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSaved }: AddExpense
           <input
             type="date"
             value={date}
+            min={historyMin}
             onChange={(e) => setDate(e.target.value)}
             style={inputStyle}
           />

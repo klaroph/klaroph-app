@@ -8,6 +8,7 @@ import {
   goalAdoptionBlockMessage,
   type ResolvedPlanCap,
 } from '../domain/planLimits'
+import { HISTORY_LOCKED, HISTORY_LOCKED_MESSAGE, isOlderThanFreeHistory } from '../domain/historyLock'
 import { clampPageSize, DEFAULT_OVERLAP_MS, DEFAULT_PAGE_SIZE, pullLowerBound, type PullPageInput } from './cursor'
 import type { LocalStore } from './localStore'
 import {
@@ -61,8 +62,26 @@ const PUSH_PHASES: readonly Phase[] = [
 ]
 
 function isNonBlockingSyncError(error: SyncError): boolean {
-  if (error.code === BUDGET_LOCKED || error.code === GOAL_CREATION_GRACE) return true
+  if (error.code === BUDGET_LOCKED || error.code === GOAL_CREATION_GRACE || error.code === HISTORY_LOCKED) return true
   return error.message.includes('Invalid goal in allocations')
+}
+
+function isOldHistoryRow(row: SyncRow): boolean {
+  if (row.table !== 'expenses' && row.table !== 'income_records') return false
+  const date = row.values.date
+  return typeof date === 'string' && isOlderThanFreeHistory(date)
+}
+
+/**
+ * HISTORY_LOCKED is the trigger. PGRST116 and an empty write are the same row
+ * hidden by the 90-day SELECT policy. A lower countLive is not a delete.
+ */
+function isHistoryLockFailure(error: unknown, row: SyncRow): boolean {
+  if (errorCode(error) === HISTORY_LOCKED || errorMessage(error).includes(HISTORY_LOCKED)) return true
+  if (!isOldHistoryRow(row)) return false
+  if (errorCode(error) === 'PGRST116') return true
+  const message = errorMessage(error)
+  return message.includes('Write returned no row') || message.includes('0 rows') || message.includes('Cannot coerce')
 }
 
 function isGoalCreationGrace(error: unknown): boolean {
@@ -94,7 +113,12 @@ export class SyncEngine {
     this.pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE
   }
 
-  /** Local vs server live counts. Does not upload, adopt, or delete either side. */
+  /**
+   * Local vs server live counts. Does not upload, adopt, or delete either side.
+   * Free history hides expenses and income older than 90 days from countLive.
+   * That lower server count is not a delete, and pull does not tombstone a
+   * local row just because it was absent from the page.
+   */
   async preview(userId: string, plan?: ResolvedPlanCap): Promise<SignInPreview> {
     const resolved = await this.prepareAccount(userId, plan)
     const server = emptyCounts()
@@ -175,6 +199,7 @@ export class SyncEngine {
     const resolved = plan ?? account.plan
     this.local.setKnownPlan(resolved)
     this.local.setGoalCreatesBlocked(resolved.blocksNewGoals === true)
+    if (resolved.name !== 'Free') this.local.releaseHistoryLocks()
     return resolved
   }
 
@@ -304,6 +329,8 @@ export class SyncEngine {
     const isTombstone = row.deleted_at != null
     if (isTombstone !== tombstones) return
     if (row.user_id !== userId) return
+    if (this.local.isHistoryLocked(row.table, row.id)) return
+    if (this.allocationTombstoneWaitsForOldIncome(row)) return
     if (blockNewGoals && row.table === 'goals' && !isTombstone && row.base_updated_at == null) return
     if (isTombstone && row.base_updated_at == null) {
       this.local.discardNeverSynced(row.table, row.id)
@@ -336,9 +363,23 @@ export class SyncEngine {
       const stamp = await this.remote.push(row.table, payload, mode)
       this.local.markSynced(row.table, row.id, stamp, revision)
       report.pushed += 1
+      if (row.table === 'income_records' && isTombstone && isOldHistoryRow(row)) {
+        await this.pushAllocationTombstonesForIncome(userId, row.id, report, blockNewGoals)
+      }
     } catch (error) {
       if (row.table === 'income_allocations' && this.allocationWaitsForGoal(row)) {
         this.local.holdAllocationsForUnsyncedGoals(userId)
+        return
+      }
+      if (isHistoryLockFailure(error, row)) {
+        if (row.deleted_at != null) this.local.restoreHistoryRow(row.table, row.id)
+        this.local.lockHistory(row.table, row.id)
+        report.errors.push({
+          table: row.table,
+          id: row.id,
+          message: HISTORY_LOCKED_MESSAGE,
+          code: HISTORY_LOCKED,
+        })
         return
       }
       if (row.table === 'goals' && mode === 'insert' && isGoalCreationGrace(error)) {
@@ -359,6 +400,32 @@ export class SyncEngine {
         message: errorMessage(error),
         code: errorCode(error),
       })
+    }
+  }
+
+  /**
+   * Allocation tombstones are pushed before the parent income. An old income
+   * delete can still be refused, so those allocations wait until that delete lands.
+   */
+  private allocationTombstoneWaitsForOldIncome(row: SyncRow): boolean {
+    if (row.table !== 'income_allocations' || row.deleted_at == null) return false
+    const incomeId = row.values.income_record_id
+    if (typeof incomeId !== 'string' || incomeId.length === 0) return false
+    const income = this.local.getRow('income_records', incomeId)
+    if (!income || income.deleted_at == null || !income.dirty) return false
+    return isOldHistoryRow(income)
+  }
+
+  private async pushAllocationTombstonesForIncome(
+    userId: string,
+    incomeId: string,
+    report: SyncReport,
+    blockNewGoals: boolean,
+  ): Promise<void> {
+    const dirty = this.local.listDirty('income_allocations', userId)
+    for (const child of dirty) {
+      if (child.values.income_record_id !== incomeId) continue
+      await this.pushRow(userId, child, true, report, blockNewGoals)
     }
   }
 

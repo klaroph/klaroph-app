@@ -65,6 +65,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const importUsed = features?.import_used ?? 0
   const importLimit = features?.import_limit ?? 2
@@ -75,6 +76,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
     setFile(null)
     setValidation(null)
     setError(null)
+    setNotice(null)
     setLoading(false)
     setConfirming(false)
   }, [])
@@ -180,8 +182,16 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
         return
       }
       refresh()
-      onSuccess()
-      dispatchDashboardTransactionsRefresh()
+      const imported = typeof data.imported === 'number' ? data.imported : 0
+      if (imported > 0) {
+        onSuccess()
+        dispatchDashboardTransactionsRefresh()
+      }
+      if (typeof data.message === 'string' && data.message) {
+        setNotice(data.message)
+        setConfirming(false)
+        return
+      }
       handleClose()
     } catch {
       setError('Network error. Please try again.')
@@ -301,6 +311,7 @@ export default function ImportCSVModal({ isOpen, onClose, onSuccess, mode }: Imp
         </div>
       )}
 
+      {notice && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-secondary)' }}>{notice}</p>}
       {error && <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-error)' }}>{error}</p>}
 
       {validation && validation.rows.length > 0 && (

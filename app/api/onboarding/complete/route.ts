@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { plainDbError } from '@/lib/apiError'
+import { historyLockedResponse, isHistoryLockedError } from '@/lib/freeHistory'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { toLocalDateString } from '@/lib/format'
@@ -186,6 +187,7 @@ export async function POST(request: Request) {
       if (rollbackProfileError) {
         console.error('POST /api/onboarding/complete profile rollback', rollbackProfileError.message)
       }
+      if (isHistoryLockedError(incomeError)) return historyLockedResponse()
       return NextResponse.json(
         {
           error: incomeError

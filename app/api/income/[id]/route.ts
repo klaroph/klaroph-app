@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { liveOnly, softDelete } from '@/lib/liveRows'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { plainDbError } from '@/lib/apiError'
+import { historyLockedResponse, isHistoryLockedError } from '@/lib/freeHistory'
+import { freeUserOwnsOldRow } from '@/lib/freeHistoryLock'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -75,6 +77,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
       .single()
 
     if (!currentRow) {
+      if (await freeUserOwnsOldRow('income_records', user.id, id)) return historyLockedResponse()
       return NextResponse.json({ error: 'Income record not found.' }, { status: 404 })
     }
 
@@ -93,6 +96,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
 
     if (error) {
       const msg = error.message ?? ''
+      if (isHistoryLockedError(error)) return historyLockedResponse()
       if (msg.includes('Income record not found or unauthorized')) {
         return NextResponse.json({ error: 'Income record not found.' }, { status: 404 })
       }
@@ -144,6 +148,23 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { data: removed, error } = await softDelete(supabase.from('income_records'))
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select('id')
+
+    if (isHistoryLockedError(error)) return historyLockedResponse()
+    if (error) {
+      return NextResponse.json(
+        { error: plainDbError(error, 'delete', 'DELETE /api/income/[id] error:') },
+        { status: 500 }
+      )
+    }
+    if (!removed || removed.length === 0) {
+      if (await freeUserOwnsOldRow('income_records', user.id, id)) return historyLockedResponse()
+      return NextResponse.json({ ok: true })
+    }
+
     const { error: allocError } = await softDelete(supabase.from('income_allocations')).eq(
       'income_record_id',
       id
@@ -153,17 +174,6 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       console.error('DELETE /api/income/[id] allocations error:', allocError)
       return NextResponse.json(
         { error: 'Failed to delete linked allocations.' },
-        { status: 500 }
-      )
-    }
-
-    const { error } = await softDelete(supabase.from('income_records'))
-      .eq('id', id)
-      .eq('user_id', user.id)
-
-    if (error) {
-      return NextResponse.json(
-        { error: plainDbError(error, 'delete', 'DELETE /api/income/[id] error:') },
         { status: 500 }
       )
     }

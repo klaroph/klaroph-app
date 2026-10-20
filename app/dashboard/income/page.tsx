@@ -28,6 +28,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext'
 import { usePremiumGate } from '@/hooks/usePremiumGate'
 import { useUpgradeTrigger } from '@/contexts/UpgradeTriggerContext'
 import { useTriggerDateRangeBeyond90 } from '@/hooks/useSmartUpgradeTriggers'
+import { FREE_HISTORY_NOTICE } from '@/lib/freeHistory'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { getAllTimeRangeAndGrouping, type AllTimeRangeResult } from '@/lib/allTimeRange'
 import {
@@ -438,9 +439,9 @@ export default function IncomePage() {
           </div>
           {period === 'custom' && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 6 }} />
+              <input type="date" value={customStart} min={!isPro ? features?.analyticsCutoffDate ?? undefined : undefined} onChange={(e) => setCustomStart(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 6 }} />
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>to</span>
-              <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 6 }} />
+              <input type="date" value={customEnd} min={!isPro ? features?.analyticsCutoffDate ?? undefined : undefined} onChange={(e) => setCustomEnd(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 6 }} />
             </div>
           )}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -661,6 +662,9 @@ export default function IncomePage() {
         {/* RIGHT — Detailed Table (stable height; only body scrolls) */}
         <div className="income-expense-table-card premium-section">
           <CardHeaderWithAction title="Detailed Breakdown" titleAs="h3" />
+          {!isPro && (
+            <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>{FREE_HISTORY_NOTICE}</p>
+          )}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {loading ? (
               <div className="income-expense-table-body-empty">

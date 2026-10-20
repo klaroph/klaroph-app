@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Modal from '../ui/Modal'
+import { useSubscription } from '@/contexts/SubscriptionContext'
 import { EXPENSE_CATEGORIES, getTypeForCategory } from '../../lib/expenseCategories'
 
 export type ExpenseRecord = {
@@ -26,6 +27,8 @@ export default function EditExpenseModal({
   onSaved,
   expense,
 }: EditExpenseModalProps) {
+  const { isPro, features } = useSubscription()
+  const historyMin = !isPro ? features?.analyticsCutoffDate ?? undefined : undefined
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
@@ -170,6 +173,7 @@ export default function EditExpenseModal({
           <input
             type="date"
             value={date}
+            min={historyMin}
             onChange={(e) => setDate(e.target.value)}
             style={inputStyle}
           />
