@@ -4,6 +4,6 @@ export default defineConfig({
   tsconfig: './tsconfig.vitest.json',
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
   },
 })

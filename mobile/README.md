@@ -1,8 +1,21 @@
 # Klaro Native
 
-Offline-first Android app for KlaroPH. This folder is the non-visual foundation: a local SQLite database, a repository, and a push/pull sync engine. The screen is only a placeholder.
+Offline-first Android app for KlaroPH. Local SQLite, the repository, and the push/pull sync engine stay the source of truth. Screens read and write through those APIs and do not change sync rules.
 
 The Next.js app at the repo root does not import this package. `mobile/` is excluded from the root TypeScript project, ESLint, and Vitest so Vercel still builds only the web app.
+
+## Screens
+
+Light mode is the primary palette: blue `#0038A8`, yellow `#FCD116`, off-white cards with 26px corners. Dark mode follows the system appearance. Nunito is the rounded sans. Category icons are bundled in the app.
+
+- First run is two screens. Then Home, History, and Goals, with a yellow + in the middle of the tab bar.
+- Home shows this payday period, a budget ring, an on-this-phone / synced pill, days logged, top category, goal progress, and recent entries.
+- Quick add opens from the +. Amount, category, save. The date starts as today in Asia/Manila. On Free, the date control stops 90 days back.
+- History lists expenses and income with edit and delete. Free shows the last 90 days and the line "Entries older than 90 days are saved. Upgrade to Pro to see them." Older rows stay stored and cannot be edited or deleted on Free.
+- Goals show progress as the sum of live allocations, or `saved_amount` when a goal has none. Deposit writes an allocation. Limit and past-due grace copy comes from the sync engine.
+- Settings sits behind the avatar: sync switch, email sign-in, and the uninstall warning. Sign-out still clears local rows. The intro flag is written back so those two screens do not replay.
+
+The budget ring uses the payday helper. It takes the monthly category budget (each plan, replaced by that month's override) and prorates it by the period's share of days in the month. There is no budget editor in this version, so the ring uses budgets already on the phone.
 
 ## Run locally
 
@@ -15,7 +28,7 @@ npm test
 npx expo start
 ```
 
-`npm test` runs the sync, repository, and payday tests. It does not need a device or a Supabase project.
+`npm test` runs the sync, repository, payday, and screen tests. It does not need a device or a Supabase project.
 
 To open the placeholder on an Android emulator or a device with Expo Go:
 
@@ -84,6 +97,6 @@ Signed-in budget creates, replacements, and override saves follow the web routes
 
 `activateAccount` keeps local-only data on the first sign-in. Signing in as a different user wipes the previous account's rows and token. `signOut` always clears both.
 
-## Not in this foundation
+## Not in this version
 
-Pro checkout, reports, exports, and any designed screens. Payday periods (`src/domain/payPeriod.ts`) use Asia/Manila and match the payday email window. Period A is the previous month's last day through the 14th. Period B is the 15th through the day before the month's last day. The last day of a month starts the next month's period A.
+Pro checkout, reports, exports, a budget editor, and Google or magic-link sign-in. Payday periods (`src/domain/payPeriod.ts`) use Asia/Manila and match the payday email window. Period A is the previous month's last day through the 14th. Period B is the 15th through the day before the month's last day. The last day of a month starts the next month's period A.
