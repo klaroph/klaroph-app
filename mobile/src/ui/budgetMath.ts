@@ -77,9 +77,20 @@ export function budgetPercent(spent: number, budget: number | null): number | nu
   return Math.round((spent / budget) * 100)
 }
 
+/**
+ * Whole pesos of the month remainder.
+ * Money still left rounds to the nearest peso. An over amount rounds up, so 500.50 over is 501.
+ * The sign is negative only when the rounded over amount is at least one peso.
+ */
+export function displayMonthRemainder(left: number): number {
+  const cents = roundMoney(left)
+  if (cents < 0) return -Math.ceil(Math.abs(cents))
+  return Math.round(cents)
+}
+
 /** Whole pesos of the month remainder. Below zero uses the absolute value and "over". */
 export function monthBudgetLine(left: number, isoDate: string): string {
-  const whole = Math.round(left)
+  const whole = displayMonthRemainder(left)
   const money = formatWholePeso(Math.abs(whole))
   const days = daysLeftInMonth(isoDate)
   const noun = days === 1 ? 'day' : 'days'

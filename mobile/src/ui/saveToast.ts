@@ -1,6 +1,7 @@
 import type { KlaroRepository } from '../db/repository'
 import { roundMoney } from '../domain/money'
 import { commitDeleteEntry } from './actions'
+import { displayMonthRemainder } from './budgetMath'
 import type { EntryKind } from './categories'
 import { formatWholePeso } from './format'
 
@@ -11,7 +12,7 @@ export function moneyLeft(budget: number | null, spent: number): number | null {
 
 export function saveToastMessage(left: number | null): string {
   if (left == null) return 'Saved'
-  const whole = Math.round(left)
+  const whole = displayMonthRemainder(left)
   if (whole < 0) return `Saved · ${formatWholePeso(Math.abs(whole))} over this month`
   return `Saved · ${formatWholePeso(whole)} left this month`
 }

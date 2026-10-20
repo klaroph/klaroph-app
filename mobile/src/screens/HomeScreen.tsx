@@ -8,7 +8,7 @@ import { ScreenHeader } from '../components/Header'
 import { StarterGoals } from '../components/StarterGoals'
 import { Card, FitLine, ScreenScroll, T, YellowButton } from '../components/ui'
 import { useTheme } from '../components/ThemeProvider'
-import { elapsedDaysInMonth, monthBudgetLine } from '../ui/budgetMath'
+import { displayMonthRemainder, elapsedDaysInMonth, monthBudgetLine } from '../ui/budgetMath'
 import { formatPesoShort, formatWholePeso, monthKicker, signedPeso, signedWholePeso } from '../ui/format'
 import { rowHeadline, rowSignedAmount } from '../ui/historyGroups'
 import { homeInsight } from '../ui/insight'
@@ -52,8 +52,8 @@ export function HomeScreen({
   const noBudget = snapshot.budget == null
   const heading = noActivity && noBudget ? 'Welcome' : greeting
   const left = moneyLeft(snapshot.budget, snapshot.spent)
-  const wholeLeft = left == null ? null : Math.round(left)
-  const line = wholeLeft == null ? null : monthBudgetLine(wholeLeft, snapshot.today)
+  const wholeLeft = left == null ? null : displayMonthRemainder(left)
+  const line = left == null ? null : monthBudgetLine(left, snapshot.today)
   const elapsed = elapsedDaysInMonth(snapshot.today)
   const insight = homeInsight({
     foodSpent: snapshot.foodSpent,
