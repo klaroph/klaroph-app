@@ -9,9 +9,6 @@ export const MISSING_SUPABASE_CONFIG = 'Add the publishable Supabase key in mobi
 
 export const ISOLATED_ACCOUNT_NOTICE = "Signed in to a different account. The previous account's entries were removed from this phone."
 
-/** Same sentence `createGoal` throws when the device is already at the plan cap. */
-export const LOCAL_GOAL_CAP_MESSAGE = 'Goal count is already at the plan max_goals.'
-
 export const FUTURE_DATE_MESSAGE = 'Dates stop at today.'
 
 /** Shown in the pay-period budget sheet. The amount is not a synced budget row. */

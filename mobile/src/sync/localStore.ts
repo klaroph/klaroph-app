@@ -31,7 +31,8 @@ export interface LocalStore {
   /** Synced goals this device has tombstoned and not yet pushed. */
   countPendingGoalDeletes(userId: string): number
   clearAll(): void
-  adoptUnassigned(userId: string): void
+  /** Assigns phone-only rows to the account. Counts live expenses, income, and goals. */
+  adoptUnassigned(userId: string): { entries: number; goals: number }
   sessionUserId(): string | null
   setSessionUserId(userId: string | null): void
   /** Remembers the signed-in budget clock. `null` forgets it (sign-out clears this with the other meta). */

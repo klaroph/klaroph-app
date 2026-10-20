@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { BudgetRing } from '../components/BudgetRing'
 import { CategoryIcon } from '../components/CategoryIcon'
 import { ScreenHeader } from '../components/Header'
-import { Card, Pill, ScreenScroll, T } from '../components/ui'
+import { Card, FitLine, Pill, ScreenScroll, T } from '../components/ui'
 import { useTheme } from '../components/ThemeProvider'
 import { formatPeso } from '../ui/format'
 import type { HistoryRow, LedgerSnapshot } from '../ui/ledger'
@@ -46,7 +46,7 @@ export function HomeScreen({
           </Pressable>
           <View style={styles.spent}>
             <T size={13} weight="bold" color={colors.muted}>Spent</T>
-            <T size={26} weight="bold">{formatPeso(snapshot.spent)}</T>
+            <FitLine size={26}>{formatPeso(snapshot.spent)}</FitLine>
             <T size={14} color={snapshot.overBudget ? colors.danger : colors.muted}>
               {snapshot.overBudget && snapshot.budget != null ? `Over by ${formatPeso(snapshot.spent - snapshot.budget)}` : budgetLabel}
             </T>
@@ -140,6 +140,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     borderWidth: 1,
     padding: 12,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,

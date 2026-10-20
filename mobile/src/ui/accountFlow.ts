@@ -1,11 +1,14 @@
 import type { SignInPreview, SyncReport } from '../sync/engine'
 import type { LocalStore } from '../sync/localStore'
 import { activateAccount, signOut } from '../sync/session'
+import { movedToAccountLine } from '../sync/summary'
 import type { TokenStore } from '../sync/tokenStore'
+
+export type AdoptedRows = { entries: number; goals: number }
 
 export type AccountEngine = {
   preview(userId: string): Promise<SignInPreview>
-  adopt(userId: string): Promise<void>
+  adopt(userId: string): Promise<AdoptedRows>
   sync(userId: string): Promise<SyncReport>
 }
 
@@ -37,12 +40,21 @@ export async function signInAndAdopt(input: {
     tokenValue: input.tokenValue,
   })
   const preview = await input.engine.preview(input.userId)
-  if (preview.goalLimitMessage == null) await input.engine.adopt(input.userId)
+  const adopted = preview.goalLimitMessage == null
+    ? await input.engine.adopt(input.userId)
+    : { entries: 0, goals: 0 }
   const report = input.syncEnabled ? await input.engine.sync(input.userId) : null
+  const moved = movedToAccountLine(adopted.entries, adopted.goals)
+  const summary = moved ? [moved, ...(report?.summary ?? [])] : [...(report?.summary ?? [])]
+  const nextReport = summary.length === 0
+    ? report
+    : report
+      ? { ...report, summary }
+      : { pulled: 0, pushed: 0, errors: [], summary }
   return {
     isolated: activated.isolated,
     goalLimitMessage: preview.goalLimitMessage,
-    report,
+    report: nextReport,
   }
 }
 

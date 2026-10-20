@@ -89,7 +89,7 @@ export function QuickAddSheet({
             />
           ))}
         </ScrollView>
-        <Pressable accessibilityRole="button" accessibilityLabel="Change date" onPress={() => setShowDate((open) => !open)}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Change date" onPress={() => setShowDate((open) => !open)} style={styles.dateHit}>
           <T weight="semibold" color={colors.blue}>
             {draft.date === today ? 'Today' : formatPrettyDate(draft.date, true)}
           </T>
@@ -159,9 +159,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  dateHit: {
+    minHeight: 48,
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+    paddingRight: 12,
+  },
   step: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',

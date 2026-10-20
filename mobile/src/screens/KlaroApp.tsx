@@ -9,9 +9,21 @@ import { commitDeleteEntry, commitDeleteGoal, commitDeposit, commitEntry, commit
 import type { SignInResult } from '../ui/accountFlow'
 import { ISOLATED_ACCOUNT_NOTICE, SIGN_OUT_WARNING } from '../ui/copy'
 import { errorText } from '../ui/format'
-import { canAddGoal, engineGoalMessage, visibleGoalBanner } from '../ui/goalCopy'
-import { hasUnsyncedChanges, loadLedger, type GoalCard, type HistoryRow } from '../ui/ledger'
+import { canAddGoal, engineGoalMessage, scrubGoalCopy, visibleGoalBanner } from '../ui/goalCopy'
+import {
+  applyHistoryChange,
+  hasUnsyncedChanges,
+  HISTORY_PAGE_SIZE,
+  loadLedger,
+  pageHistory,
+  patchHome,
+  type EntryChange,
+  type GoalCard,
+  type HistoryRow,
+  type LedgerSnapshot,
+} from '../ui/ledger'
 import { newEntryDraft, type EntryDraft } from '../ui/quickAdd'
+import { budgetsKeptFromAccountLine, movedToAccountLine } from '../sync/summary'
 import { reportLooksOffline, syncNotices, syncPill, uniqueLines } from '../ui/syncStatus'
 import { BudgetSheet } from './BudgetSheet'
 import { FirstRun } from './FirstRun'
@@ -42,6 +54,9 @@ function historyDraft(row: HistoryRow): EntryDraft {
   }
 }
 
+const SYNC_DEBOUNCE_MS = 1500
+let historySeedStarted = false
+
 export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   const { repo, prefs } = runtime
   const { colors } = useTheme()
@@ -53,27 +68,70 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
   const [offline, setOffline] = useState(false)
   const [notices, setNotices] = useState<string[]>([])
   const [engineMessage, setEngineMessage] = useState<string | null>(null)
-  const refresh = () => setRevision((value) => value + 1)
-  const now = useMemo(() => new Date(), [revision])
-  const snapshot = useMemo(
-    () => loadLedger(repo, now, prefs.periodBudget(payPeriodStart(now))),
-    [repo, now, prefs, revision],
-  )
+  const [home, setHome] = useState<LedgerSnapshot>(() => readHome(repo, prefs))
+  const [historyRows, setHistoryRows] = useState<HistoryRow[]>([])
+  const [historyCursor, setHistoryCursor] = useState<{ date: string; id: string } | null>(null)
+  const [historyHasMore, setHistoryHasMore] = useState(false)
+  const refreshMeta = () => setRevision((value) => value + 1)
   const pending = useMemo(() => hasUnsyncedChanges(repo), [repo, revision])
   const unsyncedCount = useMemo(() => repo.countUnsyncedRows(), [repo, revision])
   const signedIn = repo.sessionUserId() != null
+  const plan = signedIn ? repo.knownPlan() : null
   const syncEnabled = prefs.syncEnabled()
   const pill = syncPill({ signedIn, syncEnabled, syncing, offline, pending })
   const banner = visibleGoalBanner({
-    grace: snapshot.grace,
+    grace: home.grace,
     engineMessage,
-    capMessage: snapshot.capMessage,
+    capMessage: home.capMessage,
+    plan,
   })
   const introDone = prefs.firstRunDone()
   const syncingRef = useRef(false)
   const syncAgain = useRef(false)
   const launched = useRef(false)
   const syncRef = useRef<() => Promise<void>>(async () => undefined)
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const historyReady = useRef(false)
+  const historyHasMoreRef = useRef(false)
+  const historyCursorRef = useRef<{ date: string; id: string } | null>(null)
+  const tabRef = useRef(tab)
+  const loadingMore = useRef(false)
+  tabRef.current = tab
+  historyHasMoreRef.current = historyHasMore
+
+  function replaceHome() {
+    setHome(readHome(repo, prefs))
+    refreshMeta()
+  }
+
+  function showHistoryPage(before: { date: string; id: string } | null, append: boolean) {
+    const page = pageHistory(repo, new Date(), before, HISTORY_PAGE_SIZE)
+    historyReady.current = true
+    setHistoryRows((current) => (append ? [...current, ...page.rows] : page.rows))
+    setHistoryCursor(page.cursor)
+    historyCursorRef.current = page.cursor
+    setHistoryHasMore(page.hasMore)
+    historyHasMoreRef.current = page.hasMore
+  }
+
+  function noteHistoryStale() {
+    historyReady.current = false
+    if (tabRef.current === 'history') showHistoryPage(null, false)
+    else {
+      setHistoryRows([])
+      setHistoryCursor(null)
+      historyCursorRef.current = null
+      setHistoryHasMore(false)
+      historyHasMoreRef.current = false
+    }
+  }
+
+  function applyEntry(change: EntryChange) {
+    const refill = change.type === 'delete' ? pageHistory(repo, new Date(), null, 5).rows : undefined
+    setHome((current) => patchHome(current, change, refill))
+    if (!historyReady.current) return
+    setHistoryRows((current) => applyHistoryChange(current, change, historyHasMoreRef.current))
+  }
 
   const runSync = async () => {
     if (!repo.sessionUserId() || !prefs.syncEnabled()) return
@@ -89,16 +147,18 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
         setNotices((current) => uniqueLines([...current, 'Sync needs a signed-in account and the publishable Supabase key.']))
         return
       }
-      setEngineMessage(engineGoalMessage(report.errors))
+      const known = repo.knownPlan()
+      setEngineMessage(engineGoalMessage(report.errors, known))
       setOffline(reportLooksOffline(report))
-      setNotices(syncNotices(report))
+      setNotices(uniqueLines(syncNotices(report).map((line) => scrubGoalCopy(line, known))))
     } catch (error) {
       setOffline(true)
-      setNotices([errorText(error)])
+      setNotices([scrubGoalCopy(errorText(error), repo.knownPlan())])
     } finally {
       syncingRef.current = false
       setSyncing(false)
-      refresh()
+      replaceHome()
+      noteHistoryStale()
       if (syncAgain.current) {
         syncAgain.current = false
         void syncRef.current()
@@ -108,6 +168,19 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
 
   syncRef.current = runSync
 
+  function scheduleSync() {
+    if (!repo.sessionUserId() || !prefs.syncEnabled()) return
+    if (syncTimer.current) clearTimeout(syncTimer.current)
+    syncTimer.current = setTimeout(() => {
+      syncTimer.current = null
+      void syncRef.current()
+    }, SYNC_DEBOUNCE_MS)
+  }
+
+  useEffect(() => () => {
+    if (syncTimer.current) clearTimeout(syncTimer.current)
+  }, [])
+
   useEffect(() => {
     if (!prefs.firstRunDone()) return
     if (launched.current) return
@@ -115,10 +188,126 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
     if (repo.sessionUserId() && prefs.syncEnabled()) void syncRef.current()
   }, [revision, prefs, repo])
 
-  function finishWrite() {
+  useEffect(() => {
+    if (tab !== 'history' || historyReady.current) return
+    showHistoryPage(null, false)
+  }, [tab])
+
+  useEffect(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return
+    const bench = globalThis as {
+      __klaroBench?: (adds: number) => Promise<{ median: number; max: number; times: number[]; count: number }>
+    }
+    bench.__klaroBench = async (adds: number) => {
+      const today = readHome(repo, prefs).today
+      if (repo.countVisibleEntries() < 1000) repo.seedExpenses(1000 - repo.countVisibleEntries(), today)
+      let view = readHome(repo, prefs)
+      const times: number[] = []
+      for (let index = 0; index < adds; index += 1) {
+        const started = performance.now()
+        const row = commitEntry(repo, { ...newEntryDraft(view.today, 'expense', prefs.lastCategory('expense')), amount: '12.50' }, new Date())
+        view = patchHome(view, { type: 'insert', row })
+        times.push(performance.now() - started)
+        await new Promise((resolve) => { setTimeout(resolve, 0) })
+      }
+      const sorted = [...times].sort((a, b) => a - b)
+      const mid = Math.floor(sorted.length / 2)
+      const median = sorted.length === 0 ? 0 : sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!
+      return { median, max: sorted[sorted.length - 1] ?? 0, times, count: repo.countVisibleEntries() }
+    }
+    const pullBench = globalThis as {
+      __klaroPull?: (count: number) => Promise<{ count: number }>
+    }
+    pullBench.__klaroPull = async (count: number) => {
+      const userId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      repo.setSessionUserId(userId)
+      for (let index = 0; index < count; index += 1) {
+        repo.applyServerRow('expenses', {
+          table: 'expenses',
+          id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+          user_id: userId,
+          created_at: '2026-10-01T00:00:00.000Z',
+          updated_at: '2026-10-01T00:00:00.000Z',
+          deleted_at: null,
+          values: {
+            category: 'Fare',
+            type: 'needs',
+            amount: '10.00',
+            date: '2026-10-16',
+            description: null,
+          },
+        })
+        if ((index + 1) % 10 === 0) await new Promise((resolve) => { setTimeout(resolve, 0) })
+      }
+      noteHistoryStale()
+      replaceHome()
+      return { count: repo.countVisibleEntries() }
+    }
+    if (typeof location === 'undefined') return
+    const shot = new URLSearchParams(location.search).get('shot')
+    if (!shot) return
+    if (!prefs.firstRunDone()) prefs.setFirstRunDone(true)
+    repo.setSessionUserId(null)
+    refreshMeta()
+    const today = readHome(repo, prefs).today
+    if (shot === 'cap') {
+      const userId = repo.sessionUserId()
+      const have = (userId ? repo.listLive('goals', userId).length : 0) + repo.listLive('goals', null).length
+      for (let index = have; index < 2; index += 1) {
+        repo.createGoal({ userId, name: index === 0 ? 'Emergency fund' : 'Tuition', targetAmount: 10000 })
+      }
+      replaceHome()
+      setTab('goals')
+    } else if (shot === 'total') {
+      repo.createExpense({
+        userId: repo.sessionUserId(),
+        category: 'Rent',
+        type: 'needs',
+        amount: 1234567.89,
+        date: today,
+      })
+      replaceHome()
+    } else if (shot === 'history') {
+      const seed = !historySeedStarted
+      historySeedStarted = true
+      void (async () => {
+        try {
+          if (seed) {
+            await new Promise((resolve) => { setTimeout(resolve, 300) })
+            const userId = repo.sessionUserId()
+            while (repo.countVisibleEntries() < 1000) {
+              repo.createExpense({
+                userId,
+                category: 'Groceries',
+                type: 'needs',
+                amount: 10,
+                date: today,
+              })
+              await new Promise((resolve) => { setTimeout(resolve, 0) })
+            }
+          } else {
+            while (repo.countVisibleEntries() < 1000) {
+              await new Promise((resolve) => { setTimeout(resolve, 50) })
+            }
+          }
+          historyReady.current = false
+          setTab('history')
+        } catch (error) {
+          setNotices([errorText(error)])
+        }
+      })()
+    } else if (shot === 'merge') {
+      const moved = movedToAccountLine(12, 2)
+      const kept = budgetsKeptFromAccountLine(1)
+      setNotices([moved, kept].filter((line): line is string => line != null))
+      setOverlay({ type: 'settings' })
+    }
+  }, [])
+
+  function finishLocal() {
     setOverlay(null)
-    refresh()
-    if (repo.sessionUserId() && prefs.syncEnabled()) void syncRef.current()
+    refreshMeta()
+    scheduleSync()
   }
 
   function applySignIn(outcome: SignInResult) {
@@ -126,10 +315,12 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       outcome.isolated ? ISOLATED_ACCOUNT_NOTICE : '',
       outcome.goalLimitMessage ?? '',
     ]
-    setEngineMessage(outcome.goalLimitMessage ?? (outcome.report ? engineGoalMessage(outcome.report.errors) : null))
+    const known = repo.knownPlan()
+    setEngineMessage(outcome.goalLimitMessage ?? (outcome.report ? engineGoalMessage(outcome.report.errors, known) : null))
     setOffline(outcome.report ? reportLooksOffline(outcome.report) : false)
-    setNotices(uniqueLines([...extra, ...(outcome.report ? syncNotices(outcome.report) : [])]))
-    refresh()
+    setNotices(uniqueLines([...extra, ...(outcome.report ? syncNotices(outcome.report) : [])].map((line) => scrubGoalCopy(line, known))))
+    replaceHome()
+    noteHistoryStale()
   }
 
   function confirmDeleteEntry(row: HistoryRow) {
@@ -141,7 +332,8 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
         onPress: () => {
           try {
             commitDeleteEntry(repo, row.kind, row.id, new Date())
-            finishWrite()
+            applyEntry({ type: 'delete', previous: row })
+            finishLocal()
           } catch (error) {
             setNotices([errorText(error)])
           }
@@ -159,7 +351,9 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
         onPress: () => {
           try {
             commitDeleteGoal(repo, goal.id)
-            finishWrite()
+            replaceHome()
+            setOverlay(null)
+            scheduleSync()
           } catch (error) {
             setNotices([errorText(error)])
           }
@@ -176,7 +370,8 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       setOffline(false)
       setOverlay(null)
       setTab('home')
-      refresh()
+      replaceHome()
+      noteHistoryStale()
     })
   }
 
@@ -193,7 +388,8 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             setOffline(false)
             setOverlay(null)
             setTab('home')
-            refresh()
+            replaceHome()
+            noteHistoryStale()
           })
         },
       },
@@ -205,7 +401,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       <FirstRun
         onDone={() => {
           prefs.setFirstRunDone(true)
-          refresh()
+          replaceHome()
         }}
       />
     )
@@ -216,7 +412,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       <View style={styles.body}>
         {tab === 'home' ? (
           <HomeScreen
-            snapshot={snapshot}
+            snapshot={home}
             pill={pill}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
             onOpenEntry={(row) => setOverlay({ type: 'edit-entry', row })}
@@ -225,17 +421,23 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
         ) : null}
         {tab === 'history' ? (
           <HistoryScreen
-            rows={snapshot.history}
-            olderLineVisible={snapshot.olderLineVisible}
-            emptyLabel={snapshot.freeHistory ? 'No entries in the last 90 days.' : 'No entries yet.'}
+            rows={historyRows}
+            olderLineVisible={home.olderLineVisible}
+            emptyLabel={home.freeHistory ? 'No entries in the last 90 days.' : 'No entries yet.'}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
             onEdit={(row) => setOverlay({ type: 'edit-entry', row })}
             onDelete={confirmDeleteEntry}
+            onLoadMore={() => {
+              if (loadingMore.current || !historyHasMoreRef.current || !historyCursorRef.current) return
+              loadingMore.current = true
+              showHistoryPage(historyCursorRef.current, true)
+              loadingMore.current = false
+            }}
           />
         ) : null}
         {tab === 'goals' ? (
           <GoalsScreen
-            goals={snapshot.goals}
+            goals={home.goals}
             banner={banner}
             canAdd={canAddGoal(banner)}
             onOpenSettings={() => setOverlay({ type: 'settings' })}
@@ -254,28 +456,40 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
       {overlay ? (
         <OverlaySheet
           overlay={overlay}
-          today={snapshot.today}
-          cutoff={snapshot.freeHistory ? snapshot.cutoff : null}
+          today={home.today}
+          cutoff={home.freeHistory ? home.cutoff : null}
           lastExpense={prefs.lastCategory('expense')}
           lastIncome={prefs.lastCategory('income')}
-          localBudget={formatStoredBudget(prefs.periodBudget(snapshot.period.start))}
+          localBudget={formatStoredBudget(prefs.periodBudget(home.period.start))}
           onClose={() => setOverlay(null)}
           onSaveEntry={(draft) => {
-            commitEntry(repo, draft, new Date())
+            const previous = draft.id
+              ? historyRows.find((row) => row.id === draft.id && row.kind === draft.kind)
+                ?? home.recent.find((row) => row.id === draft.id && row.kind === draft.kind)
+              : undefined
+            const row = commitEntry(repo, draft, new Date())
             prefs.setLastCategory(draft.kind, draft.category)
-            finishWrite()
+            if (draft.id && previous) applyEntry({ type: 'update', row, previous })
+            else if (draft.id) replaceHome()
+            else applyEntry({ type: 'insert', row })
+            finishLocal()
           }}
           onSaveBudget={(amount) => {
-            commitPeriodBudget(prefs, snapshot.period.start, amount)
-            finishWrite()
+            commitPeriodBudget(prefs, home.period.start, amount)
+            replaceHome()
+            setOverlay(null)
           }}
           onSaveGoal={(name, target, id) => {
             commitGoal(repo, { id, name, target })
-            finishWrite()
+            replaceHome()
+            setOverlay(null)
+            scheduleSync()
           }}
           onDeposit={(goalId, amount) => {
             commitDeposit(repo, goalId, amount)
-            finishWrite()
+            replaceHome()
+            setOverlay(null)
+            scheduleSync()
           }}
           settings={{
             syncEnabled,
@@ -285,7 +499,7 @@ export function KlaroApp({ runtime }: { runtime: AppRuntime }) {
             pill,
             onToggleSync: (enabled) => {
               prefs.setSyncEnabled(enabled)
-              refresh()
+              refreshMeta()
               if (enabled && repo.sessionUserId()) void syncRef.current()
             },
             onSignIn: async (email, password) => {
@@ -410,8 +624,9 @@ function OverlaySheet({
   }
 }
 
-function payPeriodStart(now: Date): string {
-  return payPeriodAt(now).start
+function readHome(repo: AppRuntime['repo'], prefs: AppRuntime['prefs']): LedgerSnapshot {
+  const now = new Date()
+  return loadLedger(repo, now, prefs.periodBudget(payPeriodAt(now).start))
 }
 
 function formatStoredBudget(amount: number | null): string {

@@ -6,7 +6,7 @@ import { openTestRepository } from '../db/testDb'
 import type { KlaroDb } from '../db/repository'
 import { schema } from '../db/schema'
 import { manilaCivilDate } from '../domain/payPeriod'
-import { GOAL_GRACE_BLOCK_MESSAGE } from '../domain/planLimits'
+import { FREE_GOAL_CAP_MESSAGE, GOAL_GRACE_BLOCK_MESSAGE, PRO_GOAL_CAP_MESSAGE, goalCapMessage } from '../domain/planLimits'
 import { MemoryTokenStore } from '../sync/tokenStore'
 import { emptyCounts } from '../sync/model'
 import { signInAndAdopt, signOutKeepingIntro } from './accountFlow'
@@ -14,7 +14,7 @@ import { commitDeleteEntry, commitDeposit, commitEntry, commitGoal, commitPeriod
 import { monthlyBudget, prorateToPeriod, ringProgress } from './budgetMath'
 import { FIRST_RUN_PAGES, FUTURE_DATE_MESSAGE, OLDER_ENTRIES_LINE, PERIOD_BUDGET_LINE, UNINSTALL_WARNING, unsyncedSignOutLine } from './copy'
 import { canShiftEntryDate, historyCutoff, manilaToday } from './historyWindow'
-import { hasUnsyncedChanges, loadLedger } from './ledger'
+import { hasUnsyncedChanges, loadLedger, pageHistory, patchHome } from './ledger'
 import { ScreenPrefs } from './prefs'
 import { readPublicSupabaseConfig } from './publicConfig'
 import { canSaveQuickAdd, categoryForNewEntry, emptyDraft, newEntryDraft, parseQuickAmount, sanitizeAmountInput } from './quickAdd'
@@ -53,7 +53,7 @@ describe('free history window', () => {
     repo.createExpense({ userId: null, category: 'Shopping', type: 'wants', amount: 9000, date: '2026-07-21' })
     const view = loadLedger(repo, NOW)
     expect(view.olderLineVisible).toBe(true)
-    expect(view.history.map((row) => row.date)).toEqual(['2026-10-16'])
+    expect(pageHistory(repo, NOW, null).rows.map((row) => row.date)).toEqual(['2026-10-16'])
     expect(view.recent).toHaveLength(1)
     expect(view.topCategory?.name).toBe('Groceries')
     expect(repo.listLive('expenses', null)).toHaveLength(2)
@@ -65,14 +65,14 @@ describe('free history window', () => {
   it('lets a dated-on-the-cutoff expense through and shows every row on Pro', () => {
     const { repo } = openTestRepository({ now: () => NOW })
     commitEntry(repo, { ...emptyDraft('2026-07-22'), amount: '15', date: '2026-07-22' }, NOW)
-    expect(loadLedger(repo, NOW).history).toHaveLength(1)
+    expect(pageHistory(repo, NOW, null).rows).toHaveLength(1)
     repo.setSessionUserId(USER)
     repo.setKnownPlan({ name: 'Pro', maxGoals: 20 })
     const old = repo.createExpense({ userId: USER, category: 'Travel', type: 'wants', amount: 40, date: '2020-01-01' })
     const view = loadLedger(repo, NOW)
     expect(view.freeHistory).toBe(false)
     expect(view.olderLineVisible).toBe(false)
-    expect(view.history.some((row) => row.id === old.id)).toBe(true)
+    expect(pageHistory(repo, NOW, null).rows.some((row) => row.id === old.id)).toBe(true)
     commitDeleteEntry(repo, 'expense', old.id, NOW)
     expect(repo.getRow('expenses', old.id)?.deleted_at).toBeTruthy()
   })
@@ -131,8 +131,13 @@ describe('goals on screen', () => {
     expect(zebra).toMatchObject({ progress: 25, percent: 25 })
     expect(view.goalName).toBe('Zebra')
     expect(view.goalPercent).toBe(25)
-    expect(view.capMessage).toBe('Goal count is already at the plan max_goals.')
-    expect(() => commitGoal(repo, { name: 'Third', target: '10' })).toThrow(view.capMessage!)
+    expect(view.capMessage).toBe(FREE_GOAL_CAP_MESSAGE)
+    expect(view.capMessage).not.toMatch(/max_goals/i)
+    expect(() => commitGoal(repo, { name: 'Third', target: '10' })).toThrow(FREE_GOAL_CAP_MESSAGE)
+    repo.setSessionUserId(USER)
+    repo.setKnownPlan({ name: 'Pro', maxGoals: 20 })
+    expect(goalCapMessage(repo.knownPlan())).toBe(PRO_GOAL_CAP_MESSAGE)
+    expect(PRO_GOAL_CAP_MESSAGE).not.toMatch(/max_goals/i)
   })
 
   it('surfaces the grace message ahead of the local cap', () => {
@@ -206,7 +211,7 @@ describe('account flow for the settings sheet', () => {
     const { repo } = openTestRepository({ now: () => NOW })
     repo.createGoal({ userId: null, name: 'Phone', targetAmount: 10 })
     const tokens = new MemoryTokenStore()
-    const adopt = vi.fn(async () => undefined)
+    const adopt = vi.fn(async () => ({ entries: 0, goals: 0 }))
     const sync = vi.fn(async () => ({ pulled: 0, pushed: 0, errors: [], summary: [] }))
     const message = 'Free allows 2 goals; you have 1 here and 2 in your account. Remove some to continue.'
     const result = await signInAndAdopt({
@@ -250,6 +255,31 @@ describe('account flow for the settings sheet', () => {
     expect(adopt).toHaveBeenCalledWith(USER)
     expect(sync).toHaveBeenCalledWith(USER)
     expect(result.report?.summary).toEqual(['1 budget kept from your account'])
+  })
+
+  it('says what moved onto the account, then which budgets stayed', async () => {
+    const { repo } = openTestRepository({ now: () => NOW })
+    repo.createExpense({ userId: null, category: 'Groceries', type: 'needs', amount: 10, date: '2026-10-20' })
+    repo.createIncome({ userId: null, totalAmount: 20, date: '2026-10-20', incomeSource: 'Salary' })
+    repo.createGoal({ userId: null, name: 'Phone', targetAmount: 10 })
+    const tokens = new MemoryTokenStore()
+    const result = await signInAndAdopt({
+      local: repo,
+      tokens,
+      userId: USER,
+      tokenKey: 'sb-test-auth-token',
+      tokenValue: 'token',
+      syncEnabled: true,
+      engine: {
+        preview: async () => ({ local: emptyCounts(), server: emptyCounts(), goalLimitMessage: null }),
+        adopt: async () => repo.adoptUnassigned(USER),
+        sync: async () => ({ pulled: 1, pushed: 1, errors: [], summary: ['1 budget kept from your account'] }),
+      },
+    })
+    expect(result.report?.summary).toEqual([
+      'Moved 2 entries and 1 goal to your account.',
+      '1 budget kept from your account',
+    ])
   })
 
   it('keeps the intro flag after sign-out clears local rows', async () => {

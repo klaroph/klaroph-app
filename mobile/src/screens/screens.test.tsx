@@ -22,6 +22,24 @@ vi.mock('react-native', () => {
     TextInput: host('TextInput'),
     Modal: host('Modal'),
     Switch: host('Switch'),
+    FlatList: ({
+      data,
+      renderItem,
+      ListHeaderComponent,
+      ListEmptyComponent,
+    }: {
+      data?: { id: string }[]
+      renderItem?: (info: { item: { id: string }; index: number }) => React.ReactNode
+      ListHeaderComponent?: React.ReactNode
+      ListEmptyComponent?: React.ReactNode
+    }) => React.createElement(
+      'FlatList',
+      null,
+      ListHeaderComponent,
+      data && data.length > 0 && renderItem
+        ? data.map((item, index) => renderItem({ item, index }))
+        : ListEmptyComponent,
+    ),
     ActivityIndicator: host('ActivityIndicator'),
     KeyboardAvoidingView: host('KeyboardAvoidingView'),
     StyleSheet: {

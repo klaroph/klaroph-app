@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { StyleSheet, Switch, View } from 'react-native'
+import { Pressable, StyleSheet, Switch, View } from 'react-native'
 import { Sheet } from '../components/Sheet'
 import { useTheme } from '../components/ThemeProvider'
 import { Card, DangerButton, Field, GhostButton, Pill, PrimaryButton, T } from '../components/ui'
@@ -58,13 +58,21 @@ export function SettingsSheet({
           <T weight="bold">Sync</T>
           <T size={13} color={colors.muted}>Uploads and downloads changes for the signed-in account.</T>
         </View>
-        <Switch
+        <Pressable
+          accessibilityRole="switch"
           accessibilityLabel="Sync"
-          value={syncEnabled}
-          onValueChange={onToggleSync}
-          trackColor={{ false: colors.border, true: colors.blue }}
-          thumbColor={colors.card}
-        />
+          accessibilityState={{ checked: syncEnabled }}
+          onPress={() => onToggleSync(!syncEnabled)}
+          style={styles.switchHit}
+        >
+          <Switch
+            pointerEvents="none"
+            value={syncEnabled}
+            onValueChange={onToggleSync}
+            trackColor={{ false: colors.border, true: colors.blue }}
+            thumbColor={colors.card}
+          />
+        </Pressable>
       </View>
       <Pill label={pill.label} tone={pill.tone} />
       {notices.map((notice) => (
@@ -124,5 +132,11 @@ const styles = StyleSheet.create({
   },
   block: {
     gap: 10,
+  },
+  switchHit: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

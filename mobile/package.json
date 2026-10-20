@@ -36,6 +36,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "vitest run",
+    "perf:quick-add": "vitest run src/dev/quickAdd.perf.test.ts",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate"
   },

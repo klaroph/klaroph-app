@@ -93,6 +93,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Sync failed.'
 }
 
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0)
+  })
+}
+
 function errorCode(error: unknown): string | undefined {
   if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
     return error.code
@@ -136,12 +142,12 @@ export class SyncEngine {
    * Assign the signed-in user to local-only rows. Refuses when the combined
    * goals would exceed the plan, and does not assign any rows in that case.
    */
-  async adopt(userId: string, plan?: ResolvedPlanCap): Promise<void> {
+  async adopt(userId: string, plan?: ResolvedPlanCap): Promise<{ entries: number; goals: number }> {
     const resolved = await this.prepareAccount(userId, plan)
     const serverGoals = await this.remote.countLive('goals', userId)
     const message = this.goalLimitMessage(userId, serverGoals, resolved)
     if (message) throw new DomainError(this.goalBlockCode(resolved), message)
-    this.local.adoptUnassigned(userId)
+    return this.local.adoptUnassigned(userId)
   }
 
   async sync(userId: string, plan?: ResolvedPlanCap): Promise<SyncReport> {
@@ -270,7 +276,11 @@ export class SyncEngine {
       }
       previousMarker = marker
 
-      for (const raw of page) {
+      const batch = page
+      for (let index = 0; index < batch.length; index += 1) {
+        const raw = batch[index]
+        batch[index] = undefined as unknown as Record<string, unknown>
+        if (!raw) continue
         let rowId: string | undefined
         try {
           const remoteRow = normalizeServerRow(table, raw)
@@ -293,10 +303,12 @@ export class SyncEngine {
             code: errorCode(error),
           })
         }
+        if ((index + 1) % 10 === 0) await yieldToEventLoop()
       }
 
       after = { updatedAt: lastUpdated, id: lastId }
-      if (page.length < limit) break
+      if (batch.length < limit) break
+      await yieldToEventLoop()
     }
 
     if (rowErrors === 0 && maxSeen && maxSeen !== cursor) {

@@ -49,6 +49,50 @@ export function T({
   )
 }
 
+/** Approximate Nunito bold advance so a total stays on one line. */
+export function shrinkToFit(text: string, size: number, width: number): number {
+  if (width <= 0 || text.length === 0) return size
+  const used = text.length * size * 0.62
+  if (used <= width) return size
+  return Math.max(11, Math.floor((size * width) / used))
+}
+
+export function FitLine({
+  children,
+  size = 26,
+  weight = 'bold',
+  color,
+}: {
+  children: ReactNode
+  size?: number
+  weight?: Weight
+  color?: string
+}) {
+  const { colors } = useTheme()
+  const [width, setWidth] = useState(0)
+  const label = typeof children === 'string' || typeof children === 'number' ? String(children) : ''
+  const fontSize = shrinkToFit(label, size, width)
+  const family = weight === 'bold' ? font.bold : weight === 'semibold' ? font.semibold : font.regular
+  return (
+    <View
+      style={styles.fit}
+      onLayout={(event) => {
+        const next = Math.floor(event.nativeEvent.layout.width)
+        setWidth((current) => (current === next ? current : next))
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.35}
+        style={{ fontFamily: family, fontSize, color: color ?? colors.text }}
+      >
+        {children}
+      </Text>
+    </View>
+  )
+}
+
 export function ScreenScroll({ children, testID }: { children: ReactNode; testID?: string }) {
   const { colors } = useTheme()
   return (
@@ -294,9 +338,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   ghost: {
-    minHeight: 44,
+    minHeight: 48,
+    minWidth: 48,
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    alignItems: 'center',
+    paddingHorizontal: 12,
   },
   field: {
     gap: 6,
@@ -312,9 +358,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 14,
-    minHeight: 40,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fit: {
+    alignSelf: 'stretch',
+    minWidth: 0,
   },
   banner: {
     borderRadius: 16,

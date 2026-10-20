@@ -40,6 +40,16 @@ export const FREE_PLAN_CAP: ResolvedPlanCap = {
   maxGoals: FREE_PLAN_MAX_GOALS,
 }
 
+export const FREE_GOAL_CAP_MESSAGE = "You've reached 2 goals on Free. Upgrade to Pro for up to 20."
+
+export const PRO_GOAL_CAP_MESSAGE = "You've reached the 20-goal limit."
+
+/** On-screen cap. Never includes the column name `max_goals`. */
+export function goalCapMessage(plan: { name: string } | null | undefined): string {
+  if (plan && plan.name.trim().toLowerCase() !== 'free') return PRO_GOAL_CAP_MESSAGE
+  return FREE_GOAL_CAP_MESSAGE
+}
+
 const PREMIUM_PLAN_NAMES = new Set(['pro', 'clarity_premium'])
 
 /**

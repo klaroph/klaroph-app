@@ -37,6 +37,8 @@ npx expo start --web
 
 `npm test` runs the sync, repository, payday, and screen tests. It does not need a device or a Supabase project.
 
+`npm run perf:quick-add` seeds 1,000 expenses and prints the median and max of 10 quick adds. The same helpers live in `scripts/seed-thousand.ts`.
+
 To open the placeholder on an Android emulator or a device with Expo Go:
 
 ```bash

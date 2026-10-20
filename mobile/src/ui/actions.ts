@@ -6,6 +6,7 @@ import { assertNever } from '../sync/assertNever'
 import { expenseTypeFor, type EntryKind } from './categories'
 import { FUTURE_DATE_MESSAGE, OLDER_ENTRIES_LINE } from './copy'
 import { entryReadOnly, historyCutoff, manilaToday, showsFreeHistory } from './historyWindow'
+import { historyRowFromSync, type HistoryRow } from './ledger'
 import { parseQuickAmount, type EntryDraft } from './quickAdd'
 
 function requireAmount(raw: string, label = 'amount'): number {
@@ -22,7 +23,7 @@ function assertMutable(repo: KlaroRepository, date: string, now: Date): void {
   if (entryReadOnly(date, free, cutoff)) throw new DomainError('ENTRY_READ_ONLY', OLDER_ENTRIES_LINE)
 }
 
-export function commitEntry(repo: KlaroRepository, draft: EntryDraft, now: Date): void {
+export function commitEntry(repo: KlaroRepository, draft: EntryDraft, now: Date): HistoryRow {
   const amount = requireAmount(draft.amount)
   if (draft.id) {
     const table = draft.kind === 'expense' ? 'expenses' : 'income_records'
@@ -32,21 +33,19 @@ export function commitEntry(repo: KlaroRepository, draft: EntryDraft, now: Date)
     assertMutable(repo, draft.date, now)
     switch (draft.kind) {
       case 'expense':
-        repo.updateExpense(draft.id, {
+        return historyRowFromSync('expense', repo.updateExpense(draft.id, {
           category: draft.category,
           type: expenseTypeFor(draft.category, current.values.type),
           amount,
           date: draft.date,
           description: draft.description,
-        })
-        return
+        }))
       case 'income':
-        repo.updateIncome(draft.id, {
+        return historyRowFromSync('income', repo.updateIncome(draft.id, {
           totalAmount: amount,
           date: draft.date,
           incomeSource: draft.category || null,
-        })
-        return
+        }))
       default:
         return assertNever(draft.kind)
     }
@@ -55,23 +54,21 @@ export function commitEntry(repo: KlaroRepository, draft: EntryDraft, now: Date)
   const userId = repo.sessionUserId()
   switch (draft.kind) {
     case 'expense':
-      repo.createExpense({
+      return historyRowFromSync('expense', repo.createExpense({
         userId,
         category: draft.category,
         type: expenseTypeFor(draft.category),
         amount,
         date: draft.date,
         description: draft.description.trim() ? draft.description : null,
-      })
-      return
+      }))
     case 'income':
-      repo.createIncome({
+      return historyRowFromSync('income', repo.createIncome({
         userId,
         totalAmount: amount,
         date: draft.date,
         incomeSource: draft.category || null,
-      })
-      return
+      }))
     default:
       return assertNever(draft.kind)
   }
